@@ -49,7 +49,7 @@ OLLAMA_BASE = "http://localhost:11434"
 SEARXNG_BASE = "http://localhost:8888"
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "jarvischat.db"
-DEFAULT_MODEL = "deepseek-coder:6.7b"
+DEFAULT_MODEL = "llama3.1:latest"
 
 # --- Templates and Static Files ---
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -141,7 +141,7 @@ DEFAULT_PRESETS = [
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id TEXT PRIMARY KEY,
@@ -183,7 +183,7 @@ def init_db():
             value TEXT NOT NULL
         )
     """)
-    
+
     # FTS5 Memory table
     conn.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS memories USING fts5(
@@ -343,7 +343,7 @@ def process_remember_command(user_message: str) -> Optional[str]:
             topic = detect_topic(fact)
             add_memory(fact, topic=topic, source=source)
             return f"✓ Remembered [{topic}]: {fact}"
-    
+
     for pattern in FORGET_PATTERNS:
         match = re.search(pattern, user_message, re.IGNORECASE)
         if match:
@@ -377,7 +377,7 @@ async def query_searxng(query: str, max_results: int = 5) -> list[dict]:
                         return [{"title": "Current Weather", "url": f"https://wttr.in/{location}", "content": resp.text.strip()}]
                 except Exception as e:
                     log.warning(f"wttr.in error: {e}")
-        
+
         try:
             resp = await client.get(f"{SEARXNG_BASE}/search", params={"q": query, "format": "json", "categories": "general"}, timeout=10.0)
             if resp.status_code == 200:
@@ -746,7 +746,7 @@ def build_system_prompt(db, extra_prompt="", user_message=""):
     """Build the full system prompt: profile + memories + preset."""
     parts = []
     settings = {row["key"]: row["value"] for row in db.execute("SELECT key, value FROM settings").fetchall()}
-    
+
     if settings.get("profile_enabled", "true") == "true":
         profile = db.execute("SELECT content FROM profile WHERE id = 1").fetchone()
         if profile and profile["content"].strip():
@@ -916,4 +916,4 @@ async def chat(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)	
+    uvicorn.run(app, host="0.0.0.0", port=8080)
