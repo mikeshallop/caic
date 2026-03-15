@@ -1,76 +1,208 @@
-# JarvisChat v1.4.0
+# ⚡ JarvisChat v1.4.0
 
-Lightweight Ollama coding companion with FTS5 memory system.
+![screenshot](docs/images/screenshot.png)
 
-## New in v1.4.0
-- **FTS5 Memory System**: Say "remember that..." to store facts, they're automatically retrieved by relevance
-- **Forget command**: Say "forget about..." to remove memories
-- **Memory toggle**: Enable/disable memory injection from topbar
-- **Refactored structure**: Separated frontend from backend for maintainability
+**A lightweight Ollama coding companion with persistent memory, web search, and real-time system monitoring.**
+
+Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
+
+## What's New in v1.4.0
+
+- **FTS5 Memory System**: Say "remember that..." to store facts — they're automatically retrieved by relevance and injected into context
+- **Forget Command**: Say "forget about..." to remove memories
+- **Memory Toggle**: Enable/disable memory injection from topbar or settings
+- **Multi-file Structure**: Backend and frontend separated for easier maintenance
+
+## Features
+
+- **Persistent Memory** — SQLite FTS5 full-text search for fast, relevant memory retrieval
+- **Web Search** — SearXNG integration for automatic web lookups when the model is uncertain
+- **Profile Injection** — Custom system prompt injected into every conversation
+- **System Presets** — Save and switch between different system prompts
+- **Real-time Stats** — CPU, RAM, GPU, VRAM monitoring in sidebar
+- **Token Thermometer** — Visual context window usage indicator
+- **Streaming Responses** — Server-sent events for real-time token display
+- **Conversation History** — SQLite-backed chat persistence with mass-delete option
+- **Model Switching** — Change Ollama models on the fly
 
 ## File Structure
 
 ```
 /opt/jarvischat/
-├── app.py              # FastAPI backend (~600 lines)
+├── app.py              # FastAPI backend
 ├── jarvischat.db       # SQLite database (auto-created)
 ├── static/
-│   └── logo.jpg        # Your logo (optional)
+│   └── logo.png        # Logo image (optional)
 └── templates/
     └── index.html      # Frontend
 ```
 
+## Requirements
+
+- Python 3.11+ (tested on 3.13)
+- Ollama running locally or on network
+- SearXNG (optional, for web search)
+
 ## Installation
 
-```bash
-# Backup existing
-cd /opt/jarvischat
-cp app.py app.py.bak
+### Fresh Install
 
-# Create directories
+```bash
+# Create directory and venv
+sudo mkdir -p /opt/jarvischat
+sudo chown $USER:$USER /opt/jarvischat
+cd /opt/jarvischat
+python3 -m venv venv
+
+# Install dependencies
+./venv/bin/pip install fastapi uvicorn httpx psutil jinja2 python-multipart
+
+# Create subdirectories
 mkdir -p templates static
 
-# Copy new files (from wherever you downloaded them)
-cp /path/to/new/app.py .
-cp /path/to/new/templates/index.html templates/
+# Copy files
+# (copy app.py to /opt/jarvischat/)
+# (copy index.html to /opt/jarvischat/templates/)
+# (copy logo.png to /opt/jarvischat/static/ — optional)
+```
 
-# Extract logo from old app.py if you want (or just let it fail gracefully)
-# The frontend handles missing logo with onerror="this.style.display='none'"
+### Upgrading from v1.3.x
 
-# Restart service
+```bash
+cd /opt/jarvischat
+
+# Backup
+cp app.py app.py.bak
+
+# Install new dependency
+./venv/bin/pip install jinja2
+
+# Create new directories
+mkdir -p templates static
+
+# Copy new files
+# (copy app.py, replacing old version)
+# (copy index.html to templates/)
+
+# Restart
 sudo systemctl restart jarvischat
+```
+
+## Systemd Service
+
+Create `/etc/systemd/system/jarvischat.service`:
+
+```ini
+[Unit]
+Description=JarvisChat - Local Ollama Web Interface
+After=network.target
+
+[Service]
+Type=simple
+User=jarvischat
+Group=jarvischat
+WorkingDirectory=/opt/jarvischat
+ExecStart=/opt/jarvischat/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable jarvischat
+sudo systemctl start jarvischat
 ```
 
 ## Memory Commands
 
-In chat, you can say:
-- "remember that I prefer Rust over Go" → stores as preference
-- "remember that JarvisChat runs on port 8080" → stores as infrastructure  
-- "note that the deadline is Friday" → stores as general
-- "forget about the deadline" → removes matching memories
+In chat, natural language triggers memory operations:
 
-Memories are automatically searched and injected based on your message content.
+| You say | What happens |
+|---------|--------------|
+| "remember that I prefer Rust over Go" | Stores as `preference` |
+| "remember that JarvisChat runs on port 8080" | Stores as `infrastructure` |
+| "note that the deadline is Friday" | Stores as `general` |
+| "forget about the deadline" | Removes matching memories |
+
+Memories are automatically searched based on your message content and injected into the system prompt when relevant.
+
+### Memory Topics
+
+Memories are auto-categorized:
+- `preference` — likes, dislikes, choices
+- `project` — active work, repos, tasks
+- `infrastructure` — servers, services, configs
+- `personal` — name, location, background
+- `general` — everything else
 
 ## API Endpoints
 
 ### Memory
-- `GET /api/memories` - List all memories
-- `POST /api/memories` - Add memory `{"fact": "...", "topic": "general"}`
-- `DELETE /api/memories/{rowid}` - Delete memory
-- `GET /api/memories/search?q=rust` - Search memories
-- `GET /api/memories/stats` - Get counts by topic
 
-### Existing
-- `GET /api/models` - List Ollama models
-- `POST /api/chat` - Send message (streaming)
-- `GET /api/profile` - Get profile
-- `PUT /api/settings` - Update settings
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/memories` | List all memories |
+| POST | `/api/memories` | Add memory `{"fact": "...", "topic": "general"}` |
+| DELETE | `/api/memories/{rowid}` | Delete memory by ID |
+| GET | `/api/memories/search?q=term` | Search memories |
+| GET | `/api/memories/stats` | Get counts by topic |
 
-## Dependencies
+### Chat & Models
 
-```bash
-pip install fastapi uvicorn httpx psutil jinja2 python-multipart --break-system-packages
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models` | List available Ollama models |
+| POST | `/api/chat` | Send message (streaming SSE) |
+| POST | `/api/show` | Get model info (context size) |
+| GET | `/api/ps` | Get running models |
+
+### Settings & Profile
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/profile` | Get profile content |
+| PUT | `/api/profile` | Update profile |
+| GET | `/api/profile/default` | Get default profile |
+| GET | `/api/settings` | Get settings |
+| PUT | `/api/settings` | Update settings |
+
+### Conversations
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/conversations` | List conversations |
+| GET | `/api/conversations/{id}` | Get conversation with messages |
+| DELETE | `/api/conversations/{id}` | Delete conversation |
+| DELETE | `/api/conversations` | Delete ALL conversations |
+
+### Presets
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/presets` | List presets |
+| POST | `/api/presets` | Create preset |
+| PUT | `/api/presets/{id}` | Update preset |
+| DELETE | `/api/presets/{id}` | Delete preset |
+
+### System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/stats` | CPU, RAM, GPU, VRAM stats |
+| GET | `/api/search/status` | SearXNG availability |
+
+## Configuration
+
+Settings are stored in the `settings` table and include:
+
+- `profile_enabled` — Inject profile into chats (true/false)
+- `search_enabled` — Auto web search (true/false)
+- `memory_enabled` — Memory injection (true/false)
+- `default_model` — Default Ollama model
+- `searxng_url` — SearXNG instance URL (default: `http://localhost:8888`)
 
 ## Testing Memory
 
@@ -83,7 +215,48 @@ curl -X POST http://jarvis:8080/api/memories \
 # Search memories
 curl "http://jarvis:8080/api/memories/search?q=docker"
 
-# Or in chat, just say:
-# "remember that I hate yaml"
-# Then ask: "what markup languages should I avoid?"
+# List all memories
+curl http://jarvis:8080/api/memories
+
+# Get stats
+curl http://jarvis:8080/api/memories/stats
 ```
+
+Or in chat:
+1. Say "remember that I hate YAML"
+2. Later ask "what markup languages should I avoid?"
+3. JarvisChat will inject the YAML preference into context
+
+## Troubleshooting
+
+### Service won't start
+
+Check logs:
+```bash
+journalctl -u jarvischat -n 50 --no-pager
+```
+
+Common issues:
+- Missing `jinja2`: `./venv/bin/pip install jinja2`
+- Missing `templates/` directory
+- Wrong permissions on `/opt/jarvischat`
+
+### Memory not working
+
+1. Check memory is enabled (🧠 MEM ON in topbar)
+2. Verify memories exist: `curl http://jarvis:8080/api/memories`
+3. Check FTS5 table: `sqlite3 jarvischat.db "SELECT * FROM memories_fts;"`
+
+### Web search not working
+
+1. Verify SearXNG is running: `curl http://localhost:8888/search?q=test&format=json`
+2. Check search status: `curl http://jarvis:8080/api/search/status`
+3. Ensure JSON format is enabled in SearXNG settings
+
+## License
+
+MIT
+
+## Repository
+
+Gitea: `ssh://gitea@llgit.llamachile.tube:1319/gramps/jarvisChat.git`
