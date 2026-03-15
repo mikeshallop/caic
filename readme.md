@@ -1,5 +1,5 @@
 # ⚡ JarvisChat
-
+![screenshot](docs/images/screenshot.png)
 **A lightweight Ollama coding companion that runs on Python 3.13**
 
 ![Version](https://img.shields.io/badge/version-1.3.1-blue)
