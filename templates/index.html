@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JarvisChat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg-primary: #0a0e14;
+    --bg-secondary: #111820;
+    --bg-tertiary: #1a2230;
+    --bg-hover: #1e2a3a;
+    --text-primary: #c8d6e5;
+    --text-secondary: #7f8fa6;
+    --text-muted: #4a5568;
+    --accent: #48b5e0;
+    --accent-dim: #2a6f8a;
+    --accent-glow: rgba(72, 181, 224, 0.15);
+    --danger: #e74c3c;
+    --danger-hover: #c0392b;
+    --success: #2ecc71;
+    --warning: #f39c12;
+    --border: #1e2a3a;
+    --scrollbar: #2a3a4a;
+    --radius: 8px;
+    --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--font-body); background: var(--bg-primary); color: var(--text-primary); height: 100vh; overflow: hidden; display: flex; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+
+.sidebar { width: 280px; min-width: 280px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; }
+.sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid var(--border); text-align: center; }
+.sidebar-header .logo { width: 100%; max-width: 180px; height: auto; margin-bottom: 12px; border-radius: 8px; }
+.sidebar-header h1 { font-family: var(--font-mono); font-size: 18px; font-weight: 600; color: var(--accent); letter-spacing: 1px; margin-bottom: 4px; }
+.sidebar-header .subtitle { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 12px; }
+.btn-row { display: flex; gap: 6px; }
+.new-chat-btn, .settings-btn { padding: 10px 14px; background: var(--accent-glow); border: 1px solid var(--accent-dim); border-radius: var(--radius); color: var(--accent); font-family: var(--font-body); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.new-chat-btn { flex: 1; }
+.settings-btn { padding: 10px 12px; }
+.new-chat-btn:hover, .settings-btn:hover { background: var(--accent-dim); color: #fff; }
+.delete-all-btn { padding: 10px 12px; background: transparent; border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); font-size: 14px; cursor: pointer; transition: all 0.2s; }
+.delete-all-btn:hover { background: var(--danger); color: #fff; }
+.conversation-list { flex: 1; overflow-y: auto; padding: 8px; }
+.conv-item { padding: 10px 12px; border-radius: var(--radius); cursor: pointer; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s; font-size: 13px; color: var(--text-secondary); }
+.conv-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.conv-item.active { background: var(--bg-tertiary); color: var(--text-primary); }
+.conv-item .conv-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.conv-item .conv-delete { opacity: 0; color: var(--danger); cursor: pointer; padding: 2px 6px; font-size: 16px; }
+.conv-item:hover .conv-delete { opacity: 0.7; }
+.conv-item .conv-delete:hover { opacity: 1; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+.sidebar-footer .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.stats-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.stat-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.stat-label { width: 36px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+.stat-bar { flex: 1; height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden; }
+.stat-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s ease; width: 0%; }
+.stat-fill.gpu { background: var(--success); }
+.stat-fill.warn { background: var(--warning); }
+.stat-fill.danger { background: var(--danger); }
+.stat-value { width: 32px; text-align: right; font-size: 10px; }
+
+.main { flex: 1; display: flex; flex-direction: column; height: 100vh; min-width: 0; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); gap: 12px; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+.topbar select { background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-mono); font-size: 13px; padding: 6px 10px; border-radius: var(--radius); cursor: pointer; }
+.topbar-label { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 1px; }
+.profile-badge, .search-badge, .memory-badge { font-size: 11px; padding: 4px 10px; border-radius: 12px; font-family: var(--font-mono); cursor: pointer; border: none; transition: all 0.2s; }
+.profile-badge.on, .search-badge.on, .memory-badge.on { background: rgba(46,204,113,0.15); color: var(--success); border: 1px solid rgba(46,204,113,0.3); }
+.profile-badge.off, .search-badge.off, .memory-badge.off { background: rgba(231,76,60,0.15); color: var(--danger); border: 1px solid rgba(231,76,60,0.3); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; animation: pulse 2s infinite; }
+.status-dot.offline { background: var(--danger); animation: none; }
+.status-dot.warning { background: var(--warning); animation: none; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.modal-overlay { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; }
+.modal-overlay.visible { display:flex; }
+.modal { background:var(--bg-secondary); border:1px solid var(--border); border-radius:12px; width:90%; max-width:700px; max-height:85vh; overflow-y:auto; }
+.modal-header { display:flex; justify-content:space-between; align-items:center; padding:20px 24px 16px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg-secondary); z-index:1; }
+.modal-header h2 { font-family:var(--font-mono); font-size:16px; color:var(--accent); }
+.modal-close { background:none; border:none; color:var(--text-muted); font-size:24px; cursor:pointer; }
+.modal-close:hover { color:var(--text-primary); }
+.modal-body { padding: 20px 24px; }
+.modal-section { margin-bottom: 24px; }
+.modal-section h3 { font-family:var(--font-mono); font-size:13px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+.modal-section p.desc { font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height:1.5; }
+.modal-section textarea { width:100%; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-mono); font-size:12px; padding:12px; border-radius:var(--radius); resize:vertical; line-height:1.6; }
+.modal-section textarea:focus { outline:none; border-color:var(--accent-dim); }
+.token-count { font-size:11px; color:var(--text-muted); font-family:var(--font-mono); margin-top:4px; text-align:right; }
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; }
+.toggle-label { font-size:13px; }
+.toggle-switch { position:relative; width:44px; height:24px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:12px; cursor:pointer; transition:background 0.2s; }
+.toggle-switch.on { background:var(--accent-dim); border-color:var(--accent-dim); }
+.toggle-switch::after { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; background:var(--text-primary); border-radius:50%; transition:transform 0.2s; }
+.toggle-switch.on::after { transform:translateX(20px); }
+.btn-small { padding:6px 14px; border-radius:var(--radius); font-family:var(--font-mono); font-size:12px; cursor:pointer; border:1px solid var(--border); transition:all 0.2s; }
+.btn-save { background:var(--accent-dim); color:#fff; border-color:var(--accent-dim); }
+.btn-save:hover { background:var(--accent); }
+.btn-reset { background:transparent; color:var(--text-muted); }
+.btn-reset:hover { color:var(--danger); border-color:var(--danger); }
+.btn-bar { display:flex; gap:8px; margin-top:10px; }
+.preset-item { display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--bg-tertiary); border-radius:var(--radius); margin-bottom:6px; font-size:13px; }
+.preset-item .preset-name { flex:1; color:var(--text-primary); }
+.preset-item button { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:13px; padding:2px 4px; }
+.preset-item button:hover { color:var(--text-primary); }
+.memory-item { display:flex; align-items:flex-start; gap:8px; padding:8px 10px; background:var(--bg-tertiary); border-radius:var(--radius); margin-bottom:6px; font-size:12px; }
+.memory-item .memory-fact { flex:1; color:var(--text-primary); line-height:1.4; }
+.memory-item .memory-topic { font-size:10px; color:var(--accent); background:var(--accent-glow); padding:2px 6px; border-radius:4px; }
+.memory-item .memory-delete { color:var(--danger); cursor:pointer; opacity:0.5; }
+.memory-item .memory-delete:hover { opacity:1; }
+.memory-stats { font-size:11px; color:var(--text-muted); margin-bottom:10px; font-family:var(--font-mono); }
+
+.chat-container { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
+.welcome-screen { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); text-align:center; gap:12px; }
+.welcome-screen .logo { font-family:var(--font-mono); font-size:48px; color:var(--accent-dim); opacity:0.5; }
+.welcome-screen p { font-size:14px; max-width:420px; line-height:1.6; }
+.message { display:flex; gap:12px; max-width:900px; width:100%; margin:0 auto; animation:fadeIn 0.2s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.message .avatar { width:32px; height:32px; min-width:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:13px; font-weight:600; margin-top:2px; }
+.message.user .avatar { background:#1a3a5c; color:var(--accent); }
+.message.assistant .avatar { background:var(--accent-dim); color:#fff; }
+.message .content { flex:1; min-width:0; }
+.message .content .role-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; color:var(--text-muted); font-family:var(--font-mono); }
+.message .content .text { font-size:14px; line-height:1.65; word-wrap:break-word; overflow-wrap:break-word; }
+.message .content .text pre { background:var(--bg-primary); border:1px solid var(--border); border-radius:var(--radius); padding:12px; margin:8px 0; overflow-x:auto; font-family:var(--font-mono); font-size:13px; line-height:1.5; position:relative; }
+.message .content .text code { font-family:var(--font-mono); background:var(--bg-primary); padding:2px 5px; border-radius:3px; font-size:13px; }
+.message .content .text pre code { background:none; padding:0; }
+.copy-btn { position:absolute; top:6px; right:6px; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-muted); font-family:var(--font-mono); font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer; }
+.copy-btn:hover { color:var(--text-primary); }
+.typing-indicator { display:inline-flex; gap:4px; padding:4px 0; }
+.typing-indicator span { width:6px; height:6px; background:var(--accent-dim); border-radius:50%; animation:blink 1.4s infinite; }
+.typing-indicator span:nth-child(2) { animation-delay:0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay:0.4s; }
+@keyframes blink { 0%,80%,100%{opacity:0.3} 40%{opacity:1} }
+.search-indicator { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); border-radius:var(--radius); color:var(--warning); font-family:var(--font-mono); font-size:12px; margin:8px 0; }
+.search-indicator .spinner { width:14px; height:14px; border:2px solid rgba(243,156,18,0.3); border-top-color:var(--warning); border-radius:50%; animation:spin 1s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.search-badge-inline { display:inline-block; padding:2px 8px; background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); border-radius:10px; color:var(--success); font-family:var(--font-mono); font-size:10px; margin-left:8px; }
+.memory-badge-inline { display:inline-block; padding:2px 8px; background:rgba(155,89,182,0.15); border:1px solid rgba(155,89,182,0.3); border-radius:10px; color:#9b59b6; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
+.perplexity-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
+.perplexity-badge.low { background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); color:var(--success); }
+.perplexity-badge.medium { background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); color:var(--warning); }
+.perplexity-badge.high { background:rgba(231,76,60,0.15); border:1px solid rgba(231,76,60,0.3); color:var(--danger); }
+.tps-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; background:rgba(72,181,224,0.15); border:1px solid rgba(72,181,224,0.3); color:var(--accent); }
+
+.input-area { padding:16px 20px; border-top:1px solid var(--border); background:var(--bg-secondary); }
+.input-row-top { max-width:900px; margin:0 auto 8px; display:flex; gap:8px; align-items:center; }
+.input-row-top select { background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-secondary); font-family:var(--font-mono); font-size:11px; padding:4px 8px; border-radius:var(--radius); cursor:pointer; }
+.input-row-top .preset-label { font-size:11px; color:var(--text-muted); font-family:var(--font-mono); }
+.input-wrapper { max-width:900px; margin:0 auto; display:flex; gap:10px; align-items:flex-end; }
+.input-wrapper textarea { flex:1; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-body); font-size:14px; padding:12px 14px; border-radius:var(--radius); resize:none; min-height:44px; max-height:200px; line-height:1.5; }
+.input-wrapper textarea:focus { outline:none; border-color:var(--accent-dim); }
+.input-wrapper textarea::placeholder { color:var(--text-muted); }
+.send-btn { padding:12px 20px; background:var(--accent-dim); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.send-btn:hover { background:var(--accent); }
+.stop-btn { padding:12px 20px; background:var(--danger); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; }
+.stop-btn:hover { background:var(--danger-hover); }
+
+.token-thermometer { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.thermometer-bar { width:12px; height:80px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:6px; position:relative; overflow:hidden; }
+.thermometer-fill { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(to top, var(--success), var(--warning), var(--danger)); transition:height 0.3s ease; border-radius:0 0 5px 5px; }
+.token-info { font-family:var(--font-mono); font-size:10px; color:var(--text-muted); text-align:center; cursor:help; }
+.token-info.warning { color:var(--warning); }
+.token-info.danger { color:var(--danger); }
+
+@media (max-width:768px) {
+    .sidebar { display:none; }
+    .topbar { padding:10px 14px; }
+    .chat-container { padding:12px; }
+    .input-area { padding:10px 12px; }
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <img class="logo" src="/static/logo.jpg" alt="JarvisChat Logo" onerror="this.style.display='none'">
+        <h1>⚡ JarvisChat {{ version }}</h1>
+        <div class="subtitle">🦙 local coding companion</div>
+        <div class="btn-row">
+            <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
+            <button class="settings-btn" onclick="openSettings()">⚙</button>
+            <button class="delete-all-btn" onclick="deleteAllConversations()" title="Delete all conversations">🗑</button>
+        </div>
+    </div>
+    <div class="conversation-list" id="convList"></div>
+    <div class="sidebar-footer">
+        <div class="status-row" id="ollamaStatus"><span class="status-dot offline"></span> checking...</div>
+        <div class="status-row" id="searchStatus"><span class="status-dot offline"></span> search: checking...</div>
+        <div class="status-row" id="memoryStatus"><span class="status-dot"></span> memory: -- entries</div>
+        <div class="stats-panel" id="statsPanel">
+            <div class="stat-row"><span class="stat-label">CPU</span><div class="stat-bar"><div class="stat-fill" id="cpuFill"></div></div><span class="stat-value" id="cpuValue">--%</span></div>
+            <div class="stat-row"><span class="stat-label">MEM</span><div class="stat-bar"><div class="stat-fill" id="memFill"></div></div><span class="stat-value" id="memValue">--%</span></div>
+            <div class="stat-row"><span class="stat-label">GPU</span><div class="stat-bar"><div class="stat-fill gpu" id="gpuFill"></div></div><span class="stat-value" id="gpuValue">--%</span></div>
+            <div class="stat-row"><span class="stat-label">VRAM</span><div class="stat-bar"><div class="stat-fill gpu" id="vramFill"></div></div><span class="stat-value" id="vramValue">--%</span></div>
+        </div>
+    </div>
+</aside>
+
+<div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Settings</h2>
+            <button class="modal-close" onclick="closeSettings()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-section">
+                <h3>Profile / Memory</h3>
+                <p class="desc">This context is injected as a system prompt into every conversation.</p>
+                <div class="toggle-row">
+                    <span class="toggle-label">Inject profile into all chats</span>
+                    <div class="toggle-switch on" id="profileToggle" onclick="toggleProfile()"></div>
+                </div>
+                <textarea id="profileEditor" rows="18" spellcheck="false"></textarea>
+                <div class="token-count" id="profileTokenCount"></div>
+                <div class="btn-bar">
+                    <button class="btn-small btn-save" id="saveProfileBtn" onclick="saveProfile()">Save Profile</button>
+                    <button class="btn-small btn-reset" onclick="resetProfile()">Reset to Default</button>
+                </div>
+            </div>
+            <div class="modal-section">
+                <h3>Memory System (FTS5)</h3>
+                <p class="desc">Memories are automatically injected based on relevance to your message. Say "remember that..." to add memories.</p>
+                <div class="toggle-row">
+                    <span class="toggle-label">Enable memory injection</span>
+                    <div class="toggle-switch on" id="memoryToggle" onclick="toggleMemory()"></div>
+                </div>
+                <div class="memory-stats" id="memoryStats">Loading...</div>
+                <div id="memoryList"></div>
+            </div>
+            <div class="modal-section">
+                <h3>Web Search (SearXNG)</h3>
+                <p class="desc">When enabled, JarvisChat will automatically search the web if the model indicates uncertainty.</p>
+                <div class="toggle-row">
+                    <span class="toggle-label">Enable automatic web search</span>
+                    <div class="toggle-switch on" id="searchToggle" onclick="toggleSearch()"></div>
+                </div>
+            </div>
+            <div class="modal-section">
+                <h3>System Prompt Presets</h3>
+                <div id="presetList"></div>
+                <div class="btn-bar" style="margin-top:12px;">
+                    <button class="btn-small btn-save" onclick="addPreset()">+ Add Preset</button>
+                </div>
+            </div>
+            <div class="modal-section">
+                <h3>General</h3>
+                <div class="toggle-row">
+                    <span class="toggle-label">Default model</span>
+                    <select id="defaultModelSetting" onchange="saveDefaultModel()"></select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<main class="main">
+    <div class="topbar">
+        <div class="topbar-left">
+            <span class="topbar-label">Model</span>
+            <select id="modelSelect"></select>
+        </div>
+        <div class="topbar-right">
+            <button class="memory-badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">🧠 MEM ON</button>
+            <button class="search-badge on" id="searchBadge" onclick="toggleSearch()" title="Toggle auto web search">🔍 SEARCH ON</button>
+            <button class="profile-badge on" id="profileBadge" onclick="toggleProfile()" title="Toggle profile injection">PROFILE ON</button>
+        </div>
+    </div>
+    <div class="chat-container" id="chatContainer">
+        <div class="welcome-screen" id="welcomeScreen">
+            <div class="logo">⚡</div>
+            <p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Say "remember that..." to teach me things.</p>
+        </div>
+    </div>
+    <div class="input-area">
+        <div class="input-row-top">
+            <span class="preset-label">PRESET</span>
+            <select id="presetSelect"><option value="">None (profile only)</option></select>
+        </div>
+        <div class="input-wrapper">
+            <textarea id="userInput" placeholder="Type a message... (Shift+Enter for new line)" rows="1" autofocus></textarea>
+            <div class="token-thermometer" title="Context usage">
+                <div class="thermometer-bar"><div class="thermometer-fill" id="thermometerFill" style="height:0%"></div></div>
+                <div class="token-info" id="tokenInfo">-- / --</div>
+            </div>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
+        </div>
+    </div>
+</main>
+
+<script>
+let currentConvId = null;
+let isStreaming = false;
+let abortController = null;
+let profileEnabled = true;
+let searchEnabled = true;
+let memoryEnabled = true;
+let presets = [];
+let modelContextSize = 8192;
+let cachedProfile = '';
+let conversationHistory = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadModels();
+    await loadSettings();
+    await loadProfile();
+    await loadPresets();
+    await loadConversations();
+    await loadMemoryStats();
+    checkOllamaStatus();
+    checkSearchStatus();
+    updateSystemStats();
+    setInterval(checkOllamaStatus, 30000);
+    setInterval(checkSearchStatus, 60000);
+    setInterval(updateSystemStats, 2000);
+    document.getElementById('userInput').addEventListener('input', updateTokenThermometer);
+    updateTokenThermometer();
+});
+
+async function loadMemoryStats() {
+    try {
+        const resp = await fetch('/api/memories/stats');
+        const data = await resp.json();
+        document.getElementById('memoryStats').textContent = `Total: ${data.total} memories`;
+        document.getElementById('memoryStatus').innerHTML = `<span class="status-dot"></span> memory: ${data.total} entries`;
+        
+        const listResp = await fetch('/api/memories?limit=20');
+        const listData = await listResp.json();
+        const container = document.getElementById('memoryList');
+        container.innerHTML = '';
+        listData.memories.slice(0, 10).forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'memory-item';
+            div.innerHTML = `<span class="memory-topic">${m.topic}</span><span class="memory-fact">${m.fact}</span><span class="memory-delete" data-id="${m.rowid}" onclick="deleteMemory(${m.rowid})">×</span>`;
+            container.appendChild(div);
+        });
+    } catch(e) { console.log('Memory stats error:', e); }
+}
+
+async function deleteMemory(rowid) {
+    if (!confirm('Delete this memory?')) return;
+    await fetch(`/api/memories/${rowid}`, { method: 'DELETE' });
+    await loadMemoryStats();
+}
+
+async function updateSystemStats() {
+    try {
+        const resp = await fetch('/api/stats');
+        const data = await resp.json();
+        document.getElementById('cpuFill').style.width = data.cpu_percent + '%';
+        document.getElementById('cpuFill').className = 'stat-fill' + (data.cpu_percent >= 90 ? ' danger' : data.cpu_percent >= 70 ? ' warn' : '');
+        document.getElementById('cpuValue').textContent = data.cpu_percent + '%';
+        document.getElementById('memFill').style.width = data.memory_percent + '%';
+        document.getElementById('memFill').className = 'stat-fill' + (data.memory_percent >= 90 ? ' danger' : data.memory_percent >= 70 ? ' warn' : '');
+        document.getElementById('memValue').textContent = data.memory_percent + '%';
+        if (data.gpu_available) {
+            document.getElementById('gpuFill').style.width = data.gpu_percent + '%';
+            document.getElementById('gpuValue').textContent = data.gpu_percent + '%';
+            document.getElementById('vramFill').style.width = data.vram_percent + '%';
+            document.getElementById('vramValue').textContent = data.vram_percent + '%';
+        }
+    } catch(e) {}
+}
+
+async function checkOllamaStatus() {
+    try {
+        const resp = await fetch('/api/ps');
+        const data = await resp.json();
+        const el = document.getElementById('ollamaStatus');
+        const models = data.models || [];
+        el.innerHTML = models.length > 0 ? '<span class="status-dot"></span> ' + models.map(m => m.name).join(', ') : '<span class="status-dot"></span> Ollama ready';
+    } catch(e) {
+        document.getElementById('ollamaStatus').innerHTML = '<span class="status-dot offline"></span> Ollama offline';
+    }
+}
+
+async function checkSearchStatus() {
+    try {
+        const resp = await fetch('/api/search/status');
+        const data = await resp.json();
+        document.getElementById('searchStatus').innerHTML = data.available ? '<span class="status-dot"></span> search: ready' : '<span class="status-dot warning"></span> search: unavailable';
+    } catch(e) {
+        document.getElementById('searchStatus').innerHTML = '<span class="status-dot offline"></span> search: error';
+    }
+}
+
+async function loadModels() {
+    try {
+        const resp = await fetch('/api/models');
+        const data = await resp.json();
+        const select = document.getElementById('modelSelect');
+        const settingSelect = document.getElementById('defaultModelSetting');
+        select.innerHTML = '';
+        settingSelect.innerHTML = '';
+        (data.models || []).forEach(m => {
+            const gb = (m.size / (1024*1024*1024)).toFixed(1);
+            select.add(new Option(m.name + ' (' + gb + 'GB)', m.name));
+            settingSelect.add(new Option(m.name, m.name));
+        });
+        select.addEventListener('change', fetchModelContextSize);
+    } catch(e) {}
+}
+
+async function fetchModelContextSize() {
+    const model = document.getElementById('modelSelect').value;
+    if (!model) return;
+    try {
+        const resp = await fetch('/api/show', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: model }) });
+        const data = await resp.json();
+        if (data.model_info && data.model_info['context_length']) modelContextSize = data.model_info['context_length'];
+        else if (data.parameters) { const match = data.parameters.match(/num_ctx\s+(\d+)/); if (match) modelContextSize = parseInt(match[1]); }
+        updateTokenThermometer();
+    } catch(e) {}
+}
+
+async function loadSettings() {
+    try {
+        const resp = await fetch('/api/settings');
+        const s = await resp.json();
+        profileEnabled = s.profile_enabled !== 'false';
+        searchEnabled = s.search_enabled !== 'false';
+        memoryEnabled = s.memory_enabled !== 'false';
+        updateProfileUI();
+        updateSearchUI();
+        updateMemoryUI();
+        if (s.default_model) {
+            document.getElementById('modelSelect').value = s.default_model;
+            document.getElementById('defaultModelSetting').value = s.default_model;
+        }
+    } catch(e) {}
+}
+
+async function saveSettings() {
+    await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_enabled: profileEnabled ? 'true' : 'false', search_enabled: searchEnabled ? 'true' : 'false', memory_enabled: memoryEnabled ? 'true' : 'false' }) });
+}
+
+async function saveDefaultModel() {
+    const model = document.getElementById('defaultModelSetting').value;
+    await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ default_model: model }) });
+}
+
+async function loadProfile() {
+    try {
+        const resp = await fetch('/api/profile');
+        const data = await resp.json();
+        cachedProfile = data.content || '';
+        document.getElementById('profileEditor').value = cachedProfile;
+        updateTokenCount();
+        updateTokenThermometer();
+    } catch(e) {}
+}
+
+async function saveProfile() {
+    const content = document.getElementById('profileEditor').value;
+    await fetch('/api/profile', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: content }) });
+    cachedProfile = content;
+    updateTokenCount();
+    const btn = document.getElementById('saveProfileBtn');
+    btn.textContent = 'Saved!';
+    setTimeout(() => btn.textContent = 'Save Profile', 1500);
+}
+
+async function resetProfile() {
+    if (!confirm('Reset profile to default?')) return;
+    try {
+        const resp = await fetch('/api/profile/default');
+        const data = await resp.json();
+        document.getElementById('profileEditor').value = data.content;
+        await saveProfile();
+    } catch(e) {}
+}
+
+function toggleProfile() { profileEnabled = !profileEnabled; updateProfileUI(); saveSettings(); }
+function toggleSearch() { searchEnabled = !searchEnabled; updateSearchUI(); saveSettings(); }
+function toggleMemory() { memoryEnabled = !memoryEnabled; updateMemoryUI(); saveSettings(); }
+
+function updateProfileUI() {
+    const badge = document.getElementById('profileBadge');
+    const toggle = document.getElementById('profileToggle');
+    badge.className = 'profile-badge ' + (profileEnabled ? 'on' : 'off');
+    badge.textContent = profileEnabled ? 'PROFILE ON' : 'PROFILE OFF';
+    if (toggle) toggle.className = 'toggle-switch' + (profileEnabled ? ' on' : '');
+}
+
+function updateSearchUI() {
+    const badge = document.getElementById('searchBadge');
+    const toggle = document.getElementById('searchToggle');
+    badge.className = 'search-badge ' + (searchEnabled ? 'on' : 'off');
+    badge.innerHTML = searchEnabled ? '🔍 SEARCH ON' : '🔍 SEARCH OFF';
+    if (toggle) toggle.className = 'toggle-switch' + (searchEnabled ? ' on' : '');
+}
+
+function updateMemoryUI() {
+    const badge = document.getElementById('memoryBadge');
+    const toggle = document.getElementById('memoryToggle');
+    badge.className = 'memory-badge ' + (memoryEnabled ? 'on' : 'off');
+    badge.innerHTML = memoryEnabled ? '🧠 MEM ON' : '🧠 MEM OFF';
+    if (toggle) toggle.className = 'toggle-switch' + (memoryEnabled ? ' on' : '');
+}
+
+function updateTokenCount() {
+    const text = document.getElementById('profileEditor').value;
+    cachedProfile = text;
+    const tokens = Math.round(text.length / 4);
+    document.getElementById('profileTokenCount').textContent = '~' + tokens + ' tokens';
+    updateTokenThermometer();
+}
+
+function estimateTokens(text) { return Math.round((text || '').length / 4); }
+
+function updateTokenThermometer() {
+    const userInput = document.getElementById('userInput').value || '';
+    const presetId = document.getElementById('presetSelect').value;
+    const preset = presets.find(p => p.id === presetId);
+    const presetText = preset ? preset.prompt : '';
+    let totalTokens = 0;
+    if (profileEnabled && cachedProfile) totalTokens += estimateTokens(cachedProfile);
+    totalTokens += estimateTokens(presetText);
+    conversationHistory.forEach(msg => totalTokens += estimateTokens(msg.content));
+    totalTokens += estimateTokens(userInput);
+    const fill = document.getElementById('thermometerFill');
+    const info = document.getElementById('tokenInfo');
+    const percent = Math.min((totalTokens / modelContextSize) * 100, 100);
+    fill.style.height = percent + '%';
+    const formatNum = n => n >= 1000 ? (n/1000).toFixed(1) + 'K' : n;
+    info.textContent = formatNum(totalTokens) + ' / ' + formatNum(modelContextSize);
+    info.title = totalTokens + ' / ' + modelContextSize + ' tokens';
+    info.className = 'token-info' + (percent >= 90 ? ' danger' : percent >= 70 ? ' warning' : '');
+}
+
+document.getElementById('profileEditor').addEventListener('input', updateTokenCount);
+document.getElementById('presetSelect').addEventListener('change', updateTokenThermometer);
+
+async function loadPresets() {
+    try {
+        const resp = await fetch('/api/presets');
+        presets = await resp.json();
+        renderPresetList();
+        renderPresetSelect();
+    } catch(e) {}
+}
+
+function renderPresetList() {
+    const container = document.getElementById('presetList');
+    container.innerHTML = '';
+    presets.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'preset-item';
+        div.innerHTML = `<span class="preset-name">${p.name}</span><button onclick="editPreset('${p.id}')">✎</button>${!p.is_default ? `<button onclick="deletePreset('${p.id}')">×</button>` : ''}`;
+        container.appendChild(div);
+    });
+}
+
+function renderPresetSelect() {
+    const select = document.getElementById('presetSelect');
+    const current = select.value;
+    select.innerHTML = '<option value="">None (profile only)</option>';
+    presets.forEach(p => select.add(new Option(p.name, p.id)));
+    select.value = current;
+}
+
+async function addPreset() {
+    const name = prompt('Preset name:');
+    if (!name) return;
+    const p = prompt('System prompt text:');
+    if (!p) return;
+    await fetch('/api/presets', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) });
+    await loadPresets();
+}
+
+async function editPreset(id) {
+    const preset = presets.find(p => p.id === id);
+    if (!preset) return;
+    const name = prompt('Preset name:', preset.name);
+    if (!name) return;
+    const p = prompt('System prompt:', preset.prompt);
+    if (p === null) return;
+    await fetch(`/api/presets/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) });
+    await loadPresets();
+}
+
+async function deletePreset(id) {
+    if (!confirm('Delete this preset?')) return;
+    await fetch(`/api/presets/${id}`, { method: 'DELETE' });
+    await loadPresets();
+}
+
+function getSelectedPresetPrompt() {
+    const id = document.getElementById('presetSelect').value;
+    if (!id) return '';
+    const p = presets.find(x => x.id === id);
+    return p ? p.prompt : '';
+}
+
+function openSettings() { document.getElementById('settingsModal').classList.add('visible'); loadProfile(); loadMemoryStats(); }
+function closeSettings() { document.getElementById('settingsModal').classList.remove('visible'); }
+document.getElementById('settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') closeSettings(); });
+
+async function loadConversations() {
+    try {
+        const resp = await fetch('/api/conversations');
+        const convs = await resp.json();
+        const list = document.getElementById('convList');
+        list.innerHTML = '';
+        convs.forEach(c => {
+            const div = document.createElement('div');
+            div.className = 'conv-item' + (c.id === currentConvId ? ' active' : '');
+            div.innerHTML = `<span class="conv-title" onclick="loadConversation('${c.id}')">${c.title}</span><span class="conv-delete" onclick="event.stopPropagation();deleteConversation('${c.id}')">×</span>`;
+            list.appendChild(div);
+        });
+    } catch(e) {}
+}
+
+async function loadConversation(convId) {
+    try {
+        const resp = await fetch(`/api/conversations/${convId}`);
+        const data = await resp.json();
+        currentConvId = convId;
+        document.getElementById('modelSelect').value = data.conversation.model;
+        fetchModelContextSize();
+        const container = document.getElementById('chatContainer');
+        container.innerHTML = '';
+        conversationHistory = [];
+        data.messages.forEach(msg => { appendMessage(msg.role, msg.content, false); conversationHistory.push({ role: msg.role, content: msg.content }); });
+        scrollToBottom();
+        updateTokenThermometer();
+        await loadConversations();
+    } catch(e) {}
+}
+
+async function deleteConversation(convId) {
+    if (!confirm('Delete this conversation?')) return;
+    await fetch(`/api/conversations/${convId}`, { method: 'DELETE' });
+    if (currentConvId === convId) { currentConvId = null; showWelcome(); }
+    await loadConversations();
+}
+
+async function deleteAllConversations() {
+    if (!confirm('Delete ALL conversations? This cannot be undone.')) return;
+    await fetch('/api/conversations', { method: 'DELETE' });
+    currentConvId = null;
+    conversationHistory = [];
+    showWelcome();
+    updateTokenThermometer();
+    await loadConversations();
+}
+
+function newChat() {
+    currentConvId = null;
+    conversationHistory = [];
+    showWelcome();
+    document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+    updateTokenThermometer();
+}
+
+function showWelcome() {
+    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="logo">⚡</div><p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Say "remember that..." to teach me things.</p></div>';
+}
+
+async function sendMessage() {
+    const input = document.getElementById('userInput');
+    const message = input.value.trim();
+    if (!message || isStreaming) return;
+    const model = document.getElementById('modelSelect').value;
+    const presetPrompt = getSelectedPresetPrompt();
+    const welcome = document.getElementById('welcomeScreen');
+    if (welcome) welcome.remove();
+    appendMessage('user', message, true);
+    conversationHistory.push({ role: 'user', content: message });
+    input.value = '';
+    input.style.height = 'auto';
+    updateTokenThermometer();
+    const assistantDiv = appendMessage('assistant', '', true);
+    const textEl = assistantDiv.querySelector('.text');
+    textEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+    setStreamingState(true);
+    let searchTriggered = false;
+    try {
+        abortController = new AbortController();
+        const resp = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, message, model, system_prompt: presetPrompt }), signal: abortController.signal });
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        let firstToken = true;
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.error) { textEl.textContent = 'Error: ' + data.error; setStreamingState(false); return; }
+                    if (data.conversation_id && !currentConvId) { currentConvId = data.conversation_id; await loadConversations(); }
+                    if (data.searching) { textEl.innerHTML = fullText ? renderMarkdown(fullText) + '<div class="search-indicator"><div class="spinner"></div>Searching...</div>' : '<div class="search-indicator"><div class="spinner"></div>Searching...</div>'; searchTriggered = true; }
+                    if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results...</div>'; fullText = ''; firstToken = true; }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
+                    if (data.done) {
+                        const roleLabel = assistantDiv.querySelector('.role-label');
+                        if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
+                        if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; roleLabel.innerHTML += `<span class="perplexity-badge ${ppl >= 15 ? 'high' : ppl >= 8 ? 'medium' : 'low'}">ppl: ${ppl.toFixed(1)}</span>`; }
+                        if (typeof data.tokens_per_sec === 'number' && data.tokens_per_sec > 0 && roleLabel) roleLabel.innerHTML += `<span class="tps-badge">${data.tokens_per_sec.toFixed(1)} t/s</span>`;
+                        conversationHistory.push({ role: 'assistant', content: fullText });
+                        updateTokenThermometer();
+                        addCopyButtons(assistantDiv);
+                        setStreamingState(false);
+                        await loadConversations();
+                        await loadMemoryStats();
+                        checkOllamaStatus();
+                    }
+                } catch(e) {}
+            }
+        }
+    } catch (e) {
+        if (e.name === 'AbortError') textEl.innerHTML += '<br><em style="color:var(--text-muted)">[stopped]</em>';
+        else textEl.textContent = 'Error: ' + e.message;
+        setStreamingState(false);
+    }
+}
+
+function setStreamingState(streaming) {
+    isStreaming = streaming;
+    const btn = document.getElementById('sendBtn');
+    if (streaming) { btn.textContent = 'STOP'; btn.className = 'stop-btn'; btn.onclick = () => { if (abortController) abortController.abort(); setStreamingState(false); }; }
+    else { btn.textContent = 'SEND'; btn.className = 'send-btn'; btn.onclick = sendMessage; }
+}
+
+function appendMessage(role, content, animate) {
+    const container = document.getElementById('chatContainer');
+    const div = document.createElement('div');
+    div.className = 'message ' + role;
+    if (!animate) div.style.animation = 'none';
+    div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}</div><div class="text">${content ? renderMarkdown(content) : ''}</div></div>`;
+    container.appendChild(div);
+    if (content && role === 'assistant') addCopyButtons(div);
+    scrollToBottom();
+    return div;
+}
+
+function renderMarkdown(text) {
+    let blocks = [];
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => { blocks.push(`<pre data-lang="${lang}"><code>${escapeHtml(code)}</code></pre>`); return '\x00BLOCK' + (blocks.length - 1) + '\x00'; });
+    text = text.replace(/```([\s\S]*?)```/g, (m, code) => { blocks.push(`<pre><code>${escapeHtml(code)}</code></pre>`); return '\x00BLOCK' + (blocks.length - 1) + '\x00'; });
+    let h = escapeHtml(text);
+    h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    h = h.replace(/\n/g, '<br>');
+    h = h.replace(/\x00BLOCK(\d+)\x00/g, (m, idx) => blocks[parseInt(idx)]);
+    return h;
+}
+
+function addCopyButtons(msgDiv) {
+    msgDiv.querySelectorAll('pre').forEach(pre => {
+        if (pre.querySelector('.copy-btn')) return;
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'copy';
+        btn.onclick = () => navigator.clipboard.writeText(pre.querySelector('code')?.textContent || pre.textContent).then(() => { btn.textContent = 'copied!'; setTimeout(() => btn.textContent = 'copy', 1500); });
+        pre.style.position = 'relative';
+        pre.appendChild(btn);
+    });
+}
+
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function scrollToBottom() { const c = document.getElementById('chatContainer'); c.scrollTop = c.scrollHeight; }
+
+const userInput = document.getElementById('userInput');
+userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px'; });
+userInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+</script>
+</body>
+</html>
