@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import sqlite3
+import subprocess
 import uuid
 import re
 from datetime import datetime, timezone
@@ -25,6 +26,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 import httpx
+import psutil
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 
@@ -38,7 +40,7 @@ syslog_handler.setFormatter(logging.Formatter('jarvischat[%(process)d]: %(leveln
 log.addHandler(syslog_handler)
 
 # --- Configuration ---
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 OLLAMA_BASE = "http://localhost:11434"
 SEARXNG_BASE = "http://localhost:8888"
 DB_PATH = Path(__file__).parent / "jarvischat.db"
@@ -428,6 +430,72 @@ async def search_status():
                 return {"available": resp.status_code == 200}
             except:
                 return {"available": False}
+
+# --- System Stats ---
+
+def get_gpu_stats() -> dict:
+    """Get AMD GPU stats via rocm-smi."""
+    try:
+        result = subprocess.run(
+            ["rocm-smi", "--showuse", "--showmemuse", "--json"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            # Parse rocm-smi JSON output
+            gpu_info = data.get("card0", {})
+            gpu_use = gpu_info.get("GPU use (%)", 0)
+            vram_use = gpu_info.get("GPU Memory Allocated (VRAM%)", 0)
+            # Handle string or int values
+            if isinstance(gpu_use, str):
+                gpu_use = int(gpu_use.replace("%", "").strip() or 0)
+            if isinstance(vram_use, str):
+                vram_use = int(vram_use.replace("%", "").strip() or 0)
+            return {"gpu_percent": gpu_use, "vram_percent": vram_use, "available": True}
+    except subprocess.TimeoutExpired:
+        log.warning("rocm-smi timed out")
+    except FileNotFoundError:
+        log.debug("rocm-smi not found")
+    except json.JSONDecodeError:
+        # Fallback: parse text output
+        try:
+            result = subprocess.run(
+                ["rocm-smi", "--showuse", "--showmemuse"],
+                capture_output=True, text=True, timeout=5
+            )
+            gpu_use = 0
+            vram_use = 0
+            for line in result.stdout.split("\n"):
+                if "GPU use (%)" in line:
+                    match = re.search(r"(\d+)", line.split(":")[-1])
+                    if match:
+                        gpu_use = int(match.group(1))
+                elif "GPU Memory Allocated (VRAM%)" in line:
+                    match = re.search(r"(\d+)", line.split(":")[-1])
+                    if match:
+                        vram_use = int(match.group(1))
+            return {"gpu_percent": gpu_use, "vram_percent": vram_use, "available": True}
+        except Exception as e:
+            log.warning(f"rocm-smi parse error: {e}")
+    except Exception as e:
+        log.warning(f"GPU stats error: {e}")
+    return {"gpu_percent": 0, "vram_percent": 0, "available": False}
+
+@app.get("/api/stats")
+async def system_stats():
+    """Get system resource usage (CPU, memory, GPU)."""
+    cpu_percent = psutil.cpu_percent(interval=0.1)
+    memory = psutil.virtual_memory()
+    gpu = get_gpu_stats()
+    return {
+        "cpu_percent": round(cpu_percent, 1),
+        "memory_percent": round(memory.percent, 1),
+        "memory_used_gb": round(memory.used / (1024**3), 1),
+        "memory_total_gb": round(memory.total / (1024**3), 1),
+        "gpu_percent": gpu["gpu_percent"],
+        "vram_percent": gpu["vram_percent"],
+        "gpu_available": gpu["available"],
+    }
 
 # --- Profile ---
 
@@ -870,6 +938,15 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .conv-item .conv-delete:hover { opacity: 1; }
 .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
 .sidebar-footer .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.stats-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.stat-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.stat-label { width: 36px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
+.stat-bar { flex: 1; height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden; }
+.stat-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s ease, background 0.3s ease; width: 0%; }
+.stat-fill.gpu { background: var(--success); }
+.stat-fill.warn { background: var(--warning); }
+.stat-fill.danger { background: var(--danger); }
+.stat-value { width: 32px; text-align: right; font-size: 10px; }
 
 /* Main */
 .main { flex: 1; display: flex; flex-direction: column; height: 100vh; min-width: 0; }
@@ -999,6 +1076,28 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     <div class="sidebar-footer">
         <div class="status-row" id="ollamaStatus"><span class="status-dot offline"></span> checking...</div>
         <div class="status-row" id="searchStatus"><span class="status-dot offline"></span> search: checking...</div>
+        <div class="stats-panel" id="statsPanel">
+            <div class="stat-row">
+                <span class="stat-label">CPU</span>
+                <div class="stat-bar"><div class="stat-fill" id="cpuFill"></div></div>
+                <span class="stat-value" id="cpuValue">--%</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">MEM</span>
+                <div class="stat-bar"><div class="stat-fill" id="memFill"></div></div>
+                <span class="stat-value" id="memValue">--%</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">GPU</span>
+                <div class="stat-bar"><div class="stat-fill gpu" id="gpuFill"></div></div>
+                <span class="stat-value" id="gpuValue">--%</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">VRAM</span>
+                <div class="stat-bar"><div class="stat-fill gpu" id="vramFill"></div></div>
+                <span class="stat-value" id="vramValue">--%</span>
+            </div>
+        </div>
     </div>
 </aside>
 
@@ -1110,11 +1209,60 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadConversations();
     checkOllamaStatus();
     checkSearchStatus();
+    updateSystemStats();
     setInterval(checkOllamaStatus, 30000);
     setInterval(checkSearchStatus, 60000);
+    setInterval(updateSystemStats, 2000);
     document.getElementById('userInput').addEventListener('input', updateTokenThermometer);
     updateTokenThermometer();
 });
+
+async function updateSystemStats() {
+    try {
+        const resp = await fetch('/api/stats');
+        const data = await resp.json();
+        
+        // Update CPU
+        const cpuFill = document.getElementById('cpuFill');
+        const cpuValue = document.getElementById('cpuValue');
+        cpuFill.style.width = data.cpu_percent + '%';
+        cpuFill.className = 'stat-fill' + (data.cpu_percent >= 90 ? ' danger' : data.cpu_percent >= 70 ? ' warn' : '');
+        cpuValue.textContent = data.cpu_percent + '%';
+        
+        // Update Memory
+        const memFill = document.getElementById('memFill');
+        const memValue = document.getElementById('memValue');
+        memFill.style.width = data.memory_percent + '%';
+        memFill.className = 'stat-fill' + (data.memory_percent >= 90 ? ' danger' : data.memory_percent >= 70 ? ' warn' : '');
+        memValue.textContent = data.memory_percent + '%';
+        
+        // Update GPU
+        const gpuFill = document.getElementById('gpuFill');
+        const gpuValue = document.getElementById('gpuValue');
+        if (data.gpu_available) {
+            gpuFill.style.width = data.gpu_percent + '%';
+            gpuFill.className = 'stat-fill gpu' + (data.gpu_percent >= 90 ? ' danger' : data.gpu_percent >= 70 ? ' warn' : '');
+            gpuValue.textContent = data.gpu_percent + '%';
+        } else {
+            gpuFill.style.width = '0%';
+            gpuValue.textContent = 'N/A';
+        }
+        
+        // Update VRAM
+        const vramFill = document.getElementById('vramFill');
+        const vramValue = document.getElementById('vramValue');
+        if (data.gpu_available) {
+            vramFill.style.width = data.vram_percent + '%';
+            vramFill.className = 'stat-fill gpu' + (data.vram_percent >= 90 ? ' danger' : data.vram_percent >= 70 ? ' warn' : '');
+            vramValue.textContent = data.vram_percent + '%';
+        } else {
+            vramFill.style.width = '0%';
+            vramValue.textContent = 'N/A';
+        }
+    } catch(e) {
+        console.log('Stats fetch error:', e);
+    }
+}
 
 async function checkOllamaStatus() {
     try {

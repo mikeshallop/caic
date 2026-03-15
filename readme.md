@@ -2,7 +2,7 @@
 
 **A lightweight Ollama coding companion that runs on Python 3.13**
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.1-blue)
 ![Python](https://img.shields.io/badge/python-3.13-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
@@ -39,16 +39,21 @@ JarvisChat acts as middleware between your browser and Ollama. When the model's 
 - Python 3.11+ (tested on 3.13)
 - Ollama running locally (default: `localhost:11434`)
 - SearXNG (optional, for web search — default: `localhost:8888`)
+- ROCm (optional, for AMD GPU stats — `rocm-smi` must be in PATH)
 
 ## Installation
 
 ```bash
 # Clone or download app.py
-git clone https://llgit.llamachile.shop/gramps/jarvischat.git
-cd jarvischat
+git clone https://github.com/llamachileshop-code/313_webui.git
+cd 313_webui
+
+# Create virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate
 
 # Install dependencies
-pip install fastapi httpx uvicorn
+pip install fastapi httpx uvicorn psutil
 
 # Run
 python app.py
@@ -57,6 +62,11 @@ uvicorn app:app --host 0.0.0.0 --port 8080
 ```
 
 Open `http://localhost:8080` in your browser.
+
+**Note:** If running as a systemd service with a venv, install dependencies using the venv pip directly:
+```bash
+/opt/jarvischat/venv/bin/pip install fastapi httpx uvicorn psutil
+```
 
 ## Running as a Service
 
@@ -74,8 +84,8 @@ Wants=ollama.service
 
 [Service]
 Type=simple
-User=jarvischat
-WorkingDirectory=/opt/jarvischat
+User=your-username
+WorkingDirectory=/path/to/313_webui
 ExecStart=/usr/bin/python3 app.py
 Restart=on-failure
 RestartSec=5
@@ -110,7 +120,7 @@ journalctl -t jarvischat -f
 Edit these constants at the top of `app.py`:
 
 ```python
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 OLLAMA_BASE = "http://localhost:11434"
 SEARXNG_BASE = "http://localhost:8888"
 DEFAULT_MODEL = "deepseek-coder:6.7b"
@@ -172,8 +182,9 @@ The count includes: profile + preset + conversation history + current input. Con
 | `/api/models` | GET | List Ollama models |
 | `/api/ps` | GET | Running models |
 | `/api/show` | POST | Model info (context size) |
+| `/api/stats` | GET | System stats (CPU, memory, GPU, VRAM) |
 | `/api/chat` | POST | Stream chat (SSE) |
-| `/api/conversations` | GET | List conversations |
+| `/api/conversations` | GET/DELETE | List/delete all conversations |
 | `/api/conversations/{id}` | GET/DELETE | Get/delete conversation |
 | `/api/profile` | GET/PUT | Get/update profile |
 | `/api/presets` | GET/POST | List/create presets |
@@ -222,6 +233,7 @@ The count includes: profile + preset + conversation history + current input. Con
 
 | Version | Changes |
 |---------|---------|
+| 1.3.1 | System stats panel (CPU, memory, GPU, VRAM) in sidebar |
 | 1.3.0 | Delete all conversations button |
 | 1.2.9 | Token thermometer with live context tracking |
 | 1.2.8 | Logo in sidebar, llama emoji tagline |
