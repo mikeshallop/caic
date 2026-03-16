@@ -142,7 +142,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .search-indicator { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); border-radius:var(--radius); color:var(--warning); font-family:var(--font-mono); font-size:12px; margin:8px 0; }
 .search-indicator .spinner { width:14px; height:14px; border:2px solid rgba(243,156,18,0.3); border-top-color:var(--warning); border-radius:50%; animation:spin 1s linear infinite; }
 @keyframes spin { to{transform:rotate(360deg)} }
-.search-badge-inline { display:inline-block; padding:2px 8px; background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); border-radius:10px; color:var(--success); font-family:var(--font-mono); font-size:10px; margin-left:8px; }
+.search-badge-inline { display:inline-block; padding:2px 8px; background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); border-radius:10px; color:var(--warning); font-family:var(--font-mono); font-size:10px; margin-left:8px; }
 .memory-badge-inline { display:inline-block; padding:2px 8px; background:rgba(155,89,182,0.15); border:1px solid rgba(155,89,182,0.3); border-radius:10px; color:#9b59b6; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
 .perplexity-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
 .perplexity-badge.low { background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); color:var(--success); }
@@ -162,6 +162,9 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .send-btn:hover { background:var(--accent); }
 .stop-btn { padding:12px 20px; background:var(--danger); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; }
 .stop-btn:hover { background:var(--danger-hover); }
+.search-btn { padding:12px 14px; background:var(--warning); border:none; border-radius:var(--radius); color:#fff; font-size:16px; cursor:pointer; transition:background 0.2s; }
+.search-btn:hover { background:#e67e22; }
+.search-btn:disabled { background:var(--text-muted); cursor:not-allowed; }
 
 .token-thermometer { display:flex; flex-direction:column; align-items:center; gap:4px; }
 .thermometer-bar { width:12px; height:80px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:6px; position:relative; overflow:hidden; }
@@ -169,6 +172,15 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .token-info { font-family:var(--font-mono); font-size:10px; color:var(--text-muted); text-align:center; cursor:help; }
 .token-info.warning { color:var(--warning); }
 .token-info.danger { color:var(--danger); }
+
+.message.assistant.search-result .content { background:rgba(243,156,18,0.08); border:1px solid rgba(243,156,18,0.2); border-radius:var(--radius); padding:12px; }
+.raw-results { margin-top:12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; font-size:12px; }
+.raw-results summary { cursor:pointer; color:var(--accent); font-family:var(--font-mono); }
+.raw-results ul { margin:8px 0 0 0; padding-left:20px; list-style:none; }
+.raw-results li { margin-bottom:8px; }
+.raw-results a { color:var(--accent); text-decoration:none; }
+.raw-results a:hover { text-decoration:underline; }
+.raw-results small { color:var(--text-muted); display:block; margin-top:2px; }
 
 @media (max-width:768px) {
     .sidebar { display:none; }
@@ -238,7 +250,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             </div>
             <div class="modal-section">
                 <h3>Web Search (SearXNG)</h3>
-                <p class="desc">When enabled, JarvisChat will automatically search the web if the model indicates uncertainty.</p>
+                <p class="desc">When enabled, JarvisChat will automatically search the web if the model indicates uncertainty. Use the 🔍 button to force a web search.</p>
                 <div class="toggle-row">
                     <span class="toggle-label">Enable automatic web search</span>
                     <div class="toggle-switch on" id="searchToggle" onclick="toggleSearch()"></div>
@@ -277,7 +289,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     <div class="chat-container" id="chatContainer">
         <div class="welcome-screen" id="welcomeScreen">
             <div class="logo">⚡</div>
-            <p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Say "remember that..." to teach me things.</p>
+            <p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Use 🔍 to force a web search.<br>Say "remember that..." to teach me things.</p>
         </div>
     </div>
     <div class="input-area">
@@ -291,6 +303,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
                 <div class="thermometer-bar"><div class="thermometer-fill" id="thermometerFill" style="height:0%"></div></div>
                 <div class="token-info" id="tokenInfo">-- / --</div>
             </div>
+            <button class="search-btn" id="searchBtn" onclick="sendSearch()" title="Search the web">🔍</button>
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
         </div>
     </div>
@@ -331,7 +344,7 @@ async function loadMemoryStats() {
         const data = await resp.json();
         document.getElementById('memoryStats').textContent = `Total: ${data.total} memories`;
         document.getElementById('memoryStatus').innerHTML = `<span class="status-dot"></span> memory: ${data.total} entries`;
-        
+
         const listResp = await fetch('/api/memories?limit=20');
         const listData = await listResp.json();
         const container = document.getElementById('memoryList');
@@ -662,7 +675,74 @@ function newChat() {
 }
 
 function showWelcome() {
-    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="logo">⚡</div><p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Say "remember that..." to teach me things.</p></div>';
+    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="logo">⚡</div><p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Use 🔍 to force a web search.<br>Say "remember that..." to teach me things.</p></div>';
+}
+
+async function sendSearch() {
+    const input = document.getElementById('userInput');
+    const query = input.value.trim();
+    if (!query || isStreaming) return;
+    const model = document.getElementById('modelSelect').value;
+    const welcome = document.getElementById('welcomeScreen');
+    if (welcome) welcome.remove();
+    appendMessage('user', '🔍 ' + query, true);
+    conversationHistory.push({ role: 'user', content: '🔍 ' + query });
+    input.value = '';
+    input.style.height = 'auto';
+    updateTokenThermometer();
+    const assistantDiv = appendMessage('assistant', '', true, true);
+    const textEl = assistantDiv.querySelector('.text');
+    textEl.innerHTML = '<div class="search-indicator"><div class="spinner"></div>Searching the web...</div>';
+    setStreamingState(true);
+    try {
+        abortController = new AbortController();
+        const resp = await fetch('/api/search', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, query, model }), signal: abortController.signal });
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        let buffer = '';
+        let firstToken = true;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.error) { textEl.textContent = 'Error: ' + data.error; setStreamingState(false); return; }
+                    if (data.conversation_id && !currentConvId) { currentConvId = data.conversation_id; await loadConversations(); }
+                    if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results, summarizing...</div>'; }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
+                    if (data.raw_results) {
+                        let rawHtml = '<details class="raw-results"><summary>🔍 View raw search results (' + data.raw_results.length + ')</summary><ul>';
+                        data.raw_results.forEach(r => { 
+                            rawHtml += `<li><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>`;
+                            if (r.content) rawHtml += `<small>${escapeHtml(r.content)}</small>`;
+                            rawHtml += '</li>'; 
+                        });
+                        rawHtml += '</ul></details>';
+                        textEl.innerHTML += rawHtml;
+                    }
+                    if (data.done) {
+                        const roleLabel = assistantDiv.querySelector('.role-label');
+                        if (roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
+                        conversationHistory.push({ role: 'assistant', content: fullText });
+                        updateTokenThermometer();
+                        addCopyButtons(assistantDiv);
+                        setStreamingState(false);
+                        await loadConversations();
+                    }
+                } catch(e) { console.log('Parse error:', e); }
+            }
+        }
+    } catch (e) {
+        if (e.name === 'AbortError') textEl.innerHTML += '<br><em style="color:var(--text-muted)">[stopped]</em>';
+        else textEl.textContent = 'Error: ' + e.message;
+        setStreamingState(false);
+    }
 }
 
 async function sendMessage() {
@@ -731,15 +811,25 @@ async function sendMessage() {
 
 function setStreamingState(streaming) {
     isStreaming = streaming;
-    const btn = document.getElementById('sendBtn');
-    if (streaming) { btn.textContent = 'STOP'; btn.className = 'stop-btn'; btn.onclick = () => { if (abortController) abortController.abort(); setStreamingState(false); }; }
-    else { btn.textContent = 'SEND'; btn.className = 'send-btn'; btn.onclick = sendMessage; }
+    const sendBtn = document.getElementById('sendBtn');
+    const searchBtn = document.getElementById('searchBtn');
+    if (streaming) { 
+        sendBtn.textContent = 'STOP'; 
+        sendBtn.className = 'stop-btn'; 
+        sendBtn.onclick = () => { if (abortController) abortController.abort(); setStreamingState(false); }; 
+        searchBtn.disabled = true;
+    } else { 
+        sendBtn.textContent = 'SEND'; 
+        sendBtn.className = 'send-btn'; 
+        sendBtn.onclick = sendMessage; 
+        searchBtn.disabled = false;
+    }
 }
 
-function appendMessage(role, content, animate) {
+function appendMessage(role, content, animate, isSearch = false) {
     const container = document.getElementById('chatContainer');
     const div = document.createElement('div');
-    div.className = 'message ' + role;
+    div.className = 'message ' + role + (isSearch && role === 'assistant' ? ' search-result' : '');
     if (!animate) div.style.animation = 'none';
     div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}</div><div class="text">${content ? renderMarkdown(content) : ''}</div></div>`;
     container.appendChild(div);

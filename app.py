@@ -13,6 +13,7 @@ Features:
   - Copy-to-clipboard on code blocks
   - Token count estimates
   - SearXNG integration for web search when model is uncertain
+  - Explicit web search via search button
 """
 
 import json
@@ -44,7 +45,7 @@ syslog_handler.setFormatter(logging.Formatter('jarvischat[%(process)d]: %(leveln
 log.addHandler(syslog_handler)
 
 # --- Configuration ---
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 OLLAMA_BASE = "http://localhost:11434"
 SEARXNG_BASE = "http://localhost:8888"
 BASE_DIR = Path(__file__).parent
@@ -67,6 +68,9 @@ REFUSAL_PATTERNS = re.compile(r"|".join([
     r"as of my (?:knowledge|training) cutoff",
     r"i'?m not able to (?:access|provide|browse)",
     r"(?:check|visit|use) a (?:website|financial|news)",
+    r"as an ai model",
+    r"based on my training data",
+    r"i don'?t have the capability",
 ]), re.IGNORECASE)
 
 # --- Hedging patterns ---
@@ -736,6 +740,113 @@ async def delete_all_conversations():
     db.close()
     log.info("Deleted all conversations")
     return {"status": "ok"}
+
+
+# =============================================================================
+# EXPLICIT WEB SEARCH
+# =============================================================================
+
+@app.post("/api/search")
+async def explicit_search(request: Request):
+    """Explicit web search - bypasses model uncertainty, queries SearXNG directly."""
+    body = await request.json()
+    query = body.get("query", "").strip()
+    conv_id = body.get("conversation_id")
+    model = body.get("model", DEFAULT_MODEL)
+
+    if not query:
+        raise HTTPException(status_code=400, detail="Empty query")
+
+    db = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+
+    if not conv_id:
+        conv_id = str(uuid.uuid4())
+        title = f"🔍 {query[:70]}..." if len(query) > 70 else f"🔍 {query}"
+        db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                   (conv_id, title, model, now, now))
+    else:
+        db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
+
+    db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+               (conv_id, "user", f"🔍 {query}", now))
+    db.commit()
+    db.close()
+
+    async def stream_search():
+        yield f"data: {json.dumps({'conversation_id': conv_id, 'searching': True})}\n\n"
+
+        results = await query_searxng(query, max_results=5)
+
+        if not results:
+            error_msg = "No search results found."
+            yield f"data: {json.dumps({'token': error_msg, 'conversation_id': conv_id})}\n\n"
+            
+            # Save to DB
+            db2 = get_db()
+            db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                        (conv_id, "assistant", error_msg, datetime.now(timezone.utc).isoformat()))
+            db2.commit()
+            db2.close()
+            
+            yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id})}\n\n"
+            return
+
+        yield f"data: {json.dumps({'search_results': len(results), 'conversation_id': conv_id})}\n\n"
+
+        # Ask Ollama to summarize
+        search_context = format_search_results(results)
+        messages = [
+            {"role": "system", "content": f"You have access to current web data. Answer directly using ONLY the data below. Be concise. No apologies. No disclaimers.\n\n{search_context}"},
+            {"role": "user", "content": query}
+        ]
+
+        full_response = []
+        async with httpx.AsyncClient() as client:
+            try:
+                async with client.stream("POST", f"{OLLAMA_BASE}/api/chat",
+                                          json={"model": model, "messages": messages, "stream": True},
+                                          timeout=httpx.Timeout(300.0, connect=10.0)) as resp:
+                    async for line in resp.aiter_lines():
+                        if line.strip():
+                            try:
+                                chunk = json.loads(line)
+                                if "message" in chunk and "content" in chunk["message"]:
+                                    token = chunk["message"]["content"]
+                                    full_response.append(token)
+                                    yield f"data: {json.dumps({'token': token, 'conversation_id': conv_id})}\n\n"
+                                if chunk.get("done"):
+                                    break
+                            except json.JSONDecodeError:
+                                pass
+            except Exception as e:
+                log.error(f"Ollama error during search summarization: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                return
+
+        summary = "".join(full_response)
+        
+        # Build raw results markdown
+        raw_lines = []
+        for i, r in enumerate(results, 1):
+            raw_lines.append(f"{i}. [{r['title']}]({r['url']})")
+            if r['content']:
+                raw_lines.append(f"   {r['content']}")
+        raw_results_md = "\n".join(raw_lines)
+        
+        saved_msg = f"{summary}\n\n---\n*🔍 Web search results*"
+
+        db2 = get_db()
+        db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                    (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+        db2.commit()
+        db2.close()
+
+        # Send raw results for frontend expandable div
+        yield f"data: {json.dumps({'raw_results': results, 'conversation_id': conv_id})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'searched': True})}\n\n"
+
+    return StreamingResponse(stream_search(), media_type="text/event-stream")
 
 
 # =============================================================================
