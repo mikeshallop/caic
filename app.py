@@ -31,7 +31,7 @@ from typing import Optional
 import httpx
 import psutil
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -825,14 +825,6 @@ async def explicit_search(request: Request):
                 return
 
         summary = "".join(full_response)
-        
-        # Build raw results markdown
-        raw_lines = []
-        for i, r in enumerate(results, 1):
-            raw_lines.append(f"{i}. [{r['title']}]({r['url']})")
-            if r['content']:
-                raw_lines.append(f"   {r['content']}")
-        raw_results_md = "\n".join(raw_lines)
         
         saved_msg = f"{summary}\n\n---\n*🔍 Web search results*"
 
