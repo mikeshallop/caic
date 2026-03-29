@@ -12,6 +12,7 @@ Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
 - **Orange Search Styling** — Search results, WEB badge, and search button share consistent orange color scheme
 - **Expanded Refusal Patterns** — Added "As an AI model", "based on my training data", "I don't have the capability"
 - **Code cleanup** — Removed unused `JSONResponse` import and dead `raw_results_md` variable
+- **Bug fixes** — Replaced bare `except` clauses with `except Exception`; corrected `add_memory()` return type to `int | None`; updated `TemplateResponse` call to Starlette's current API signature
 
 ## What's New in v1.4.0
 

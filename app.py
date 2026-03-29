@@ -235,7 +235,7 @@ def get_db():
 # MEMORY SYSTEM (FTS5)
 # =============================================================================
 
-def add_memory(fact: str, topic: str = "general", source: str = "explicit") -> int:
+def add_memory(fact: str, topic: str = "general", source: str = "explicit") -> int | None:
     """Store a new memory. Returns rowid."""
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
@@ -497,7 +497,7 @@ if static_dir.exists():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "version": VERSION})
+    return templates.TemplateResponse(request, "index.html", {"version": VERSION})
 
 @app.get("/api/models")
 async def list_models():
@@ -533,7 +533,7 @@ async def search_status():
         try:
             resp = await client.get(f"{SEARXNG_BASE}/search", params={"q": "test", "format": "json"}, timeout=5)
             return {"available": resp.status_code == 200}
-        except:
+        except Exception:
             return {"available": False}
 
 @app.get("/api/stats")
