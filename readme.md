@@ -36,7 +36,7 @@ Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
 
 ## TODO
 
-1. Verify SearXNG and Docker services persist across reboots
+1. ~~Verify SearXNG and Docker services persist across reboots~~
 2. Conversation search/filter by keyword
 3. Export conversation to markdown/text
 4. Keyboard shortcuts (Ctrl+N new chat, Ctrl+Enter send)
