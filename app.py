@@ -19,19 +19,25 @@ Features:
 import json
 import logging
 import math
+import os
 import sqlite3
 import subprocess
+import hashlib
+import hmac
+import time
 import uuid
 import re
+from threading import Lock
 from datetime import datetime, timezone
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 import psutil
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -40,8 +46,10 @@ import logging.handlers
 
 log = logging.getLogger("jarvischat")
 log.setLevel(logging.DEBUG)
-syslog_handler = logging.handlers.SysLogHandler(address='/dev/log')
-syslog_handler.setFormatter(logging.Formatter('jarvischat[%(process)d]: %(levelname)s %(message)s'))
+syslog_handler = logging.handlers.SysLogHandler(address="/dev/log")
+syslog_handler.setFormatter(
+    logging.Formatter("jarvischat[%(process)d]: %(levelname)s %(message)s")
+)
 log.addHandler(syslog_handler)
 
 # --- Configuration ---
@@ -52,6 +60,18 @@ BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "jarvischat.db"
 DEFAULT_MODEL = "llama3.1:latest"
 
+# --- Auth / Session Configuration ---
+# Session timeout is intentionally short so tab close/crash leaves a brief exposure window.
+SESSION_TIMEOUT_SECONDS = 90
+MAX_PIN_ATTEMPTS = 5
+PIN_LOCKOUT_SECONDS = 300
+ALLOW_DEFAULT_PIN = os.getenv("JARVISCHAT_ALLOW_DEFAULT_PIN", "false").lower() == "true"
+TRUSTED_ORIGINS = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv("JARVISCHAT_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+}
+
 # --- Templates and Static Files ---
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
@@ -59,19 +79,24 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 PERPLEXITY_THRESHOLD = 15.0
 
 # --- Refusal Patterns ---
-REFUSAL_PATTERNS = re.compile(r"|".join([
-    r"i don'?t have (?:real-?time|current|live)",
-    r"i (?:can'?t|cannot) provide (?:current|real-?time|live)",
-    r"i don'?t have access to (?:current|real-?time|live)",
-    r"(?:current|live|real-?time) (?:data|information|prices?|weather)",
-    r"my (?:knowledge|training) (?:cutoff|only goes|ends)",
-    r"as of my (?:knowledge|training) cutoff",
-    r"i'?m not able to (?:access|provide|browse)",
-    r"(?:check|visit|use) a (?:website|financial|news)",
-    r"as an ai model",
-    r"based on my training data",
-    r"i don'?t have the capability",
-]), re.IGNORECASE)
+REFUSAL_PATTERNS = re.compile(
+    r"|".join(
+        [
+            r"i don'?t have (?:real-?time|current|live)",
+            r"i (?:can'?t|cannot) provide (?:current|real-?time|live)",
+            r"i don'?t have access to (?:current|real-?time|live)",
+            r"(?:current|live|real-?time) (?:data|information|prices?|weather)",
+            r"my (?:knowledge|training) (?:cutoff|only goes|ends)",
+            r"as of my (?:knowledge|training) cutoff",
+            r"i'?m not able to (?:access|provide|browse)",
+            r"(?:check|visit|use) a (?:website|financial|news)",
+            r"as an ai model",
+            r"based on my training data",
+            r"i don'?t have the capability",
+        ]
+    ),
+    re.IGNORECASE,
+)
 
 # --- Hedging patterns ---
 HEDGE_PATTERNS = [
@@ -82,12 +107,49 @@ HEDGE_PATTERNS = [
     r"[Bb]ut\s+please\s+(?:make\s+sure|verify|check)[^.]*\.\s*",
 ]
 
+SESSIONS: dict[str, dict] = {}
+PIN_ATTEMPTS: dict[str, dict] = {}
+SESSION_LOCK = Lock()
+
+
+def hash_pin(pin: str, salt_hex: Optional[str] = None) -> tuple[str, str]:
+    """Hash a 4-digit PIN with PBKDF2-HMAC-SHA256."""
+    salt = bytes.fromhex(salt_hex) if salt_hex else os.urandom(16)
+    digest = hashlib.pbkdf2_hmac("sha256", pin.encode("utf-8"), salt, 200_000)
+    return salt.hex(), digest.hex()
+
+
+def audit_event(
+    event: str,
+    outcome: str,
+    *,
+    ip: str = "unknown",
+    role: str = "none",
+    details: str = "",
+    warning: bool = False,
+) -> None:
+    # Structured audit entries make destructive/auth events searchable in journal/syslog.
+    payload = {
+        "event": event,
+        "outcome": outcome,
+        "ip": ip,
+        "role": role,
+        "details": details[:300],
+    }
+    msg = "AUDIT " + json.dumps(payload, separators=(",", ":"))
+    if warning:
+        log.warning(msg)
+    else:
+        log.info(msg)
+
+
 def clean_hedging(text: str) -> str:
     """Remove hedging sentences from model response."""
     cleaned = text
     for pattern in HEDGE_PATTERNS:
         cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
+
 
 def format_direct_answer(question: str, results: list[dict]) -> str:
     """Format search results directly when model refuses to help."""
@@ -96,10 +158,11 @@ def format_direct_answer(question: str, results: list[dict]) -> str:
     lines = ["Here's what I found:\n"]
     for r in results[:3]:
         lines.append(f"**{r['title']}**")
-        if r['content']:
+        if r["content"]:
             lines.append(f"{r['content']}")
         lines.append("")
     return "\n".join(lines).strip()
+
 
 # --- Default Profile ---
 DEFAULT_PROFILE = """You are a coding companion running locally on a machine called "jarvis".
@@ -132,15 +195,25 @@ DEFAULT_PROFILE = """You are a coding companion running locally on a machine cal
 
 # --- Default System Prompt Presets ---
 DEFAULT_PRESETS = [
-    {"name": "Coding Companion", "prompt": "You are a senior software engineer and coding companion. Focus on writing clean, efficient, well-documented code. Provide complete working examples. Explain architectural decisions and trade-offs. Prefer Rust, Python, and bash."},
-    {"name": "Linux Sysadmin", "prompt": "You are an experienced Linux systems administrator. Focus on command-line solutions, systemd services, networking, storage, and security. Prefer Debian/Ubuntu conventions. Be concise and direct."},
-    {"name": "General Assistant", "prompt": "You are a helpful general-purpose assistant. Be clear and concise."}
+    {
+        "name": "Coding Companion",
+        "prompt": "You are a senior software engineer and coding companion. Focus on writing clean, efficient, well-documented code. Provide complete working examples. Explain architectural decisions and trade-offs. Prefer Rust, Python, and bash.",
+    },
+    {
+        "name": "Linux Sysadmin",
+        "prompt": "You are an experienced Linux systems administrator. Focus on command-line solutions, systemd services, networking, storage, and security. Prefer Debian/Ubuntu conventions. Be concise and direct.",
+    },
+    {
+        "name": "General Assistant",
+        "prompt": "You are a helpful general-purpose assistant. Be clear and concise.",
+    },
 ]
 
 
 # =============================================================================
 # DATABASE
 # =============================================================================
+
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -202,27 +275,78 @@ def init_db():
     existing = conn.execute("SELECT id FROM profile WHERE id = 1").fetchone()
     if not existing:
         now = datetime.now(timezone.utc).isoformat()
-        conn.execute("INSERT INTO profile (id, content, updated_at) VALUES (1, ?, ?)", (DEFAULT_PROFILE, now))
+        conn.execute(
+            "INSERT INTO profile (id, content, updated_at) VALUES (1, ?, ?)",
+            (DEFAULT_PROFILE, now),
+        )
 
     # Seed default presets if empty
-    existing_presets = conn.execute("SELECT COUNT(*) as c FROM system_presets").fetchone()
+    existing_presets = conn.execute(
+        "SELECT COUNT(*) as c FROM system_presets"
+    ).fetchone()
     if existing_presets["c"] == 0:
         now = datetime.now(timezone.utc).isoformat()
         for preset in DEFAULT_PRESETS:
             conn.execute(
                 "INSERT INTO system_presets (id, name, prompt, is_default, created_at) VALUES (?, ?, ?, 1, ?)",
-                (str(uuid.uuid4()), preset["name"], preset["prompt"], now)
+                (str(uuid.uuid4()), preset["name"], preset["prompt"], now),
             )
 
     # Default settings
-    defaults = {"profile_enabled": "true", "default_model": DEFAULT_MODEL, "search_enabled": "true", "memory_enabled": "true"}
+    defaults = {
+        "profile_enabled": "true",
+        "default_model": DEFAULT_MODEL,
+        "search_enabled": "true",
+        "memory_enabled": "true",
+    }
     for key, value in defaults.items():
-        existing = conn.execute("SELECT key FROM settings WHERE key = ?", (key,)).fetchone()
+        existing = conn.execute(
+            "SELECT key FROM settings WHERE key = ?", (key,)
+        ).fetchone()
         if not existing:
-            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, value))
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)", (key, value)
+            )
+
+    # Seed admin PIN hash if missing.
+    existing_pin_hash = conn.execute(
+        "SELECT value FROM settings WHERE key = 'admin_pin_hash'"
+    ).fetchone()
+    existing_pin_salt = conn.execute(
+        "SELECT value FROM settings WHERE key = 'admin_pin_salt'"
+    ).fetchone()
+    if not existing_pin_hash or not existing_pin_salt:
+        # First-boot policy: require explicit PIN unless operator explicitly opts into insecure fallback.
+        configured_pin = os.getenv("JARVISCHAT_ADMIN_PIN", "").strip()
+        if re.fullmatch(r"\d{4}", configured_pin):
+            seed_pin = configured_pin
+            pin_source = "env"
+        elif ALLOW_DEFAULT_PIN:
+            seed_pin = "1234"
+            pin_source = "default"
+        else:
+            raise RuntimeError(
+                "Admin PIN bootstrap blocked: set JARVISCHAT_ADMIN_PIN to a 4-digit PIN "
+                "or set JARVISCHAT_ALLOW_DEFAULT_PIN=true to allow insecure default PIN 1234."
+            )
+
+        salt_hex, pin_hash_hex = hash_pin(seed_pin)
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            ("admin_pin_hash", pin_hash_hex),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            ("admin_pin_salt", salt_hex),
+        )
+        if pin_source == "default":
+            log.warning("Admin PIN seeded from insecure default 1234 (override enabled).")
+        else:
+            log.info("Admin PIN hash seeded from configured environment PIN.")
 
     conn.commit()
     conn.close()
+
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -231,23 +355,32 @@ def get_db():
     return conn
 
 
+def get_setting(db, key: str, default: str = "") -> str:
+    row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
 # =============================================================================
 # MEMORY SYSTEM (FTS5)
 # =============================================================================
 
-def add_memory(fact: str, topic: str = "general", source: str = "explicit") -> int | None:
+
+def add_memory(
+    fact: str, topic: str = "general", source: str = "explicit"
+) -> int | None:
     """Store a new memory. Returns rowid."""
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
     cur = db.execute(
         "INSERT INTO memories (fact, topic, source, created_at) VALUES (?, ?, ?, ?)",
-        (fact, topic, source, now)
+        (fact, topic, source, now),
     )
     db.commit()
     rowid = cur.lastrowid
     db.close()
     log.info(f"Memory added [{topic}]: {fact[:50]}...")
     return rowid
+
 
 def search_memories(query: str, limit: int = 5) -> list[dict]:
     """Search memories by relevance using FTS5."""
@@ -260,10 +393,13 @@ def search_memories(query: str, limit: int = 5) -> list[dict]:
         return []
     safe_query = " OR ".join(word + "*" for word in words[:10])
     try:
-        rows = db.execute("""
+        rows = db.execute(
+            """
             SELECT rowid, fact, topic, source, created_at, bm25(memories) AS rank
             FROM memories WHERE memories MATCH ? ORDER BY rank LIMIT ?
-        """, (safe_query, limit)).fetchall()
+        """,
+            (safe_query, limit),
+        ).fetchall()
         results = [dict(row) for row in rows]
         log.debug(f"Memory search '{query}' returned {len(results)} results")
     except Exception as e:
@@ -272,15 +408,22 @@ def search_memories(query: str, limit: int = 5) -> list[dict]:
     db.close()
     return results
 
+
 def get_all_memories(topic: Optional[str] = None) -> list[dict]:
     """Get all memories, optionally filtered by topic."""
     db = get_db()
     if topic:
-        rows = db.execute("SELECT rowid, * FROM memories WHERE topic = ? ORDER BY created_at DESC", (topic,)).fetchall()
+        rows = db.execute(
+            "SELECT rowid, * FROM memories WHERE topic = ? ORDER BY created_at DESC",
+            (topic,),
+        ).fetchall()
     else:
-        rows = db.execute("SELECT rowid, * FROM memories ORDER BY created_at DESC").fetchall()
+        rows = db.execute(
+            "SELECT rowid, * FROM memories ORDER BY created_at DESC"
+        ).fetchall()
     db.close()
     return [dict(row) for row in rows]
+
 
 def delete_memory(rowid: int) -> bool:
     """Delete a memory by rowid."""
@@ -293,6 +436,7 @@ def delete_memory(rowid: int) -> bool:
         log.info(f"Memory deleted: rowid={rowid}")
     return deleted
 
+
 def update_memory(rowid: int, fact: str) -> bool:
     """Update an existing memory's fact."""
     db = get_db()
@@ -301,6 +445,7 @@ def update_memory(rowid: int, fact: str) -> bool:
     updated = cur.rowcount > 0
     db.close()
     return updated
+
 
 def get_memory_count() -> int:
     """Get total number of memories."""
@@ -325,25 +470,47 @@ FORGET_PATTERNS = [
     r"remove (?:the )?memory (?:about |that )?(.+)",
 ]
 
+
 def detect_topic(fact: str) -> str:
     """Auto-detect memory topic from content."""
     fact_lower = fact.lower()
-    if any(w in fact_lower for w in ["prefer", "like", "hate", "always", "never", "favorite"]):
+    if any(
+        w in fact_lower
+        for w in ["prefer", "like", "hate", "always", "never", "favorite"]
+    ):
         return "preference"
-    elif any(w in fact_lower for w in ["working on", "building", "project", "developing"]):
+    elif any(
+        w in fact_lower for w in ["working on", "building", "project", "developing"]
+    ):
         return "project"
-    elif any(w in fact_lower for w in ["run", "install", "server", "ip", "port", "service", "docker", "systemd"]):
+    elif any(
+        w in fact_lower
+        for w in [
+            "run",
+            "install",
+            "server",
+            "ip",
+            "port",
+            "service",
+            "docker",
+            "systemd",
+        ]
+    ):
         return "infrastructure"
-    elif any(w in fact_lower for w in ["my name", "i am", "i'm a", "i live", "my wife", "my partner"]):
+    elif any(
+        w in fact_lower
+        for w in ["my name", "i am", "i'm a", "i live", "my wife", "my partner"]
+    ):
         return "personal"
     return "general"
+
 
 def process_remember_command(user_message: str) -> Optional[str]:
     """Check for 'remember/forget' commands. Returns confirmation or None."""
     for pattern, source in REMEMBER_PATTERNS:
         match = re.search(pattern, user_message, re.IGNORECASE)
         if match:
-            fact = match.group(1).strip().rstrip('.')
+            fact = match.group(1).strip().rstrip(".")
             topic = detect_topic(fact)
             add_memory(fact, topic=topic, source=source)
             return f"✓ Remembered [{topic}]: {fact}"
@@ -351,7 +518,7 @@ def process_remember_command(user_message: str) -> Optional[str]:
     for pattern in FORGET_PATTERNS:
         match = re.search(pattern, user_message, re.IGNORECASE)
         if match:
-            search_term = match.group(1).strip().rstrip('.')
+            search_term = match.group(1).strip().rstrip(".")
             memories = search_memories(search_term, limit=3)
             if memories:
                 for m in memories:
@@ -366,47 +533,102 @@ def process_remember_command(user_message: str) -> Optional[str]:
 # SEARXNG INTEGRATION
 # =============================================================================
 
+
 async def query_searxng(query: str, max_results: int = 5) -> list[dict]:
     """Query SearXNG and return search results."""
     log.info(f"Querying SearXNG: '{query}'")
     async with httpx.AsyncClient() as client:
         # Weather shortcut
-        weather_match = re.search(r"(?:weather|temperature|forecast)\s+(?:in\s+)?(.+?)(?:\s+right now|\s+today|\s+degrees)?$", query, re.IGNORECASE)
-        if weather_match or "weather" in query.lower() or "temperature" in query.lower():
-            location = weather_match.group(1) if weather_match else re.sub(r"(weather|temperature|forecast|right now|today|degrees)", "", query, flags=re.IGNORECASE).strip()
+        weather_match = re.search(
+            r"(?:weather|temperature|forecast)\s+(?:in\s+)?(.+?)(?:\s+right now|\s+today|\s+degrees)?$",
+            query,
+            re.IGNORECASE,
+        )
+        if (
+            weather_match
+            or "weather" in query.lower()
+            or "temperature" in query.lower()
+        ):
+            location = (
+                weather_match.group(1)
+                if weather_match
+                else re.sub(
+                    r"(weather|temperature|forecast|right now|today|degrees)",
+                    "",
+                    query,
+                    flags=re.IGNORECASE,
+                ).strip()
+            )
             if location:
                 try:
-                    resp = await client.get(f"https://wttr.in/{location}?format=3", timeout=10.0, headers={"User-Agent": "curl/7.68.0"})
+                    resp = await client.get(
+                        f"https://wttr.in/{location}?format=3",
+                        timeout=10.0,
+                        headers={"User-Agent": "curl/7.68.0"},
+                    )
                     if resp.status_code == 200:
-                        return [{"title": "Current Weather", "url": f"https://wttr.in/{location}", "content": resp.text.strip()}]
+                        return [
+                            {
+                                "title": "Current Weather",
+                                "url": f"https://wttr.in/{location}",
+                                "content": resp.text.strip(),
+                            }
+                        ]
                 except Exception as e:
                     log.warning(f"wttr.in error: {e}")
 
         try:
-            resp = await client.get(f"{SEARXNG_BASE}/search", params={"q": query, "format": "json", "categories": "general"}, timeout=10.0)
+            resp = await client.get(
+                f"{SEARXNG_BASE}/search",
+                params={"q": query, "format": "json", "categories": "general"},
+                timeout=10.0,
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 results = []
                 for answer in data.get("answers", []):
-                    results.append({"title": "Direct Answer", "url": "", "content": answer})
+                    results.append(
+                        {"title": "Direct Answer", "url": "", "content": answer}
+                    )
                 for box in data.get("infoboxes", []):
                     content = box.get("content", "")
                     if not content and box.get("attributes"):
-                        content = " | ".join([f"{a.get('label','')}: {a.get('value','')}" for a in box["attributes"]])
-                    results.append({"title": box.get("infobox", "Info"), "url": box.get("urls", [{}])[0].get("url", "") if box.get("urls") else "", "content": content})
+                        content = " | ".join(
+                            [
+                                f"{a.get('label', '')}: {a.get('value', '')}"
+                                for a in box["attributes"]
+                            ]
+                        )
+                    results.append(
+                        {
+                            "title": box.get("infobox", "Info"),
+                            "url": box.get("urls", [{}])[0].get("url", "")
+                            if box.get("urls")
+                            else "",
+                            "content": content,
+                        }
+                    )
                 for r in data.get("results", [])[:max_results]:
-                    results.append({"title": r.get("title", ""), "url": r.get("url", ""), "content": r.get("content", "")})
+                    results.append(
+                        {
+                            "title": r.get("title", ""),
+                            "url": r.get("url", ""),
+                            "content": r.get("content", ""),
+                        }
+                    )
                 log.info(f"SearXNG returned {len(results)} results")
                 return results
         except Exception as e:
             log.error(f"SearXNG error: {e}")
     return []
 
+
 def calculate_perplexity(logprobs: list) -> float:
     if not logprobs:
         return 0.0
     avg_logprob = sum(lp["logprob"] for lp in logprobs) / len(logprobs)
     return math.exp(-avg_logprob)
+
 
 def is_uncertain(logprobs: list, threshold: float = PERPLEXITY_THRESHOLD) -> bool:
     if not logprobs:
@@ -415,6 +637,7 @@ def is_uncertain(logprobs: list, threshold: float = PERPLEXITY_THRESHOLD) -> boo
     log.info(f"Perplexity: {perplexity:.2f} (threshold: {threshold})")
     return perplexity > threshold
 
+
 def is_refusal(text: str) -> bool:
     match = REFUSAL_PATTERNS.search(text)
     if match:
@@ -422,25 +645,42 @@ def is_refusal(text: str) -> bool:
         return True
     return False
 
+
 def format_search_results(results: list[dict]) -> str:
     if not results:
         return ""
     lines = ["[LIVE WEB DATA]\n"]
     for i, r in enumerate(results, 1):
         lines.append(f"{i}. {r['title']}")
-        if r['content']:
+        if r["content"]:
             lines.append(f"   {r['content']}")
         lines.append("")
-    lines.append("\nAnswer directly using the data above. No apologies. No disclaimers. Just answer.")
+    lines.append(
+        "\nAnswer directly using the data above. No apologies. No disclaimers. Just answer."
+    )
     return "\n".join(lines)
+
 
 def extract_search_query(user_message: str) -> str:
     query = user_message.strip()
     if re.search(r"temperature|weather", query, re.IGNORECASE):
-        query = re.sub(r"^what('?s| is) the ", "", query, flags=re.IGNORECASE) + " right now degrees"
+        query = (
+            re.sub(r"^what('?s| is) the ", "", query, flags=re.IGNORECASE)
+            + " right now degrees"
+        )
     if re.search(r"price|spot price", query, re.IGNORECASE):
-        query = re.sub(r"^(what('?s| is)|can you tell me) the ", "", query, flags=re.IGNORECASE) + " today USD"
-    query = re.sub(r"^(what|who|where|when|why|how|is|are|can|could|would|should|do|does|did)\s+", "", query, flags=re.IGNORECASE)
+        query = (
+            re.sub(
+                r"^(what('?s| is)|can you tell me) the ", "", query, flags=re.IGNORECASE
+            )
+            + " today USD"
+        )
+    query = re.sub(
+        r"^(what|who|where|when|why|how|is|are|can|could|would|should|do|does|did)\s+",
+        "",
+        query,
+        flags=re.IGNORECASE,
+    )
     query = re.sub(r"[?!.]+$", "", query)
     return query[:100].strip() or user_message[:100]
 
@@ -449,10 +689,16 @@ def extract_search_query(user_message: str) -> str:
 # GPU STATS
 # =============================================================================
 
+
 def get_gpu_stats() -> dict:
     """Get AMD GPU stats via rocm-smi."""
     try:
-        result = subprocess.run(["rocm-smi", "--showuse", "--showmemuse", "--json"], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            ["rocm-smi", "--showuse", "--showmemuse", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
         if result.returncode == 0:
             data = json.loads(result.stdout)
             gpu_info = data.get("card0", {})
@@ -474,6 +720,7 @@ def get_gpu_stats() -> dict:
 # APP LIFECYCLE
 # =============================================================================
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info(f"JarvisChat v{VERSION} starting up")
@@ -482,6 +729,7 @@ async def lifespan(app: FastAPI):
     log.info(f"Memory system: {get_memory_count()} memories loaded")
     yield
     log.info("JarvisChat shutting down")
+
 
 app = FastAPI(title="JarvisChat", lifespan=lifespan)
 
@@ -492,12 +740,354 @@ if static_dir.exists():
 
 
 # =============================================================================
+# AUTH + SESSION
+# =============================================================================
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "").strip()
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def cleanup_sessions(now_ts: Optional[float] = None) -> None:
+    now_ts = now_ts or time.time()
+    with SESSION_LOCK:
+        expired = [
+            sid
+            for sid, meta in SESSIONS.items()
+            if (now_ts - meta.get("last_seen", 0)) > SESSION_TIMEOUT_SECONDS
+        ]
+        for sid in expired:
+            del SESSIONS[sid]
+
+
+def verify_admin_pin(pin: str) -> bool:
+    if not re.fullmatch(r"\d{4}", pin or ""):
+        return False
+    db = get_db()
+    pin_hash = get_setting(db, "admin_pin_hash", "")
+    pin_salt = get_setting(db, "admin_pin_salt", "")
+    db.close()
+    if not pin_hash or not pin_salt:
+        return False
+    _, candidate_hash = hash_pin(pin, salt_hex=pin_salt)
+    return hmac.compare_digest(candidate_hash, pin_hash)
+
+
+def is_ip_locked(ip: str) -> tuple[bool, int]:
+    now_ts = time.time()
+    with SESSION_LOCK:
+        state = PIN_ATTEMPTS.get(ip)
+        if not state:
+            return False, 0
+        locked_until = state.get("locked_until", 0)
+        if locked_until > now_ts:
+            return True, int(locked_until - now_ts)
+        if locked_until:
+            PIN_ATTEMPTS.pop(ip, None)
+    return False, 0
+
+
+def record_pin_failure(ip: str) -> None:
+    now_ts = time.time()
+    with SESSION_LOCK:
+        state = PIN_ATTEMPTS.get(ip, {"fail_count": 0, "locked_until": 0})
+        state["fail_count"] = int(state.get("fail_count", 0)) + 1
+        if state["fail_count"] >= MAX_PIN_ATTEMPTS:
+            state["locked_until"] = now_ts + PIN_LOCKOUT_SECONDS
+            state["fail_count"] = 0
+        PIN_ATTEMPTS[ip] = state
+
+
+def clear_pin_failures(ip: str) -> None:
+    with SESSION_LOCK:
+        PIN_ATTEMPTS.pop(ip, None)
+
+
+def create_session(ip: str, role: str) -> str:
+    now_ts = time.time()
+    sid = uuid.uuid4().hex
+    with SESSION_LOCK:
+        SESSIONS[sid] = {
+            "ip": ip,
+            "role": role,
+            "created_at": now_ts,
+            "last_seen": now_ts,
+        }
+    return sid
+
+
+def validate_session(sid: str, ip: str, touch: bool = True) -> bool:
+    if not sid:
+        return False
+    now_ts = time.time()
+    cleanup_sessions(now_ts)
+    with SESSION_LOCK:
+        session = SESSIONS.get(sid)
+        if not session:
+            return False
+        if session.get("ip") != ip:
+            return False
+        if touch:
+            session["last_seen"] = now_ts
+    return True
+
+
+def get_session(sid: str, ip: str, touch: bool = True) -> Optional[dict]:
+    if not sid:
+        return None
+    now_ts = time.time()
+    cleanup_sessions(now_ts)
+    with SESSION_LOCK:
+        session = SESSIONS.get(sid)
+        if not session:
+            return None
+        if session.get("ip") != ip:
+            return None
+        if touch:
+            session["last_seen"] = now_ts
+        return dict(session)
+
+
+def revoke_session(sid: str) -> None:
+    if not sid:
+        return
+    with SESSION_LOCK:
+        SESSIONS.pop(sid, None)
+
+
+def is_admin_only(path: str, method: str) -> bool:
+    # Capability split: guest may chat/search; write/destructive/admin config paths require PIN-unlocked admin.
+    if method in {"PUT", "DELETE", "PATCH"}:
+        return True
+    if method != "POST":
+        return False
+    guest_allowed_posts = {
+        "/api/chat",
+        "/api/search",
+        "/api/show",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/session",
+        "/api/auth/heartbeat",
+        "/api/auth/guest",
+    }
+    return path not in guest_allowed_posts
+
+
+def is_state_changing(method: str) -> bool:
+    return method in {"POST", "PUT", "DELETE", "PATCH"}
+
+
+def origin_allowed(request: Request) -> bool:
+    """Allow same-origin browser writes and optional configured trusted origins.
+
+    If Origin/Referer is absent, treat as non-browser/API client and allow
+    (token/session header remains the primary auth factor).
+    """
+    host = request.headers.get("host", "").strip()
+    expected_origin = f"{request.url.scheme}://{host}".rstrip("/") if host else ""
+    origin = request.headers.get("origin", "").strip().rstrip("/")
+    referer = request.headers.get("referer", "").strip()
+
+    if origin:
+        if origin == expected_origin or origin in TRUSTED_ORIGINS:
+            return True
+        return False
+
+    if referer:
+        parsed = urlparse(referer)
+        ref_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+        if ref_origin == expected_origin or ref_origin in TRUSTED_ORIGINS:
+            return True
+        return False
+
+    return True
+
+
+@app.middleware("http")
+async def session_auth_middleware(request: Request, call_next):
+    path = request.url.path
+    ip = get_client_ip(request)
+    request.state.session_role = "none"
+    request.state.client_ip = ip
+
+    unauth_paths = {
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/session",
+        "/api/auth/heartbeat",
+        "/api/auth/guest",
+    }
+
+    # CSRF hardening for browser writes: same-origin or explicitly allowlisted origins only.
+    if path.startswith("/api/") and is_state_changing(request.method):
+        if not origin_allowed(request):
+            audit_event(
+                "origin_check",
+                "denied",
+                ip=ip,
+                role="none",
+                details=f"{request.method} {path}",
+                warning=True,
+            )
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Origin check failed"},
+            )
+
+    if path.startswith("/api/") and path not in unauth_paths:
+        sid = request.headers.get("x-session-id", "").strip()
+        session = get_session(sid, ip, touch=True)
+        if not session:
+            audit_event(
+                "auth_required",
+                "denied",
+                ip=ip,
+                role="none",
+                details=f"{request.method} {path}",
+                warning=True,
+            )
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Authentication required"},
+            )
+        request.state.session_role = session.get("role", "none")
+        # Guest sessions stay usable for chat, but advanced/destructive actions require admin capability.
+        if session.get("role") != "admin" and is_admin_only(path, request.method):
+            audit_event(
+                "admin_capability",
+                "denied",
+                ip=ip,
+                role=session.get("role", "none"),
+                details=f"{request.method} {path}",
+                warning=True,
+            )
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Admin PIN required for this action"},
+            )
+
+    response = await call_next(request)
+    # Emit success audit only after route executes, so logs reflect completed admin actions.
+    if path.startswith("/api/") and is_admin_only(path, request.method):
+        role = getattr(request.state, "session_role", "none")
+        if response.status_code < 400 and role == "admin":
+            audit_event(
+                "admin_action",
+                "success",
+                ip=ip,
+                role=role,
+                details=f"{request.method} {path}",
+            )
+    return response
+
+
+@app.post("/api/auth/guest")
+async def auth_guest(request: Request):
+    ip = get_client_ip(request)
+    sid = create_session(ip, role="guest")
+    audit_event("guest_session", "success", ip=ip, role="guest")
+    return {
+        "status": "ok",
+        "session_id": sid,
+        "role": "guest",
+        "timeout_seconds": SESSION_TIMEOUT_SECONDS,
+    }
+
+
+@app.post("/api/auth/login")
+async def auth_login(request: Request):
+    body = await request.json()
+    pin = str(body.get("pin", ""))
+    ip = get_client_ip(request)
+
+    locked, retry_after = is_ip_locked(ip)
+    if locked:
+        audit_event(
+            "admin_login",
+            "locked",
+            ip=ip,
+            role="none",
+            details=f"retry_after={retry_after}",
+            warning=True,
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed PIN attempts. Retry in {retry_after}s.",
+        )
+
+    if not verify_admin_pin(pin):
+        record_pin_failure(ip)
+        audit_event("admin_login", "failed", ip=ip, role="none", warning=True)
+        raise HTTPException(status_code=401, detail="Invalid PIN")
+
+    clear_pin_failures(ip)
+    sid = create_session(ip, role="admin")
+    audit_event("admin_login", "success", ip=ip, role="admin")
+    return {
+        "status": "ok",
+        "session_id": sid,
+        "role": "admin",
+        "timeout_seconds": SESSION_TIMEOUT_SECONDS,
+    }
+
+
+@app.get("/api/auth/session")
+async def auth_session(request: Request):
+    sid = request.headers.get("x-session-id", "").strip()
+    ip = get_client_ip(request)
+    session = get_session(sid, ip, touch=True)
+    return {
+        "authenticated": bool(session),
+        "role": session.get("role") if session else "none",
+    }
+
+
+@app.post("/api/auth/heartbeat")
+async def auth_heartbeat(request: Request):
+    sid = request.headers.get("x-session-id", "").strip()
+    ip = get_client_ip(request)
+    if not sid or not validate_session(sid, ip, touch=True):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return {"status": "ok"}
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(request: Request):
+    ip = get_client_ip(request)
+    sid = request.headers.get("x-session-id", "").strip()
+    role = "none"
+    if sid:
+        session = get_session(sid, ip, touch=False)
+        role = session.get("role", "none") if session else "none"
+    if not sid:
+        try:
+            body = await request.json()
+            sid = str(body.get("session_id", "")).strip()
+        except Exception:
+            try:
+                sid = (await request.body()).decode("utf-8", errors="ignore").strip()
+            except Exception:
+                sid = ""
+    revoke_session(sid)
+    audit_event("logout", "success", ip=ip, role=role)
+    return {"status": "ok"}
+
+
+# =============================================================================
 # API ROUTES
 # =============================================================================
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(request, "index.html", {"version": VERSION})
+
 
 @app.get("/api/models")
 async def list_models():
@@ -508,6 +1098,7 @@ async def list_models():
         except httpx.ConnectError:
             raise HTTPException(status_code=502, detail="Cannot connect to Ollama.")
 
+
 @app.get("/api/ps")
 async def running_models():
     async with httpx.AsyncClient() as client:
@@ -516,6 +1107,7 @@ async def running_models():
             return resp.json()
         except httpx.ConnectError:
             raise HTTPException(status_code=502, detail="Cannot connect to Ollama.")
+
 
 @app.post("/api/show")
 async def show_model(request: Request):
@@ -527,14 +1119,20 @@ async def show_model(request: Request):
         except httpx.ConnectError:
             raise HTTPException(status_code=502, detail="Cannot connect to Ollama.")
 
+
 @app.get("/api/search/status")
 async def search_status():
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.get(f"{SEARXNG_BASE}/search", params={"q": "test", "format": "json"}, timeout=5)
+            resp = await client.get(
+                f"{SEARXNG_BASE}/search",
+                params={"q": "test", "format": "json"},
+                timeout=5,
+            )
             return {"available": resp.status_code == 200}
         except Exception:
             return {"available": False}
+
 
 @app.get("/api/stats")
 async def system_stats():
@@ -554,22 +1152,30 @@ async def system_stats():
 
 # --- Memory API ---
 
+
 @app.get("/api/memories")
 async def list_memories(topic: Optional[str] = None):
     memories = get_all_memories(topic)
     return {"memories": memories, "count": len(memories)}
 
+
 @app.post("/api/memories")
 async def create_memory(request: Request):
     body = await request.json()
-    rowid = add_memory(fact=body["fact"], topic=body.get("topic", "general"), source=body.get("source", "manual"))
+    rowid = add_memory(
+        fact=body["fact"],
+        topic=body.get("topic", "general"),
+        source=body.get("source", "manual"),
+    )
     return {"rowid": rowid, "status": "ok"}
+
 
 @app.delete("/api/memories/{rowid}")
 async def remove_memory(rowid: int):
     if not delete_memory(rowid):
         raise HTTPException(status_code=404, detail="Memory not found")
     return {"status": "ok"}
+
 
 @app.put("/api/memories/{rowid}")
 async def edit_memory(rowid: int, request: Request):
@@ -578,38 +1184,52 @@ async def edit_memory(rowid: int, request: Request):
         raise HTTPException(status_code=404, detail="Memory not found")
     return {"status": "ok"}
 
+
 @app.get("/api/memories/search")
 async def search_memories_api(q: str, limit: int = 10):
     results = search_memories(q, limit=limit)
     return {"results": results, "count": len(results)}
 
+
 @app.get("/api/memories/stats")
 async def memory_stats():
     db = get_db()
     total = db.execute("SELECT COUNT(*) as c FROM memories").fetchone()["c"]
-    topics = db.execute("SELECT topic, COUNT(*) as c FROM memories GROUP BY topic ORDER BY c DESC").fetchall()
+    topics = db.execute(
+        "SELECT topic, COUNT(*) as c FROM memories GROUP BY topic ORDER BY c DESC"
+    ).fetchall()
     db.close()
     return {"total": total, "by_topic": {row["topic"]: row["c"] for row in topics}}
 
 
 # --- Profile ---
 
+
 @app.get("/api/profile")
 async def get_profile():
     db = get_db()
     row = db.execute("SELECT content, updated_at FROM profile WHERE id = 1").fetchone()
     db.close()
-    return {"content": row["content"], "updated_at": row["updated_at"]} if row else {"content": "", "updated_at": ""}
+    return (
+        {"content": row["content"], "updated_at": row["updated_at"]}
+        if row
+        else {"content": "", "updated_at": ""}
+    )
+
 
 @app.put("/api/profile")
 async def update_profile(request: Request):
     body = await request.json()
     now = datetime.now(timezone.utc).isoformat()
     db = get_db()
-    db.execute("UPDATE profile SET content = ?, updated_at = ? WHERE id = 1", (body["content"], now))
+    db.execute(
+        "UPDATE profile SET content = ?, updated_at = ? WHERE id = 1",
+        (body["content"], now),
+    )
     db.commit()
     db.close()
     return {"status": "ok", "updated_at": now}
+
 
 @app.get("/api/profile/default")
 async def get_default_profile():
@@ -618,6 +1238,7 @@ async def get_default_profile():
 
 # --- Settings ---
 
+
 @app.get("/api/settings")
 async def get_settings():
     db = get_db()
@@ -625,12 +1246,16 @@ async def get_settings():
     db.close()
     return {row["key"]: row["value"] for row in rows}
 
+
 @app.put("/api/settings")
 async def update_settings(request: Request):
     body = await request.json()
     db = get_db()
     for key, value in body.items():
-        db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+        db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            (key, str(value)),
+        )
     db.commit()
     db.close()
     return {"status": "ok"}
@@ -638,12 +1263,16 @@ async def update_settings(request: Request):
 
 # --- System Presets ---
 
+
 @app.get("/api/presets")
 async def list_presets():
     db = get_db()
-    rows = db.execute("SELECT * FROM system_presets ORDER BY is_default DESC, name ASC").fetchall()
+    rows = db.execute(
+        "SELECT * FROM system_presets ORDER BY is_default DESC, name ASC"
+    ).fetchall()
     db.close()
     return [dict(r) for r in rows]
+
 
 @app.post("/api/presets")
 async def create_preset(request: Request):
@@ -651,25 +1280,34 @@ async def create_preset(request: Request):
     preset_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     db = get_db()
-    db.execute("INSERT INTO system_presets (id, name, prompt, is_default, created_at) VALUES (?, ?, ?, 0, ?)",
-               (preset_id, body["name"], body["prompt"], now))
+    db.execute(
+        "INSERT INTO system_presets (id, name, prompt, is_default, created_at) VALUES (?, ?, ?, 0, ?)",
+        (preset_id, body["name"], body["prompt"], now),
+    )
     db.commit()
     db.close()
     return {"id": preset_id, "name": body["name"], "prompt": body["prompt"]}
+
 
 @app.put("/api/presets/{preset_id}")
 async def update_preset(preset_id: str, request: Request):
     body = await request.json()
     db = get_db()
-    db.execute("UPDATE system_presets SET name = ?, prompt = ? WHERE id = ?", (body["name"], body["prompt"], preset_id))
+    db.execute(
+        "UPDATE system_presets SET name = ?, prompt = ? WHERE id = ?",
+        (body["name"], body["prompt"], preset_id),
+    )
     db.commit()
     db.close()
     return {"status": "ok"}
 
+
 @app.delete("/api/presets/{preset_id}")
 async def delete_preset(preset_id: str):
     db = get_db()
-    db.execute("DELETE FROM system_presets WHERE id = ? AND is_default = 0", (preset_id,))
+    db.execute(
+        "DELETE FROM system_presets WHERE id = ? AND is_default = 0", (preset_id,)
+    )
     db.commit()
     db.close()
     return {"status": "ok"}
@@ -677,12 +1315,14 @@ async def delete_preset(preset_id: str):
 
 # --- Conversations ---
 
+
 @app.get("/api/conversations")
 async def list_conversations():
     db = get_db()
     rows = db.execute("SELECT * FROM conversations ORDER BY updated_at DESC").fetchall()
     db.close()
     return [dict(r) for r in rows]
+
 
 @app.post("/api/conversations")
 async def create_conversation(request: Request):
@@ -692,11 +1332,20 @@ async def create_conversation(request: Request):
     model = body.get("model", DEFAULT_MODEL)
     title = body.get("title", "New Chat")
     db = get_db()
-    db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-               (conv_id, title, model, now, now))
+    db.execute(
+        "INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (conv_id, title, model, now, now),
+    )
     db.commit()
     db.close()
-    return {"id": conv_id, "title": title, "model": model, "created_at": now, "updated_at": now}
+    return {
+        "id": conv_id,
+        "title": title,
+        "model": model,
+        "created_at": now,
+        "updated_at": now,
+    }
+
 
 @app.get("/api/conversations/{conv_id}")
 async def get_conversation(conv_id: str):
@@ -705,9 +1354,12 @@ async def get_conversation(conv_id: str):
     if not conv:
         db.close()
         raise HTTPException(status_code=404, detail="Conversation not found")
-    messages = db.execute("SELECT * FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,)).fetchall()
+    messages = db.execute(
+        "SELECT * FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,)
+    ).fetchall()
     db.close()
     return {"conversation": dict(conv), "messages": [dict(m) for m in messages]}
+
 
 @app.put("/api/conversations/{conv_id}")
 async def update_conversation(conv_id: str, request: Request):
@@ -715,12 +1367,19 @@ async def update_conversation(conv_id: str, request: Request):
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
     if "title" in body:
-        db.execute("UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?", (body["title"], now, conv_id))
+        db.execute(
+            "UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?",
+            (body["title"], now, conv_id),
+        )
     if "model" in body:
-        db.execute("UPDATE conversations SET model = ?, updated_at = ? WHERE id = ?", (body["model"], now, conv_id))
+        db.execute(
+            "UPDATE conversations SET model = ?, updated_at = ? WHERE id = ?",
+            (body["model"], now, conv_id),
+        )
     db.commit()
     db.close()
     return {"status": "ok"}
+
 
 @app.delete("/api/conversations/{conv_id}")
 async def delete_conversation(conv_id: str):
@@ -730,6 +1389,7 @@ async def delete_conversation(conv_id: str):
     db.commit()
     db.close()
     return {"status": "ok"}
+
 
 @app.delete("/api/conversations")
 async def delete_all_conversations():
@@ -745,6 +1405,7 @@ async def delete_all_conversations():
 # =============================================================================
 # EXPLICIT WEB SEARCH
 # =============================================================================
+
 
 @app.post("/api/search")
 async def explicit_search(request: Request):
@@ -763,13 +1424,19 @@ async def explicit_search(request: Request):
     if not conv_id:
         conv_id = str(uuid.uuid4())
         title = f"🔍 {query[:70]}..." if len(query) > 70 else f"🔍 {query}"
-        db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                   (conv_id, title, model, now, now))
+        db.execute(
+            "INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (conv_id, title, model, now, now),
+        )
     else:
-        db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
+        db.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id)
+        )
 
-    db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-               (conv_id, "user", f"🔍 {query}", now))
+    db.execute(
+        "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+        (conv_id, "user", f"🔍 {query}", now),
+    )
     db.commit()
     db.close()
 
@@ -781,14 +1448,21 @@ async def explicit_search(request: Request):
         if not results:
             error_msg = "No search results found."
             yield f"data: {json.dumps({'token': error_msg, 'conversation_id': conv_id})}\n\n"
-            
+
             # Save to DB
             db2 = get_db()
-            db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                        (conv_id, "assistant", error_msg, datetime.now(timezone.utc).isoformat()))
+            db2.execute(
+                "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                (
+                    conv_id,
+                    "assistant",
+                    error_msg,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
             db2.commit()
             db2.close()
-            
+
             yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id})}\n\n"
             return
 
@@ -797,16 +1471,22 @@ async def explicit_search(request: Request):
         # Ask Ollama to summarize
         search_context = format_search_results(results)
         messages = [
-            {"role": "system", "content": f"You have access to current web data. Answer directly using ONLY the data below. Be concise. No apologies. No disclaimers.\n\n{search_context}"},
-            {"role": "user", "content": query}
+            {
+                "role": "system",
+                "content": f"You have access to current web data. Answer directly using ONLY the data below. Be concise. No apologies. No disclaimers.\n\n{search_context}",
+            },
+            {"role": "user", "content": query},
         ]
 
         full_response = []
         async with httpx.AsyncClient() as client:
             try:
-                async with client.stream("POST", f"{OLLAMA_BASE}/api/chat",
-                                          json={"model": model, "messages": messages, "stream": True},
-                                          timeout=httpx.Timeout(300.0, connect=10.0)) as resp:
+                async with client.stream(
+                    "POST",
+                    f"{OLLAMA_BASE}/api/chat",
+                    json={"model": model, "messages": messages, "stream": True},
+                    timeout=httpx.Timeout(300.0, connect=10.0),
+                ) as resp:
                     async for line in resp.aiter_lines():
                         if line.strip():
                             try:
@@ -825,12 +1505,14 @@ async def explicit_search(request: Request):
                 return
 
         summary = "".join(full_response)
-        
+
         saved_msg = f"{summary}\n\n---\n*🔍 Web search results*"
 
         db2 = get_db()
-        db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                    (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+        db2.execute(
+            "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+            (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()),
+        )
         db2.commit()
         db2.close()
 
@@ -845,10 +1527,14 @@ async def explicit_search(request: Request):
 # CHAT (STREAMING)
 # =============================================================================
 
+
 def build_system_prompt(db, extra_prompt="", user_message=""):
     """Build the full system prompt: profile + memories + preset."""
     parts = []
-    settings = {row["key"]: row["value"] for row in db.execute("SELECT key, value FROM settings").fetchall()}
+    settings = {
+        row["key"]: row["value"]
+        for row in db.execute("SELECT key, value FROM settings").fetchall()
+    }
 
     if settings.get("profile_enabled", "true") == "true":
         profile = db.execute("SELECT content FROM profile WHERE id = 1").fetchone()
@@ -881,7 +1567,10 @@ async def chat(request: Request):
 
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
-    settings = {row["key"]: row["value"] for row in db.execute("SELECT key, value FROM settings").fetchall()}
+    settings = {
+        row["key"]: row["value"]
+        for row in db.execute("SELECT key, value FROM settings").fetchall()
+    }
     search_enabled = settings.get("search_enabled", "true") == "true"
 
     remember_response = process_remember_command(user_message)
@@ -889,16 +1578,25 @@ async def chat(request: Request):
     if not conv_id:
         conv_id = str(uuid.uuid4())
         title = user_message[:80] + ("..." if len(user_message) > 80 else "")
-        db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                   (conv_id, title, model, now, now))
+        db.execute(
+            "INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (conv_id, title, model, now, now),
+        )
     else:
-        db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
+        db.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id)
+        )
 
-    db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-               (conv_id, "user", user_message, now))
+    db.execute(
+        "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+        (conv_id, "user", user_message, now),
+    )
     db.commit()
 
-    history_rows = db.execute("SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,)).fetchall()
+    history_rows = db.execute(
+        "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id ASC",
+        (conv_id,),
+    ).fetchall()
     system_prompt = build_system_prompt(db, preset_prompt, user_message)
     db.close()
 
@@ -908,7 +1606,12 @@ async def chat(request: Request):
     for row in history_rows:
         messages.append({"role": row["role"], "content": row["content"]})
 
-    ollama_payload = {"model": model, "messages": messages, "stream": True, "logprobs": True}
+    ollama_payload = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "logprobs": True,
+    }
 
     async def stream_response():
         full_response = []
@@ -920,8 +1623,12 @@ async def chat(request: Request):
 
         async with httpx.AsyncClient() as client:
             try:
-                async with client.stream("POST", f"{OLLAMA_BASE}/api/chat", json=ollama_payload,
-                                          timeout=httpx.Timeout(300.0, connect=10.0)) as resp:
+                async with client.stream(
+                    "POST",
+                    f"{OLLAMA_BASE}/api/chat",
+                    json=ollama_payload,
+                    timeout=httpx.Timeout(300.0, connect=10.0),
+                ) as resp:
                     async for line in resp.aiter_lines():
                         if line.strip():
                             try:
@@ -935,7 +1642,11 @@ async def chat(request: Request):
                                 if chunk.get("done"):
                                     eval_count = chunk.get("eval_count", 0)
                                     eval_duration = chunk.get("eval_duration", 0)
-                                    tokens_per_sec = (eval_count / (eval_duration / 1e9)) if eval_duration > 0 else 0
+                                    tokens_per_sec = (
+                                        (eval_count / (eval_duration / 1e9))
+                                        if eval_duration > 0
+                                        else 0
+                                    )
                                     break
                             except json.JSONDecodeError:
                                 pass
@@ -953,25 +1664,48 @@ async def chat(request: Request):
                         search_context = format_search_results(search_results)
                         augmented_messages = []
                         if system_prompt:
-                            augmented_messages.append({"role": "system", "content": system_prompt + "\n\n" + search_context})
+                            augmented_messages.append(
+                                {
+                                    "role": "system",
+                                    "content": system_prompt + "\n\n" + search_context,
+                                }
+                            )
                         else:
-                            augmented_messages.append({"role": "system", "content": search_context})
+                            augmented_messages.append(
+                                {"role": "system", "content": search_context}
+                            )
                         for row in history_rows[:-1]:
-                            augmented_messages.append({"role": row["role"], "content": row["content"]})
-                        augmented_messages.append({"role": "user", "content": user_message})
+                            augmented_messages.append(
+                                {"role": row["role"], "content": row["content"]}
+                            )
+                        augmented_messages.append(
+                            {"role": "user", "content": user_message}
+                        )
 
                         yield f"data: {json.dumps({'search_results': len(search_results), 'conversation_id': conv_id})}\n\n"
 
                         augmented_response = []
-                        async with client.stream("POST", f"{OLLAMA_BASE}/api/chat",
-                                                  json={"model": model, "messages": augmented_messages, "stream": True},
-                                                  timeout=httpx.Timeout(300.0, connect=10.0)) as resp2:
+                        async with client.stream(
+                            "POST",
+                            f"{OLLAMA_BASE}/api/chat",
+                            json={
+                                "model": model,
+                                "messages": augmented_messages,
+                                "stream": True,
+                            },
+                            timeout=httpx.Timeout(300.0, connect=10.0),
+                        ) as resp2:
                             async for line in resp2.aiter_lines():
                                 if line.strip():
                                     try:
                                         chunk = json.loads(line)
-                                        if "message" in chunk and "content" in chunk["message"]:
-                                            augmented_response.append(chunk["message"]["content"])
+                                        if (
+                                            "message" in chunk
+                                            and "content" in chunk["message"]
+                                        ):
+                                            augmented_response.append(
+                                                chunk["message"]["content"]
+                                            )
                                         if chunk.get("done"):
                                             break
                                     except json.JSONDecodeError:
@@ -980,17 +1714,29 @@ async def chat(request: Request):
                         raw_response = "".join(augmented_response) or assistant_msg
                         cleaned_response = clean_hedging(raw_response)
                         if is_refusal(cleaned_response) or len(cleaned_response) < 20:
-                            cleaned_response = format_direct_answer(user_message, search_results)
+                            cleaned_response = format_direct_answer(
+                                user_message, search_results
+                            )
 
                         yield f"data: {json.dumps({'token': cleaned_response, 'conversation_id': conv_id, 'augmented': True})}\n\n"
 
-                        saved_msg = cleaned_response + "\n\n---\n*🔍 Enhanced with web search results*"
+                        saved_msg = (
+                            cleaned_response
+                            + "\n\n---\n*🔍 Enhanced with web search results*"
+                        )
                         if remember_response:
                             saved_msg = remember_response + "\n\n" + saved_msg
 
                         db2 = get_db()
-                        db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                                    (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+                        db2.execute(
+                            "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                            (
+                                conv_id,
+                                "assistant",
+                                saved_msg,
+                                datetime.now(timezone.utc).isoformat(),
+                            ),
+                        )
                         db2.commit()
                         db2.close()
 
@@ -1002,8 +1748,15 @@ async def chat(request: Request):
                     saved_msg = remember_response + "\n\n" + saved_msg
 
                 db2 = get_db()
-                db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                            (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+                db2.execute(
+                    "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                    (
+                        conv_id,
+                        "assistant",
+                        saved_msg,
+                        datetime.now(timezone.utc).isoformat(),
+                    ),
+                )
                 db2.commit()
                 db2.close()
 
@@ -1019,4 +1772,5 @@ async def chat(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)

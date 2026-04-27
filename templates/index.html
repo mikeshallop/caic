@@ -188,9 +188,35 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     .chat-container { padding:12px; }
     .input-area { padding:10px 12px; }
 }
+
+.auth-screen { position: fixed; inset: 0; width: 100%; height: 100vh; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.62); z-index: 3000; }
+.auth-card { width: 100%; max-width: 360px; margin: 0 16px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 22px; box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
+.auth-title { font-family: var(--font-mono); font-size: 18px; color: var(--accent); margin-bottom: 6px; }
+.auth-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+.auth-warning { margin-bottom: 12px; font-size: 12px; color: #ff8f8f; background: rgba(231,76,60,0.14); border: 1px solid rgba(231,76,60,0.35); border-radius: var(--radius); padding: 8px 10px; line-height: 1.4; }
+.pin-input { width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-primary); font-family: var(--font-mono); font-size: 22px; letter-spacing: 6px; text-align: center; padding: 12px; margin-bottom: 10px; }
+.pin-input:focus { outline: none; border-color: var(--accent-dim); }
+.auth-btn { width: 100%; padding: 11px 14px; background: var(--accent-dim); border: none; border-radius: var(--radius); color: #fff; font-family: var(--font-mono); font-size: 13px; font-weight: 600; cursor: pointer; }
+.auth-btn:hover { background: var(--accent); }
+.auth-error { min-height: 18px; margin-top: 10px; font-size: 12px; color: var(--danger); text-align: center; }
+.logout-btn { padding: 8px 10px; background: transparent; border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); font-family: var(--font-mono); font-size: 11px; cursor: pointer; }
+.logout-btn:hover { background: rgba(231,76,60,0.12); }
 </style>
 </head>
 <body>
+
+<div class="auth-screen" id="authScreen">
+    <div class="auth-card">
+        <div class="auth-title">JarvisChat Unlock</div>
+        <div class="auth-subtitle">Enter 4-digit admin PIN to unlock advanced actions</div>
+        <div class="auth-warning">Security warning: PIN 1234 is weak. Use a non-trivial 4-digit PIN.</div>
+        <input id="pinInput" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" />
+        <button id="unlockBtn" class="auth-btn" onclick="unlockWithPin()">UNLOCK</button>
+        <div id="authError" class="auth-error"></div>
+    </div>
+</div>
+
+<div id="appShell" style="display:flex; width:100%; height:100%;">
 
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
@@ -284,6 +310,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="memory-badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">🧠 MEM ON</button>
             <button class="search-badge on" id="searchBadge" onclick="toggleSearch()" title="Toggle auto web search">🔍 SEARCH ON</button>
             <button class="profile-badge on" id="profileBadge" onclick="toggleProfile()" title="Toggle profile injection">PROFILE ON</button>
+            <button class="logout-btn" id="authActionBtn" onclick="handleAuthAction()" title="Unlock admin">ADMIN</button>
         </div>
     </div>
     <div class="chat-container" id="chatContainer">
@@ -309,6 +336,8 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     </div>
 </main>
 
+</div>
+
 <script>
 let currentConvId = null;
 let isStreaming = false;
@@ -320,8 +349,214 @@ let presets = [];
 let modelContextSize = 8192;
 let cachedProfile = '';
 let conversationHistory = [];
+let appInitialized = false;
+let heartbeatIntervalId = null;
+let currentRole = 'guest';
+
+const SESSION_KEY = 'jc_session_id';
 
 document.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') unlockWithPin(); });
+    await bootstrapAuth();
+});
+
+window.addEventListener('pagehide', () => {
+    // Best-effort server-side revoke on tab close; session timeout is the fallback if beacon is dropped.
+    const sid = sessionStorage.getItem(SESSION_KEY);
+    if (!sid) return;
+    navigator.sendBeacon('/api/auth/logout', sid);
+    sessionStorage.removeItem(SESSION_KEY);
+});
+
+function showAuthScreen() {
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('pinInput').value = '';
+    document.getElementById('authError').textContent = '';
+    document.getElementById('pinInput').focus();
+}
+
+function hideAuthScreen() {
+    document.getElementById('authScreen').style.display = 'none';
+}
+
+function showMainScreen() {
+    document.getElementById('appShell').style.display = 'flex';
+}
+
+function applyRoleUI() {
+    // Guest mode keeps chat available while hiding controls that mutate system state.
+    const isAdmin = currentRole === 'admin';
+    const authBtn = document.getElementById('authActionBtn');
+    const settingsBtn = document.querySelector('.settings-btn');
+    const deleteAllBtn = document.querySelector('.delete-all-btn');
+    const memoryBadge = document.getElementById('memoryBadge');
+    const searchBadge = document.getElementById('searchBadge');
+    const profileBadge = document.getElementById('profileBadge');
+
+    authBtn.textContent = isAdmin ? 'LOGOUT' : 'ADMIN';
+    authBtn.title = isAdmin ? 'Logout admin mode' : 'Unlock admin mode';
+
+    settingsBtn.style.display = isAdmin ? 'inline-block' : 'none';
+    deleteAllBtn.style.display = isAdmin ? 'inline-block' : 'none';
+    memoryBadge.style.display = isAdmin ? 'inline-block' : 'none';
+    searchBadge.style.display = isAdmin ? 'inline-block' : 'none';
+    profileBadge.style.display = isAdmin ? 'inline-block' : 'none';
+
+    if (!isAdmin) closeSettings();
+}
+
+function requireAdminNotice() {
+    // Reuse the same PIN modal as a capability escalation prompt.
+    showAuthScreen();
+    document.getElementById('authError').textContent = 'Admin PIN required for this action';
+}
+
+function handleAuthExpired() {
+    sessionStorage.removeItem(SESSION_KEY);
+    currentRole = 'guest';
+    if (heartbeatIntervalId) {
+        clearInterval(heartbeatIntervalId);
+        heartbeatIntervalId = null;
+    }
+    bootstrapAuth();
+}
+
+async function authFetch(url, options = {}) {
+    const sid = sessionStorage.getItem(SESSION_KEY);
+    const headers = { ...(options.headers || {}) };
+    if (sid) headers['X-Session-ID'] = sid;
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401) {
+        // Session missing/expired/revoked: return to bootstrap flow and recreate guest session.
+        handleAuthExpired();
+        throw new Error('Authentication required');
+    }
+    if (response.status === 403) {
+        // Authenticated but insufficient capability (guest hitting admin action).
+        requireAdminNotice();
+        throw new Error('Admin PIN required');
+    }
+    return response;
+}
+
+async function createGuestSession() {
+    // Guest session is the default so conversational UX works without PIN friction.
+    const resp = await fetch('/api/auth/guest', { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Unable to create guest session');
+    sessionStorage.setItem(SESSION_KEY, data.session_id);
+    currentRole = data.role || 'guest';
+}
+
+async function bootstrapAuth() {
+    const sid = sessionStorage.getItem(SESSION_KEY);
+    try {
+        if (sid) {
+            // Restore prior tab session when possible to avoid unnecessary re-prompts.
+            const resp = await fetch('/api/auth/session', {
+                headers: { 'X-Session-ID': sid }
+            });
+            const data = await resp.json();
+            if (resp.ok && data.authenticated) {
+                currentRole = data.role || 'guest';
+            } else {
+                sessionStorage.removeItem(SESSION_KEY);
+                await createGuestSession();
+            }
+        } else {
+            await createGuestSession();
+        }
+
+        showMainScreen();
+        hideAuthScreen();
+        applyRoleUI();
+        startHeartbeat();
+        await initializeMainApp();
+    } catch (e) {
+        showMainScreen();
+        showAuthScreen();
+    }
+}
+
+async function unlockWithPin() {
+    const pinInput = document.getElementById('pinInput');
+    const authError = document.getElementById('authError');
+    const unlockBtn = document.getElementById('unlockBtn');
+    const pin = (pinInput.value || '').trim();
+
+    if (!/^\d{4}$/.test(pin)) {
+        authError.textContent = 'PIN must be 4 digits';
+        return;
+    }
+
+    unlockBtn.disabled = true;
+    authError.textContent = '';
+    try {
+        const resp = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            authError.textContent = data.detail || 'Login failed';
+            unlockBtn.disabled = false;
+            pinInput.select();
+            return;
+        }
+        sessionStorage.setItem(SESSION_KEY, data.session_id);
+        // Admin session replaces guest session in this tab only.
+        currentRole = data.role || 'admin';
+        showMainScreen();
+        hideAuthScreen();
+        applyRoleUI();
+        startHeartbeat();
+        await initializeMainApp();
+    } catch (e) {
+        authError.textContent = 'Unable to reach auth endpoint';
+    } finally {
+        unlockBtn.disabled = false;
+    }
+}
+
+async function logoutToGuest() {
+    try {
+        await authFetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {
+        // Ignore; local client state cleanup still proceeds.
+    }
+    // Drop elevated session and immediately re-issue a guest token for continued chat use.
+    sessionStorage.removeItem(SESSION_KEY);
+    await createGuestSession();
+    currentRole = 'guest';
+    applyRoleUI();
+    hideAuthScreen();
+}
+
+function handleAuthAction() {
+    if (currentRole === 'admin') {
+        logoutToGuest();
+        return;
+    }
+    showAuthScreen();
+}
+
+async function sendHeartbeat() {
+    try {
+        await authFetch('/api/auth/heartbeat', { method: 'POST' });
+    } catch (e) {
+        // authFetch handles invalid session case.
+    }
+}
+
+function startHeartbeat() {
+    if (heartbeatIntervalId) clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = setInterval(sendHeartbeat, 30000);
+}
+
+async function initializeMainApp() {
+    if (appInitialized) return;
+    appInitialized = true;
     await loadModels();
     await loadSettings();
     await loadProfile();
@@ -336,16 +571,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(updateSystemStats, 2000);
     document.getElementById('userInput').addEventListener('input', updateTokenThermometer);
     updateTokenThermometer();
-});
+}
 
 async function loadMemoryStats() {
     try {
-        const resp = await fetch('/api/memories/stats');
+        const resp = await authFetch('/api/memories/stats');
         const data = await resp.json();
         document.getElementById('memoryStats').textContent = `Total: ${data.total} memories`;
         document.getElementById('memoryStatus').innerHTML = `<span class="status-dot"></span> memory: ${data.total} entries`;
 
-        const listResp = await fetch('/api/memories?limit=20');
+        const listResp = await authFetch('/api/memories?limit=20');
         const listData = await listResp.json();
         const container = document.getElementById('memoryList');
         container.innerHTML = '';
@@ -359,14 +594,15 @@ async function loadMemoryStats() {
 }
 
 async function deleteMemory(rowid) {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this memory?')) return;
-    await fetch(`/api/memories/${rowid}`, { method: 'DELETE' });
+    await authFetch(`/api/memories/${rowid}`, { method: 'DELETE' });
     await loadMemoryStats();
 }
 
 async function updateSystemStats() {
     try {
-        const resp = await fetch('/api/stats');
+        const resp = await authFetch('/api/stats');
         const data = await resp.json();
         document.getElementById('cpuFill').style.width = data.cpu_percent + '%';
         document.getElementById('cpuFill').className = 'stat-fill' + (data.cpu_percent >= 90 ? ' danger' : data.cpu_percent >= 70 ? ' warn' : '');
@@ -385,7 +621,7 @@ async function updateSystemStats() {
 
 async function checkOllamaStatus() {
     try {
-        const resp = await fetch('/api/ps');
+        const resp = await authFetch('/api/ps');
         const data = await resp.json();
         const el = document.getElementById('ollamaStatus');
         const models = data.models || [];
@@ -397,7 +633,7 @@ async function checkOllamaStatus() {
 
 async function checkSearchStatus() {
     try {
-        const resp = await fetch('/api/search/status');
+        const resp = await authFetch('/api/search/status');
         const data = await resp.json();
         document.getElementById('searchStatus').innerHTML = data.available ? '<span class="status-dot"></span> search: ready' : '<span class="status-dot warning"></span> search: unavailable';
     } catch(e) {
@@ -407,7 +643,7 @@ async function checkSearchStatus() {
 
 async function loadModels() {
     try {
-        const resp = await fetch('/api/models');
+        const resp = await authFetch('/api/models');
         const data = await resp.json();
         const select = document.getElementById('modelSelect');
         const settingSelect = document.getElementById('defaultModelSetting');
@@ -426,7 +662,7 @@ async function fetchModelContextSize() {
     const model = document.getElementById('modelSelect').value;
     if (!model) return;
     try {
-        const resp = await fetch('/api/show', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: model }) });
+        const resp = await authFetch('/api/show', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: model }) });
         const data = await resp.json();
         if (data.model_info && data.model_info['context_length']) modelContextSize = data.model_info['context_length'];
         else if (data.parameters) { const match = data.parameters.match(/num_ctx\s+(\d+)/); if (match) modelContextSize = parseInt(match[1]); }
@@ -436,7 +672,7 @@ async function fetchModelContextSize() {
 
 async function loadSettings() {
     try {
-        const resp = await fetch('/api/settings');
+        const resp = await authFetch('/api/settings');
         const s = await resp.json();
         profileEnabled = s.profile_enabled !== 'false';
         searchEnabled = s.search_enabled !== 'false';
@@ -452,17 +688,19 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-    await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_enabled: profileEnabled ? 'true' : 'false', search_enabled: searchEnabled ? 'true' : 'false', memory_enabled: memoryEnabled ? 'true' : 'false' }) });
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
+    await authFetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_enabled: profileEnabled ? 'true' : 'false', search_enabled: searchEnabled ? 'true' : 'false', memory_enabled: memoryEnabled ? 'true' : 'false' }) });
 }
 
 async function saveDefaultModel() {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     const model = document.getElementById('defaultModelSetting').value;
-    await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ default_model: model }) });
+    await authFetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ default_model: model }) });
 }
 
 async function loadProfile() {
     try {
-        const resp = await fetch('/api/profile');
+        const resp = await authFetch('/api/profile');
         const data = await resp.json();
         cachedProfile = data.content || '';
         document.getElementById('profileEditor').value = cachedProfile;
@@ -472,8 +710,9 @@ async function loadProfile() {
 }
 
 async function saveProfile() {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     const content = document.getElementById('profileEditor').value;
-    await fetch('/api/profile', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: content }) });
+    await authFetch('/api/profile', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: content }) });
     cachedProfile = content;
     updateTokenCount();
     const btn = document.getElementById('saveProfileBtn');
@@ -482,18 +721,19 @@ async function saveProfile() {
 }
 
 async function resetProfile() {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Reset profile to default?')) return;
     try {
-        const resp = await fetch('/api/profile/default');
+        const resp = await authFetch('/api/profile/default');
         const data = await resp.json();
         document.getElementById('profileEditor').value = data.content;
         await saveProfile();
     } catch(e) {}
 }
 
-function toggleProfile() { profileEnabled = !profileEnabled; updateProfileUI(); saveSettings(); }
-function toggleSearch() { searchEnabled = !searchEnabled; updateSearchUI(); saveSettings(); }
-function toggleMemory() { memoryEnabled = !memoryEnabled; updateMemoryUI(); saveSettings(); }
+function toggleProfile() { if (currentRole !== 'admin') { requireAdminNotice(); return; } profileEnabled = !profileEnabled; updateProfileUI(); saveSettings(); }
+function toggleSearch() { if (currentRole !== 'admin') { requireAdminNotice(); return; } searchEnabled = !searchEnabled; updateSearchUI(); saveSettings(); }
+function toggleMemory() { if (currentRole !== 'admin') { requireAdminNotice(); return; } memoryEnabled = !memoryEnabled; updateMemoryUI(); saveSettings(); }
 
 function updateProfileUI() {
     const badge = document.getElementById('profileBadge');
@@ -554,7 +794,7 @@ document.getElementById('presetSelect').addEventListener('change', updateTokenTh
 
 async function loadPresets() {
     try {
-        const resp = await fetch('/api/presets');
+        const resp = await authFetch('/api/presets');
         presets = await resp.json();
         renderPresetList();
         renderPresetSelect();
@@ -581,28 +821,31 @@ function renderPresetSelect() {
 }
 
 async function addPreset() {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     const name = prompt('Preset name:');
     if (!name) return;
     const p = prompt('System prompt text:');
     if (!p) return;
-    await fetch('/api/presets', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) });
+    await authFetch('/api/presets', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) });
     await loadPresets();
 }
 
 async function editPreset(id) {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     const preset = presets.find(p => p.id === id);
     if (!preset) return;
     const name = prompt('Preset name:', preset.name);
     if (!name) return;
     const p = prompt('System prompt:', preset.prompt);
     if (p === null) return;
-    await fetch(`/api/presets/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) });
+    await authFetch(`/api/presets/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) });
     await loadPresets();
 }
 
 async function deletePreset(id) {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this preset?')) return;
-    await fetch(`/api/presets/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/presets/${id}`, { method: 'DELETE' });
     await loadPresets();
 }
 
@@ -613,20 +856,26 @@ function getSelectedPresetPrompt() {
     return p ? p.prompt : '';
 }
 
-function openSettings() { document.getElementById('settingsModal').classList.add('visible'); loadProfile(); loadMemoryStats(); }
+function openSettings() {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
+    document.getElementById('settingsModal').classList.add('visible');
+    loadProfile();
+    loadMemoryStats();
+}
 function closeSettings() { document.getElementById('settingsModal').classList.remove('visible'); }
 document.getElementById('settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') closeSettings(); });
 
 async function loadConversations() {
     try {
-        const resp = await fetch('/api/conversations');
+        const resp = await authFetch('/api/conversations');
         const convs = await resp.json();
         const list = document.getElementById('convList');
         list.innerHTML = '';
         convs.forEach(c => {
             const div = document.createElement('div');
             div.className = 'conv-item' + (c.id === currentConvId ? ' active' : '');
-            div.innerHTML = `<span class="conv-title" onclick="loadConversation('${c.id}')">${c.title}</span><span class="conv-delete" onclick="event.stopPropagation();deleteConversation('${c.id}')">×</span>`;
+            const delBtn = currentRole === 'admin' ? `<span class="conv-delete" onclick="event.stopPropagation();deleteConversation('${c.id}')">×</span>` : '';
+            div.innerHTML = `<span class="conv-title" onclick="loadConversation('${c.id}')">${c.title}</span>${delBtn}`;
             list.appendChild(div);
         });
     } catch(e) {}
@@ -634,7 +883,7 @@ async function loadConversations() {
 
 async function loadConversation(convId) {
     try {
-        const resp = await fetch(`/api/conversations/${convId}`);
+        const resp = await authFetch(`/api/conversations/${convId}`);
         const data = await resp.json();
         currentConvId = convId;
         document.getElementById('modelSelect').value = data.conversation.model;
@@ -650,15 +899,17 @@ async function loadConversation(convId) {
 }
 
 async function deleteConversation(convId) {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this conversation?')) return;
-    await fetch(`/api/conversations/${convId}`, { method: 'DELETE' });
+    await authFetch(`/api/conversations/${convId}`, { method: 'DELETE' });
     if (currentConvId === convId) { currentConvId = null; showWelcome(); }
     await loadConversations();
 }
 
 async function deleteAllConversations() {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete ALL conversations? This cannot be undone.')) return;
-    await fetch('/api/conversations', { method: 'DELETE' });
+    await authFetch('/api/conversations', { method: 'DELETE' });
     currentConvId = null;
     conversationHistory = [];
     showWelcome();
@@ -696,7 +947,7 @@ async function sendSearch() {
     setStreamingState(true);
     try {
         abortController = new AbortController();
-        const resp = await fetch('/api/search', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, query, model }), signal: abortController.signal });
+        const resp = await authFetch('/api/search', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, query, model }), signal: abortController.signal });
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
@@ -765,7 +1016,7 @@ async function sendMessage() {
     let searchTriggered = false;
     try {
         abortController = new AbortController();
-        const resp = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, message, model, system_prompt: presetPrompt }), signal: abortController.signal });
+        const resp = await authFetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, message, model, system_prompt: presetPrompt }), signal: abortController.signal });
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';

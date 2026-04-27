@@ -34,6 +34,31 @@ Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
 - **Conversation History** — SQLite-backed chat persistence with mass-delete option
 - **Model Switching** — Change Ollama models on the fly
 
+## Current WiP (Prioritized)
+
+Canonical backlog: [docs/wiki/current-wip.md](docs/wiki/current-wip.md)
+
+Scope boundary: local-first (same-host Ollama), optional RFC1918 LAN endpoints, no public Internet AI endpoints by default.
+
+Total identified items: 26
+
+Top 10 (brief):
+
+1. P0: Add auth for write/admin endpoints
+2. P0: Add CSRF/origin protection for state-changing requests
+3. P0: Block unsafe URL schemes in rendered links
+4. P0: Add rate limiting and request size limits
+5. P1: Restrict `/api/settings` updates to allowlisted keys
+6. P1: Add pagination + hard caps for list APIs
+7. P1: Replace raw exception leakage with safe client errors
+8. P1: Add automated tests for streaming/search/memory paths
+9. P2: Implement MCP-style skills/tool-call framework
+10. P2: Implement heartbeat/check-in scheduler + summary endpoint
+
+Item 1 executive summary: keep guest mode for conversational chat, require 4-digit admin PIN for advanced/destructive actions, and enforce local/LAN-only backend policy by default.
+
+Implementation status: complete (guest session by default + admin unlock + admin-only write enforcement + origin checks + audit logging + capability tests).
+
 ## TODO
 
 1. ~~Verify SearXNG and Docker services persist across reboots~~
@@ -87,6 +112,9 @@ python3 -m venv venv
 # Install dependencies
 ./venv/bin/pip install fastapi uvicorn httpx psutil jinja2 python-multipart
 
+# Set admin PIN before first startup (4 digits)
+export JARVISCHAT_ADMIN_PIN=4827
+
 # Create subdirectories
 mkdir -p templates static
 
@@ -95,6 +123,10 @@ mkdir -p templates static
 # (copy index.html to /opt/jarvischat/templates/)
 # (copy logo.png to /opt/jarvischat/static/ — optional)
 ```
+
+WARNING: Do not use `1234` as your admin PIN unless you accept weak local security.
+
+NOTE: First boot now requires `JARVISCHAT_ADMIN_PIN` unless you explicitly opt into insecure fallback with `JARVISCHAT_ALLOW_DEFAULT_PIN=true`.
 
 ### Upgrading from v1.4.x
 
