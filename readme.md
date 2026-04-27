@@ -1,4 +1,4 @@
-# ⚡ JarvisChat v1.7.0
+# ⚡ JarvisChat v1.7.1
 
 ![screenshot](docs/images/screenshot.png)
 
@@ -62,7 +62,7 @@ Top 10 (brief):
 2. P0 [DONE]: Add CSRF/origin protection for state-changing requests
 3. P0 [DONE]: Block unsafe URL schemes in rendered links
 4. P0 [DONE]: Add rate limiting and request size limits
-5. P1: Restrict `/api/settings` updates to allowlisted keys
+5. P1 [DONE]: Restrict `/api/settings` updates to allowlisted keys
 6. P1: Add pagination + hard caps for list APIs
 7. P1: Replace raw exception leakage with safe client errors
 8. P1: Add automated tests for streaming/search/memory paths

@@ -55,7 +55,7 @@ syslog_handler.setFormatter(
 log.addHandler(syslog_handler)
 
 # --- Configuration ---
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 OLLAMA_BASE = "http://localhost:11434"
 SEARXNG_BASE = "http://localhost:8888"
 BASE_DIR = Path(__file__).parent
@@ -102,6 +102,12 @@ MAX_PRESET_PROMPT_CHARS = 12000
 MAX_SETTINGS_KEYS = 16
 MAX_SETTINGS_VALUE_CHARS = 8000
 MAX_CONVERSATION_TITLE_CHARS = 200
+ALLOWED_SETTINGS_KEYS = {
+    "profile_enabled",
+    "default_model",
+    "search_enabled",
+    "memory_enabled",
+}
 
 # --- Templates and Static Files ---
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -1439,6 +1445,14 @@ async def update_settings(request: Request):
         raise HTTPException(status_code=400, detail="Settings payload must be an object")
     if len(body) > MAX_SETTINGS_KEYS:
         raise HTTPException(status_code=413, detail="Too many settings in one request")
+    unknown_keys = sorted(
+        key for key in body.keys() if str(key) not in ALLOWED_SETTINGS_KEYS
+    )
+    if unknown_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown setting key(s): {', '.join(unknown_keys)}",
+        )
     db = get_db()
     for key, value in body.items():
         if len(str(key)) > 80 or len(str(value)) > MAX_SETTINGS_VALUE_CHARS:
