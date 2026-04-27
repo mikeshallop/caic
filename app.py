@@ -53,7 +53,7 @@ syslog_handler.setFormatter(
 log.addHandler(syslog_handler)
 
 # --- Configuration ---
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 OLLAMA_BASE = "http://localhost:11434"
 SEARXNG_BASE = "http://localhost:8888"
 BASE_DIR = Path(__file__).parent
