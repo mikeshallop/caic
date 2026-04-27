@@ -387,7 +387,8 @@ def search_memories(query: str, limit: int = 5) -> list[dict]:
     if not query.strip():
         return []
     db = get_db()
-    words = [w.strip() for w in query.split() if w.strip()]
+    # Use alphanumeric token extraction so punctuation (e.g. '?') cannot break FTS MATCH syntax.
+    words = re.findall(r"[A-Za-z0-9_]+", query)
     if not words:
         db.close()
         return []
