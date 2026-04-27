@@ -19,7 +19,7 @@ Total identified items: 26
 4. [P0][DONE] Add rate limiting and request body size limits for chat/search/profile APIs.
 5. [P1][DONE] Restrict settings updates to an allowlist of valid keys.
 6. [P1] Add pagination + hard caps on list endpoints (memories, conversations, message history).
-7. [P1] Stop returning raw exception text to clients; use safe error envelopes.
+7. [P1][DONE] Stop returning raw exception text to clients; use safe error envelopes.
 8. [P1] Add automated tests for chat streaming, auto-search trigger, and memory command paths.
 9. [P2] Implement skills/tool-call framework (MCP-style) with per-skill enable controls.
 10. [P2] Implement heartbeat/check-in pipeline with scheduler + summary endpoint.

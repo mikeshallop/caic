@@ -20,6 +20,7 @@ import json
 import logging
 import math
 import os
+import platform
 import sqlite3
 import subprocess
 import hashlib
@@ -55,7 +56,7 @@ syslog_handler.setFormatter(
 log.addHandler(syslog_handler)
 
 # --- Configuration ---
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 OLLAMA_BASE = "http://localhost:11434"
 SEARXNG_BASE = "http://localhost:8888"
 BASE_DIR = Path(__file__).parent
@@ -180,6 +181,53 @@ def audit_event(
         log.warning(msg)
     else:
         log.info(msg)
+
+
+def create_incident_key() -> str:
+    """Create a readable unique key for customer-visible error lookup."""
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return f"INC-{ts}-{uuid.uuid4().hex[:8].upper()}"
+
+
+def customer_error_envelope(message: str, incident_key: str) -> dict:
+    """Stable client-safe error contract with support lookup key."""
+    return {
+        "detail": message,
+        "error_key": incident_key,
+        "error": {
+            "message": message,
+            "incident_key": incident_key,
+            "support_hint": "Share this incident key for exact diagnostics.",
+        },
+    }
+
+
+def log_incident(
+    event: str,
+    *,
+    message: str,
+    request: Optional[Request] = None,
+    exc: Optional[Exception] = None,
+) -> str:
+    """Log internal failure details with traceback and system snapshot."""
+    incident_key = create_incident_key()
+    payload = {
+        "event": event,
+        "incident_key": incident_key,
+        "message": message,
+        "app_version": VERSION,
+        "pid": os.getpid(),
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "method": request.method if request else "",
+        "path": request.url.path if request else "",
+        "client_ip": get_client_ip(request) if request else "",
+    }
+    if exc:
+        log.exception("INCIDENT " + json.dumps(payload, separators=(",", ":")))
+    else:
+        log.error("INCIDENT " + json.dumps(payload, separators=(",", ":")))
+    return incident_key
 
 
 def parse_allowed_cidrs(raw: str) -> list[ipaddress._BaseNetwork]:
@@ -851,6 +899,24 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="JarvisChat", lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    incident_key = log_incident(
+        "unhandled_exception",
+        message="Unhandled server error",
+        request=request,
+        exc=exc,
+    )
+    message = (
+        "We could not complete that request right now. "
+        "Use the incident key for support lookup."
+    )
+    return JSONResponse(
+        status_code=500,
+        content=customer_error_envelope(message, incident_key),
+    )
 
 # Mount static files
 static_dir = BASE_DIR / "static"
@@ -1720,8 +1786,17 @@ async def explicit_search(request: Request):
                             except json.JSONDecodeError:
                                 pass
             except Exception as e:
-                log.error(f"Ollama error during search summarization: {e}")
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                incident_key = log_incident(
+                    "search_summarization_stream",
+                    message="Ollama stream failure during explicit search summarization",
+                    request=request,
+                    exc=e,
+                )
+                client_msg = (
+                    "Search summarization could not complete right now. "
+                    "Use the incident key for support lookup."
+                )
+                yield f"data: {json.dumps({'error': client_msg, 'error_key': incident_key})}\n\n"
                 return
 
         summary = "".join(full_response)
@@ -1987,7 +2062,17 @@ async def chat(request: Request):
             except httpx.ConnectError:
                 yield f"data: {json.dumps({'error': 'Cannot connect to Ollama. Is it running?'})}\n\n"
             except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                incident_key = log_incident(
+                    "chat_stream",
+                    message="Ollama stream failure during chat response",
+                    request=request,
+                    exc=e,
+                )
+                client_msg = (
+                    "Chat response generation failed before completion. "
+                    "Use the incident key for support lookup."
+                )
+                yield f"data: {json.dumps({'error': client_msg, 'error_key': incident_key})}\n\n"
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
 
