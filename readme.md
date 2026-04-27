@@ -6,6 +6,20 @@
 
 Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
 
+## Security Scope Disclaimer
+
+JarvisChat is designed for local and home-lab use (same host or trusted LAN).
+
+JarvisChat may technically work with frontier or commercial AI endpoints, but the author does not recommend or support that usage.
+
+Supported deployments are contained local/home-lab environments.
+
+By default, API access is limited to loopback + private LAN CIDRs. You can override with `JARVISCHAT_ALLOWED_CIDRS` (comma-separated CIDRs) and optionally trust reverse-proxy forwarding with `JARVISCHAT_TRUST_X_FORWARDED_FOR=true`.
+
+If you deploy outside a trusted local subnet, your risk profile changes significantly and the default protections here may be insufficient.
+
+Use at your own risk. No warranty is provided for Internet-exposed deployments.
+
 ## What's New in v1.5.0
 
 - **Explicit Web Search Button** — 🔍 button next to SEND forces a web search, bypassing model uncertainty detection
@@ -47,7 +61,7 @@ Top 10 (brief):
 1. P0 [DONE]: Add auth for write/admin endpoints
 2. P0 [DONE]: Add CSRF/origin protection for state-changing requests
 3. P0 [DONE]: Block unsafe URL schemes in rendered links
-4. P0: Add rate limiting and request size limits
+4. P0 [DONE]: Add rate limiting and request size limits
 5. P1: Restrict `/api/settings` updates to allowlisted keys
 6. P1: Add pagination + hard caps for list APIs
 7. P1: Replace raw exception leakage with safe client errors
@@ -57,7 +71,7 @@ Top 10 (brief):
 
 Item 1 executive summary: keep guest mode for conversational chat, require 4-digit admin PIN for advanced/destructive actions, and enforce local/LAN-only backend policy by default.
 
-Implementation status: complete (guest session by default + admin unlock + admin-only write enforcement + origin checks + safe-link sanitization + audit logging + capability tests).
+Implementation status: complete (guest session by default + admin unlock + admin-only write enforcement + origin checks + safe-link sanitization + audit logging + rate/payload guardrails + capability tests).
 
 ## TODO
 

@@ -16,7 +16,7 @@ Total identified items: 26
 1. [P0][DONE] Add authentication/authorization for all write and admin endpoints.
 2. [P0][DONE] Add CSRF/origin protection for browser-initiated state-changing requests.
 3. [P0][DONE] Block unsafe URL schemes in rendered search-result links (e.g., javascript:).
-4. [P0] Add rate limiting and request body size limits for chat/search/profile APIs.
+4. [P0][DONE] Add rate limiting and request body size limits for chat/search/profile APIs.
 5. [P1] Restrict settings updates to an allowlist of valid keys.
 6. [P1] Add pagination + hard caps on list endpoints (memories, conversations, message history).
 7. [P1] Stop returning raw exception text to clients; use safe error envelopes.
