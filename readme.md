@@ -44,9 +44,9 @@ Total identified items: 26
 
 Top 10 (brief):
 
-1. P0: Add auth for write/admin endpoints
-2. P0: Add CSRF/origin protection for state-changing requests
-3. P0: Block unsafe URL schemes in rendered links
+1. P0 [DONE]: Add auth for write/admin endpoints
+2. P0 [DONE]: Add CSRF/origin protection for state-changing requests
+3. P0 [DONE]: Block unsafe URL schemes in rendered links
 4. P0: Add rate limiting and request size limits
 5. P1: Restrict `/api/settings` updates to allowlisted keys
 6. P1: Add pagination + hard caps for list APIs
@@ -57,7 +57,7 @@ Top 10 (brief):
 
 Item 1 executive summary: keep guest mode for conversational chat, require 4-digit admin PIN for advanced/destructive actions, and enforce local/LAN-only backend policy by default.
 
-Implementation status: complete (guest session by default + admin unlock + admin-only write enforcement + origin checks + audit logging + capability tests).
+Implementation status: complete (guest session by default + admin unlock + admin-only write enforcement + origin checks + safe-link sanitization + audit logging + capability tests).
 
 ## TODO
 

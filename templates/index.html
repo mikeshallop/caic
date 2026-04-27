@@ -970,7 +970,13 @@ async function sendSearch() {
                     if (data.raw_results) {
                         let rawHtml = '<details class="raw-results"><summary>🔍 View raw search results (' + data.raw_results.length + ')</summary><ul>';
                         data.raw_results.forEach(r => { 
-                            rawHtml += `<li><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>`;
+                            const safeUrl = sanitizeUrl(r.url || '');
+                            rawHtml += '<li>';
+                            if (safeUrl) {
+                                rawHtml += `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>`;
+                            } else {
+                                rawHtml += `<span>${escapeHtml(r.title)}</span>`;
+                            }
                             if (r.content) rawHtml += `<small>${escapeHtml(r.content)}</small>`;
                             rawHtml += '</li>'; 
                         });
@@ -1100,6 +1106,17 @@ function renderMarkdown(text) {
     h = h.replace(/\n/g, '<br>');
     h = h.replace(/\x00BLOCK(\d+)\x00/g, (m, idx) => blocks[parseInt(idx)]);
     return h;
+}
+
+function sanitizeUrl(url) {
+    if (!url) return '';
+    try {
+        const parsed = new URL(url, window.location.origin);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+    } catch (e) {
+        return '';
+    }
+    return '';
 }
 
 function addCopyButtons(msgDiv) {

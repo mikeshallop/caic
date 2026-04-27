@@ -13,9 +13,9 @@ Total identified items: 26
 - P3: Nice-to-have polish.
 
 ## Top 10 (Urgency Order)
-1. [P0] Add authentication/authorization for all write and admin endpoints.
-2. [P0] Add CSRF/origin protection for browser-initiated state-changing requests.
-3. [P0] Block unsafe URL schemes in rendered search-result links (e.g., javascript:).
+1. [P0][DONE] Add authentication/authorization for all write and admin endpoints.
+2. [P0][DONE] Add CSRF/origin protection for browser-initiated state-changing requests.
+3. [P0][DONE] Block unsafe URL schemes in rendered search-result links (e.g., javascript:).
 4. [P0] Add rate limiting and request body size limits for chat/search/profile APIs.
 5. [P1] Restrict settings updates to an allowlist of valid keys.
 6. [P1] Add pagination + hard caps on list endpoints (memories, conversations, message history).

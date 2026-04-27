@@ -164,6 +164,17 @@ def format_direct_answer(question: str, results: list[dict]) -> str:
     return "\n".join(lines).strip()
 
 
+def sanitize_outbound_url(url: str) -> str:
+    """Allow only absolute http/https URLs for outbound links shown in UI."""
+    if not url:
+        return ""
+    candidate = url.strip()
+    parsed = urlparse(candidate)
+    if parsed.scheme.lower() in {"http", "https"} and parsed.netloc:
+        return candidate
+    return ""
+
+
 # --- Default Profile ---
 DEFAULT_PROFILE = """You are a coding companion running locally on a machine called "jarvis".
 
@@ -571,7 +582,7 @@ async def query_searxng(query: str, max_results: int = 5) -> list[dict]:
                         return [
                             {
                                 "title": "Current Weather",
-                                "url": f"https://wttr.in/{location}",
+                                "url": sanitize_outbound_url(f"https://wttr.in/{location}"),
                                 "content": resp.text.strip(),
                             }
                         ]
@@ -603,9 +614,11 @@ async def query_searxng(query: str, max_results: int = 5) -> list[dict]:
                     results.append(
                         {
                             "title": box.get("infobox", "Info"),
-                            "url": box.get("urls", [{}])[0].get("url", "")
-                            if box.get("urls")
-                            else "",
+                            "url": sanitize_outbound_url(
+                                box.get("urls", [{}])[0].get("url", "")
+                                if box.get("urls")
+                                else ""
+                            ),
                             "content": content,
                         }
                     )
@@ -613,7 +626,7 @@ async def query_searxng(query: str, max_results: int = 5) -> list[dict]:
                     results.append(
                         {
                             "title": r.get("title", ""),
-                            "url": r.get("url", ""),
+                            "url": sanitize_outbound_url(r.get("url", "")),
                             "content": r.get("content", ""),
                         }
                     )
