@@ -56,7 +56,7 @@ syslog_handler.setFormatter(
 log.addHandler(syslog_handler)
 
 # --- Configuration ---
-VERSION = "1.7.3"
+VERSION = "1.7.4"
 OLLAMA_BASE = "http://localhost:11434"
 SEARXNG_BASE = "http://localhost:8888"
 BASE_DIR = Path(__file__).parent
@@ -103,12 +103,90 @@ MAX_PRESET_PROMPT_CHARS = 12000
 MAX_SETTINGS_KEYS = 16
 MAX_SETTINGS_VALUE_CHARS = 8000
 MAX_CONVERSATION_TITLE_CHARS = 200
+MAX_SKILL_KEY_CHARS = 120
+MAX_SKILL_PROMPT_CHARS = 1600
 ALLOWED_SETTINGS_KEYS = {
     "profile_enabled",
     "default_model",
     "search_enabled",
     "memory_enabled",
+    "skills_enabled",
 }
+
+BUILTIN_SKILLS = [
+    {
+        "key": "memory.search",
+        "name": "Memory Search",
+        "category": "memory",
+        "risk": "low",
+        "description": "Search stored memory facts relevant to the current prompt.",
+    },
+    {
+        "key": "memory.add",
+        "name": "Memory Add",
+        "category": "memory",
+        "risk": "medium",
+        "description": "Store a new memory fact with topic tagging.",
+    },
+    {
+        "key": "memory.forget",
+        "name": "Memory Forget",
+        "category": "memory",
+        "risk": "high",
+        "description": "Delete matching memories when asked to forget information.",
+    },
+    {
+        "key": "conversation.list",
+        "name": "Conversation List",
+        "category": "conversation",
+        "risk": "low",
+        "description": "List existing conversations with metadata.",
+    },
+    {
+        "key": "conversation.get",
+        "name": "Conversation Get",
+        "category": "conversation",
+        "risk": "low",
+        "description": "Read a conversation and its message history.",
+    },
+    {
+        "key": "conversation.delete",
+        "name": "Conversation Delete",
+        "category": "conversation",
+        "risk": "high",
+        "description": "Delete a single conversation thread.",
+    },
+    {
+        "key": "conversation.delete_all",
+        "name": "Conversation Delete All",
+        "category": "conversation",
+        "risk": "high",
+        "description": "Delete all conversations and messages.",
+    },
+    {
+        "key": "search.web",
+        "name": "Web Search",
+        "category": "search",
+        "risk": "low",
+        "description": "Run explicit web search and summarize results.",
+    },
+    {
+        "key": "settings.get",
+        "name": "Settings Get",
+        "category": "settings",
+        "risk": "low",
+        "description": "Read current runtime settings.",
+    },
+    {
+        "key": "settings.update",
+        "name": "Settings Update",
+        "category": "settings",
+        "risk": "high",
+        "description": "Update allowlisted runtime settings keys.",
+    },
+]
+
+SKILLS_BY_KEY = {s["key"]: s for s in BUILTIN_SKILLS}
 
 # --- Templates and Static Files ---
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -424,6 +502,13 @@ def init_db():
             value TEXT NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS skills (
+            skill_key TEXT PRIMARY KEY,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            updated_at TEXT NOT NULL
+        )
+    """)
 
     # FTS5 Memory table
     conn.execute("""
@@ -462,6 +547,7 @@ def init_db():
         "default_model": DEFAULT_MODEL,
         "search_enabled": "true",
         "memory_enabled": "true",
+        "skills_enabled": "true",
     }
     for key, value in defaults.items():
         existing = conn.execute(
@@ -470,6 +556,18 @@ def init_db():
         if not existing:
             conn.execute(
                 "INSERT INTO settings (key, value) VALUES (?, ?)", (key, value)
+            )
+
+    # Seed skill toggle records for built-in skills.
+    now = datetime.now(timezone.utc).isoformat()
+    for skill in BUILTIN_SKILLS:
+        existing_skill = conn.execute(
+            "SELECT skill_key FROM skills WHERE skill_key = ?", (skill["key"],)
+        ).fetchone()
+        if not existing_skill:
+            conn.execute(
+                "INSERT INTO skills (skill_key, enabled, updated_at) VALUES (?, 1, ?)",
+                (skill["key"], now),
             )
 
     # Seed admin PIN hash if missing.
@@ -522,6 +620,55 @@ def get_db():
 def get_setting(db, key: str, default: str = "") -> str:
     row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else default
+
+
+def list_skills_with_state(db) -> list[dict]:
+    """Merge built-in skill registry with persisted enable/disable state."""
+    rows = db.execute("SELECT skill_key, enabled, updated_at FROM skills").fetchall()
+    state_by_key = {
+        row["skill_key"]: {
+            "enabled": bool(row["enabled"]),
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    }
+
+    merged = []
+    for skill in BUILTIN_SKILLS:
+        state = state_by_key.get(skill["key"], {"enabled": True, "updated_at": ""})
+        merged.append(
+            {
+                **skill,
+                "enabled": state["enabled"],
+                "updated_at": state["updated_at"],
+            }
+        )
+    return sorted(merged, key=lambda s: (s["category"], s["name"]))
+
+
+def set_skill_enabled(db, skill_key: str, enabled: bool) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    db.execute(
+        "INSERT OR REPLACE INTO skills (skill_key, enabled, updated_at) VALUES (?, ?, ?)",
+        (skill_key, 1 if enabled else 0, now),
+    )
+
+
+def format_active_skills_prompt(skills: list[dict]) -> str:
+    """Build a bounded active-skill prompt block for tool-awareness."""
+    lines = [
+        "## Active Skills",
+        "Use these skills only when needed. Prefer concise answers over unnecessary tool usage.",
+    ]
+    for skill in skills:
+        lines.append(
+            f"- {skill['key']} ({skill['risk']} risk): {skill['description']}"
+        )
+
+    text = "\n".join(lines)
+    if len(text) > MAX_SKILL_PROMPT_CHARS:
+        return text[: MAX_SKILL_PROMPT_CHARS - 3] + "..."
+    return text
 
 
 # =============================================================================
@@ -1533,6 +1680,46 @@ async def update_settings(request: Request):
     return {"status": "ok"}
 
 
+# --- Skills ---
+
+
+@app.get("/api/skills")
+async def list_skills():
+    db = get_db()
+    skills = list_skills_with_state(db)
+    db.close()
+    return {"skills": skills, "count": len(skills)}
+
+
+@app.get("/api/skills/active")
+async def list_active_skills():
+    db = get_db()
+    skills_enabled = get_setting(db, "skills_enabled", "true") == "true"
+    skills = list_skills_with_state(db)
+    db.close()
+    active = [s for s in skills if s["enabled"]] if skills_enabled else []
+    return {"skills": active, "count": len(active), "skills_enabled": skills_enabled}
+
+
+@app.put("/api/skills/{skill_key}")
+async def update_skill(skill_key: str, request: Request):
+    skill_key = skill_key.strip()
+    if len(skill_key) > MAX_SKILL_KEY_CHARS or skill_key not in SKILLS_BY_KEY:
+        raise HTTPException(status_code=404, detail="Unknown skill")
+
+    body = await read_json_body(request, BODY_LIMIT_DEFAULT_BYTES)
+    if "enabled" not in body or not isinstance(body.get("enabled"), bool):
+        raise HTTPException(status_code=400, detail="Field 'enabled' (boolean) is required")
+
+    db = get_db()
+    set_skill_enabled(db, skill_key, bool(body["enabled"]))
+    db.commit()
+    skills = list_skills_with_state(db)
+    db.close()
+    updated = next((s for s in skills if s["key"] == skill_key), None)
+    return {"status": "ok", "skill": updated}
+
+
 # --- System Presets ---
 
 
@@ -1842,6 +2029,11 @@ def build_system_prompt(db, extra_prompt="", user_message=""):
             memory_lines = [f"- {m['fact']}" for m in memories]
             parts.append("## Relevant Context from Memory\n" + "\n".join(memory_lines))
             log.debug(f"Injected {len(memories)} memories into context")
+
+    if settings.get("skills_enabled", "true") == "true":
+        active_skills = [s for s in list_skills_with_state(db) if s["enabled"]]
+        if active_skills:
+            parts.append(format_active_skills_prompt(active_skills))
 
     if extra_prompt and extra_prompt.strip():
         parts.append(extra_prompt.strip())

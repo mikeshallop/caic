@@ -1,4 +1,4 @@
-# ⚡ JarvisChat v1.7.3
+# ⚡ JarvisChat v1.7.4
 
 ![screenshot](docs/images/screenshot.png)
 
@@ -66,7 +66,7 @@ Top 10 (brief):
 6. P1: Add pagination + hard caps for list APIs
 7. P1 [DONE]: Replace raw exception leakage with safe client errors
 8. P1 [DONE]: Add automated tests for streaming/search/memory paths
-9. P2: Implement MCP-style skills/tool-call framework
+9. P2 [DONE]: Implement MCP-style skills/tool-call framework
 10. P2: Implement heartbeat/check-in scheduler + summary endpoint
 
 Item 1 executive summary: keep guest mode for conversational chat, require 4-digit admin PIN for advanced/destructive actions, and enforce local/LAN-only backend policy by default.

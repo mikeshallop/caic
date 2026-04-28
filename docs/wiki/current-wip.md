@@ -21,7 +21,7 @@ Total identified items: 26
 6. [P1] Add pagination + hard caps on list endpoints (memories, conversations, message history).
 7. [P1][DONE] Stop returning raw exception text to clients; use safe error envelopes.
 8. [P1][DONE] Add automated tests for chat streaming, auto-search trigger, and memory command paths.
-9. [P2] Implement skills/tool-call framework (MCP-style) with per-skill enable controls.
+9. [P2][DONE] Implement skills/tool-call framework (MCP-style) with per-skill enable controls.
 10. [P2] Implement heartbeat/check-in pipeline with scheduler + summary endpoint.
 
 ## Item 1 Executive Summary (Scope + Security)
