@@ -1,4 +1,4 @@
-# ⚡ JarvisChat v1.7.2
+# ⚡ JarvisChat v1.7.3
 
 ![screenshot](docs/images/screenshot.png)
 
@@ -65,7 +65,7 @@ Top 10 (brief):
 5. P1 [DONE]: Restrict `/api/settings` updates to allowlisted keys
 6. P1: Add pagination + hard caps for list APIs
 7. P1 [DONE]: Replace raw exception leakage with safe client errors
-8. P1: Add automated tests for streaming/search/memory paths
+8. P1 [DONE]: Add automated tests for streaming/search/memory paths
 9. P2: Implement MCP-style skills/tool-call framework
 10. P2: Implement heartbeat/check-in scheduler + summary endpoint
 
