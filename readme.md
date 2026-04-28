@@ -1,4 +1,4 @@
-# ⚡ JarvisChat v1.7.4
+# ⚡ JarvisChat v1.7.5
 
 ![screenshot](docs/images/screenshot.png)
 

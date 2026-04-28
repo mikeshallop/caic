@@ -116,6 +116,13 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .memory-item .memory-delete { color:var(--danger); cursor:pointer; opacity:0.5; }
 .memory-item .memory-delete:hover { opacity:1; }
 .memory-stats { font-size:11px; color:var(--text-muted); margin-bottom:10px; font-family:var(--font-mono); }
+.skills-status { font-size:11px; color:var(--text-muted); margin-bottom:10px; font-family:var(--font-mono); }
+.skill-item { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:8px 10px; background:var(--bg-tertiary); border-radius:var(--radius); margin-bottom:6px; }
+.skill-meta { min-width:0; }
+.skill-name { font-size:12px; color:var(--text-primary); font-family:var(--font-mono); margin-bottom:3px; }
+.skill-desc { font-size:11px; color:var(--text-muted); line-height:1.4; }
+.skill-risk { display:inline-block; margin-left:8px; padding:1px 6px; border-radius:10px; font-size:10px; text-transform:uppercase; border:1px solid var(--border); color:var(--text-secondary); }
+.skill-item.disabled .skill-meta { opacity:0.6; }
 
 .chat-container { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
 .welcome-screen { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); text-align:center; gap:12px; }
@@ -290,6 +297,16 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
                 </div>
             </div>
             <div class="modal-section">
+                <h3>Skills (Phase 1)</h3>
+                <p class="desc">Toggle built-in local skills used for tool-aware prompt injection. Master toggle disables all skills globally.</p>
+                <div class="toggle-row">
+                    <span class="toggle-label">Enable skills framework</span>
+                    <div class="toggle-switch on" id="skillsMasterToggle" onclick="toggleSkillsMaster()"></div>
+                </div>
+                <div class="skills-status" id="skillsStatus">Loading skills...</div>
+                <div id="skillsList"></div>
+            </div>
+            <div class="modal-section">
                 <h3>General</h3>
                 <div class="toggle-row">
                     <span class="toggle-label">Default model</span>
@@ -345,7 +362,9 @@ let abortController = null;
 let profileEnabled = true;
 let searchEnabled = true;
 let memoryEnabled = true;
+let skillsEnabled = true;
 let presets = [];
+let skillsRegistry = [];
 let modelContextSize = 8192;
 let cachedProfile = '';
 let conversationHistory = [];
@@ -559,6 +578,7 @@ async function initializeMainApp() {
     appInitialized = true;
     await loadModels();
     await loadSettings();
+    await loadSkills();
     await loadProfile();
     await loadPresets();
     await loadConversations();
@@ -677,9 +697,11 @@ async function loadSettings() {
         profileEnabled = s.profile_enabled !== 'false';
         searchEnabled = s.search_enabled !== 'false';
         memoryEnabled = s.memory_enabled !== 'false';
+        skillsEnabled = s.skills_enabled !== 'false';
         updateProfileUI();
         updateSearchUI();
         updateMemoryUI();
+        updateSkillsUI();
         if (s.default_model) {
             document.getElementById('modelSelect').value = s.default_model;
             document.getElementById('defaultModelSetting').value = s.default_model;
@@ -689,7 +711,7 @@ async function loadSettings() {
 
 async function saveSettings() {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
-    await authFetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_enabled: profileEnabled ? 'true' : 'false', search_enabled: searchEnabled ? 'true' : 'false', memory_enabled: memoryEnabled ? 'true' : 'false' }) });
+    await authFetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_enabled: profileEnabled ? 'true' : 'false', search_enabled: searchEnabled ? 'true' : 'false', memory_enabled: memoryEnabled ? 'true' : 'false', skills_enabled: skillsEnabled ? 'true' : 'false' }) });
 }
 
 async function saveDefaultModel() {
@@ -757,6 +779,92 @@ function updateMemoryUI() {
     badge.className = 'memory-badge ' + (memoryEnabled ? 'on' : 'off');
     badge.innerHTML = memoryEnabled ? '🧠 MEM ON' : '🧠 MEM OFF';
     if (toggle) toggle.className = 'toggle-switch' + (memoryEnabled ? ' on' : '');
+}
+
+function updateSkillsUI() {
+    const master = document.getElementById('skillsMasterToggle');
+    if (master) master.className = 'toggle-switch' + (skillsEnabled ? ' on' : '');
+}
+
+async function loadSkills() {
+    try {
+        const resp = await authFetch('/api/skills');
+        const data = await resp.json();
+        skillsRegistry = data.skills || [];
+        renderSkills();
+    } catch(e) {
+        const status = document.getElementById('skillsStatus');
+        if (status) status.textContent = 'Unable to load skills';
+    }
+}
+
+function renderSkills() {
+    const container = document.getElementById('skillsList');
+    const status = document.getElementById('skillsStatus');
+    if (!container || !status) return;
+
+    container.innerHTML = '';
+    if (!skillsRegistry.length) {
+        status.textContent = 'No skills registered';
+        return;
+    }
+
+    const enabledCount = skillsRegistry.filter(s => s.enabled).length;
+    status.textContent = `${enabledCount}/${skillsRegistry.length} skills enabled${skillsEnabled ? '' : ' (master toggle OFF)'}`;
+
+    skillsRegistry.forEach(skill => {
+        const row = document.createElement('div');
+        row.className = 'skill-item' + (skillsEnabled ? '' : ' disabled');
+
+        const meta = document.createElement('div');
+        meta.className = 'skill-meta';
+
+        const name = document.createElement('div');
+        name.className = 'skill-name';
+        const risk = (skill.risk || 'low').toUpperCase();
+        name.innerHTML = `${skill.name} <span class="skill-risk">${risk}</span>`;
+
+        const desc = document.createElement('div');
+        desc.className = 'skill-desc';
+        desc.textContent = `${skill.key} - ${skill.description || ''}`;
+
+        meta.appendChild(name);
+        meta.appendChild(desc);
+
+        const toggle = document.createElement('div');
+        const active = !!skill.enabled && skillsEnabled;
+        toggle.className = 'toggle-switch' + (active ? ' on' : '');
+        toggle.title = skillsEnabled ? `Toggle ${skill.name}` : 'Enable skills framework first';
+        toggle.addEventListener('click', () => toggleSkill(skill.key));
+
+        row.appendChild(meta);
+        row.appendChild(toggle);
+        container.appendChild(row);
+    });
+}
+
+async function toggleSkillsMaster() {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
+    skillsEnabled = !skillsEnabled;
+    updateSkillsUI();
+    renderSkills();
+    await saveSettings();
+}
+
+async function toggleSkill(skillKey) {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
+    if (!skillsEnabled) return;
+    const skill = skillsRegistry.find(s => s.key === skillKey);
+    if (!skill) return;
+
+    const nextEnabled = !skill.enabled;
+    await authFetch(`/api/skills/${encodeURIComponent(skillKey)}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ enabled: nextEnabled })
+    });
+    skill.enabled = nextEnabled;
+    renderSkills();
 }
 
 function updateTokenCount() {
@@ -861,6 +969,7 @@ function openSettings() {
     document.getElementById('settingsModal').classList.add('visible');
     loadProfile();
     loadMemoryStats();
+    loadSkills();
 }
 function closeSettings() { document.getElementById('settingsModal').classList.remove('visible'); }
 document.getElementById('settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') closeSettings(); });
