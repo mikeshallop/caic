@@ -1,10 +1,14 @@
-# ⚡ JarvisChat v1.7.5
+# ⚡ JarvisChat v1.7.6
 
 ![screenshot](docs/images/screenshot.png)
 
 **A lightweight Ollama coding companion with persistent memory, web search, and real-time system monitoring.**
 
 Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
+
+Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
+
+Core architecture deep-dive: [docs/wiki/Developer-Architecture.md](docs/wiki/Developer-Architecture.md)
 
 ## Security Scope Disclaimer
 
@@ -19,6 +23,22 @@ By default, API access is limited to loopback + private LAN CIDRs. You can overr
 If you deploy outside a trusted local subnet, your risk profile changes significantly and the default protections here may be insufficient.
 
 Use at your own risk. No warranty is provided for Internet-exposed deployments.
+
+## What's New in v1.7.x
+
+- **Security hardening suite completed** - request rate limits, payload caps, settings allowlist, safe error envelopes, and LAN CIDR gate controls
+- **Customer-safe incident handling** - client-facing errors include support-friendly incident keys while full traces remain in server logs
+- **Streaming and regression test expansion** - automated coverage for SSE chat/search paths, memory remember/forget command handling, and auth/guardrail behavior
+- **Skills framework (Phase 1)** - built-in local skill registry with per-skill enable controls, API endpoints, and bounded prompt injection
+- **Skills WebUX controls** - Settings modal now includes a master skills toggle and per-skill toggles for admin users
+
+## What's New in v1.6.x
+
+- **Guest/admin capability split** - guest chat by default with 4-digit admin PIN for advanced or destructive operations
+- **Session + lockout controls** - session lifecycle endpoints, heartbeat, logout/revoke behavior, failed PIN lockout protections, and auth audit events
+- **Browser request protections** - strict origin checks for state-changing requests and admin-only write enforcement
+- **Unsafe link protection** - outbound search links sanitized to allow only http/https absolute URLs
+- **Operational stability fixes** - safer first-boot PIN policy handling and memory-search tokenization fix for punctuation/FTS edge cases
 
 ## What's New in v1.5.0
 
