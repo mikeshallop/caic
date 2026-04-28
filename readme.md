@@ -1,4 +1,4 @@
-# ⚡ JarvisChat v1.7.6
+# ⚡ JarvisChat v1.7.7
 
 ![screenshot](docs/images/screenshot.png)
 
@@ -74,7 +74,7 @@ Canonical backlog: [docs/wiki/current-wip.md](docs/wiki/current-wip.md)
 
 Scope boundary: local-first (same-host Ollama), optional RFC1918 LAN endpoints, no public Internet AI endpoints by default.
 
-Total identified items: 26
+Total identified items: 27
 
 Top 10 (brief):
 
@@ -113,6 +113,7 @@ Implementation status: complete (guest session by default + admin unlock + admin
 16. Hide/remove model from list — exclude models from dropdown
 17. Update model function — trigger `ollama pull` for selected model from UI
 18. Add mouseover tooltip to SEND button
+19. Add preflight validation for required model/preset selection and show a clear warning before send to prevent avoidable timeout loops
 
 ## File Structure
 
