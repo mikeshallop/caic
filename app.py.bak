@@ -56,7 +56,7 @@ syslog_handler.setFormatter(
 log.addHandler(syslog_handler)
 
 # --- Configuration ---
-VERSION = "v1.8.0"
+VERSION = "1.7.6"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 SEARXNG_BASE = "http://localhost:8888"
 BASE_DIR = Path(__file__).parent
@@ -1972,12 +1972,16 @@ async def explicit_search(request: Request):
                 ) as resp:
                     async for line in resp.aiter_lines():
                         if line.strip():
-                            token, done, _ = parse_llama_stream_chunk(line)
-                            if token:
-                                full_response.append(token)
-                                yield f"data: {json.dumps({'token': token, 'conversation_id': conv_id})}\n\n"
-                            if done:
-                                break
+                            try:
+                                chunk = json.loads(line)
+                                if "message" in chunk and "content" in chunk["message"]:
+                                    token = chunk["message"]["content"]
+                                    full_response.append(token)
+                                    yield f"data: {json.dumps({'token': token, 'conversation_id': conv_id})}\n\n"
+                                if chunk.get("done"):
+                                    break
+                            except json.JSONDecodeError:
+                                pass
             except Exception as e:
                 incident_key = log_incident(
                     "search_summarization_stream",
@@ -2047,42 +2051,6 @@ def build_system_prompt(db, extra_prompt="", user_message=""):
     return "\n\n---\n\n".join(parts) if parts else ""
 
 
-def parse_llama_stream_chunk(line: str) -> tuple[str | None, bool, dict]:
-    """Parse OpenAI-compatible SSE chunk. Returns (token, is_done, stats)."""
-    if line.startswith("data: "):
-        line = line[6:]
-    if line.strip() == "[DONE]":
-        return None, True, {}
-    try:
-        chunk = json.loads(line)
-        # OpenAI format
-        choices = chunk.get("choices", [])
-        if choices:
-            delta = choices[0].get("delta", {})
-            token = delta.get("content")
-            finish = choices[0].get("finish_reason")
-            stats = {}
-            if finish == "stop":
-                usage = chunk.get("usage", {})
-                stats["tokens_per_sec"] = usage.get("tokens_per_second", 0.0)
-            return token, finish == "stop", stats
-        # Ollama format fallback
-        if "message" in chunk and "content" in chunk["message"]:
-            token = chunk["message"]["content"]
-            done = chunk.get("done", False)
-            stats = {}
-            if done:
-                eval_count = chunk.get("eval_count", 0)
-                eval_duration = chunk.get("eval_duration", 0)
-                stats["tokens_per_sec"] = (
-                    (eval_count / (eval_duration / 1e9)) if eval_duration > 0 else 0
-                )
-            return token, done, stats
-    except json.JSONDecodeError:
-        pass
-    return None, False, {}
-
-
 @app.post("/api/chat")
 async def chat(request: Request):
     body = await read_json_body(request, BODY_LIMIT_CHAT_BYTES)
@@ -2141,6 +2109,7 @@ async def chat(request: Request):
         "model": model,
         "messages": messages,
         "stream": True,
+        "logprobs": True,
     }
 
     async def stream_response():
@@ -2161,12 +2130,25 @@ async def chat(request: Request):
                 ) as resp:
                     async for line in resp.aiter_lines():
                         if line.strip():
-                            token, done, stats = parse_llama_stream_chunk(line)
-                            if token:
-                                full_response.append(token)
-                                yield f"data: {json.dumps({'token': token, 'conversation_id': conv_id})}\n\n"
-                            if done:
-                                tokens_per_sec = stats.get("tokens_per_sec", 0.0)
+                            try:
+                                chunk = json.loads(line)
+                                if "message" in chunk and "content" in chunk["message"]:
+                                    token = chunk["message"]["content"]
+                                    full_response.append(token)
+                                    yield f"data: {json.dumps({'token': token, 'conversation_id': conv_id})}\n\n"
+                                if "logprobs" in chunk and chunk["logprobs"]:
+                                    all_logprobs.extend(chunk["logprobs"])
+                                if chunk.get("done"):
+                                    eval_count = chunk.get("eval_count", 0)
+                                    eval_duration = chunk.get("eval_duration", 0)
+                                    tokens_per_sec = (
+                                        (eval_count / (eval_duration / 1e9))
+                                        if eval_duration > 0
+                                        else 0
+                                    )
+                                    break
+                            except json.JSONDecodeError:
+                                pass
 
                 assistant_msg = "".join(full_response)
                 perplexity = calculate_perplexity(all_logprobs) if all_logprobs else 0.0
@@ -2214,11 +2196,19 @@ async def chat(request: Request):
                         ) as resp2:
                             async for line in resp2.aiter_lines():
                                 if line.strip():
-                                    token2, done2, _ = parse_llama_stream_chunk(line)
-                                    if token2:
-                                        augmented_response.append(token2)
-                                    if done2:
-                                        break
+                                    try:
+                                        chunk = json.loads(line)
+                                        if (
+                                            "message" in chunk
+                                            and "content" in chunk["message"]
+                                        ):
+                                            augmented_response.append(
+                                                chunk["message"]["content"]
+                                            )
+                                        if chunk.get("done"):
+                                            break
+                                    except json.JSONDecodeError:
+                                        pass
 
                         raw_response = "".join(augmented_response) or assistant_msg
                         cleaned_response = clean_hedging(raw_response)
@@ -2271,8 +2261,6 @@ async def chat(request: Request):
 
                 yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1)})}\n\n"
 
-            except httpx.RemoteProtocolError:
-                pass  # llama-server closes connection after [DONE] — normal
             except httpx.ConnectError:
                 yield f"data: {json.dumps({'error': 'Cannot connect to Ollama. Is it running?'})}\n\n"
             except Exception as e:
