@@ -2016,7 +2016,32 @@ async def explicit_search(request: Request):
 # =============================================================================
 
 
-def build_system_prompt(db, extra_prompt="", user_message=""):
+
+async def query_rag(query: str, limit: int = 3) -> list[dict]:
+    """Query Qdrant for semantically relevant chunks."""
+    try:
+        async with httpx.AsyncClient() as client:
+            embed_resp = await client.post(
+                "http://192.168.50.108:11434/api/embeddings",
+                json={"model": "mxbai-embed-large", "prompt": query},
+                timeout=10.0,
+            )
+            if embed_resp.status_code != 200:
+                return []
+            vector = embed_resp.json()["embedding"]
+            search_resp = await client.post(
+                "http://192.168.50.108:6333/collections/jarvis_rag/points/search",
+                json={"vector": vector, "limit": limit, "with_payload": True},
+                timeout=10.0,
+            )
+            if search_resp.status_code != 200:
+                return []
+            return search_resp.json().get("result", [])
+    except Exception as e:
+        log.warning(f"RAG query error: {e}")
+        return []
+
+async def build_system_prompt(db, extra_prompt="", user_message=""):
     """Build the full system prompt: profile + memories + preset."""
     parts = []
     settings = {
@@ -2035,6 +2060,17 @@ def build_system_prompt(db, extra_prompt="", user_message=""):
             memory_lines = [f"- {m['fact']}" for m in memories]
             parts.append("## Relevant Context from Memory\n" + "\n".join(memory_lines))
             log.debug(f"Injected {len(memories)} memories into context")
+
+    if user_message:
+        try:
+            rag_results = await query_rag(user_message)
+            if rag_results:
+                rag_lines = [r["payload"]["text"] for r in rag_results if r["score"] > 0.25]
+                if rag_lines:
+                    parts.append("## Retrieved Context\n" + "\n\n---\n\n".join(rag_lines))
+                    log.warning(f"RAG injected {len(rag_lines)} chunks into context")
+        except Exception as e:
+            log.warning(f"RAG injection error: {e}")
 
     if settings.get("skills_enabled", "true") == "true":
         active_skills = [s for s in list_skills_with_state(db) if s["enabled"]]
@@ -2128,7 +2164,7 @@ async def chat(request: Request):
         "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id ASC",
         (conv_id,),
     ).fetchall()
-    system_prompt = build_system_prompt(db, preset_prompt, user_message)
+    system_prompt = await build_system_prompt(db, preset_prompt, user_message)
     db.close()
 
     messages = []
