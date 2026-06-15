@@ -58,6 +58,7 @@ log.addHandler(syslog_handler)
 # --- Configuration ---
 VERSION = "v1.8.0"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
+LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://192.168.50.108:8081")
 SEARXNG_BASE = "http://localhost:8888"
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "jarvischat.db"
@@ -1038,7 +1039,7 @@ def get_gpu_stats() -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info(f"JarvisChat v{VERSION} starting up")
-    log.info(f"Ollama: {OLLAMA_BASE}, SearXNG: {SEARXNG_BASE}")
+    log.info(f"Ollama: {OLLAMA_BASE}, llama-server: {LLAMA_SERVER_BASE}, SearXNG: {SEARXNG_BASE}")
     init_db()
     log.info(f"Memory system: {get_memory_count()} memories loaded")
     yield
@@ -1966,7 +1967,7 @@ async def explicit_search(request: Request):
             try:
                 async with client.stream(
                     "POST",
-                    f"{OLLAMA_BASE}/api/chat",
+                    f"{LLAMA_SERVER_BASE}/v1/chat/completions",
                     json={"model": model, "messages": messages, "stream": True},
                     timeout=httpx.Timeout(300.0, connect=10.0),
                 ) as resp:
@@ -2191,7 +2192,7 @@ async def chat(request: Request):
             try:
                 async with client.stream(
                     "POST",
-                    f"{OLLAMA_BASE}/api/chat",
+                    f"{LLAMA_SERVER_BASE}/v1/chat/completions",
                     json=ollama_payload,
                     timeout=httpx.Timeout(300.0, connect=10.0),
                 ) as resp:
@@ -2240,7 +2241,7 @@ async def chat(request: Request):
                         augmented_response = []
                         async with client.stream(
                             "POST",
-                            f"{OLLAMA_BASE}/api/chat",
+                            f"{LLAMA_SERVER_BASE}/v1/chat/completions",
                             json={
                                 "model": model,
                                 "messages": augmented_messages,
