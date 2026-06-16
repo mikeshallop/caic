@@ -1,3 +1,4 @@
+![jarvisChat logo](static/jcscreenie.png)
 # ⚡ JarvisChat v1.9.0
 
 **A privacy-first, homelab-native developer knowledge platform.**
