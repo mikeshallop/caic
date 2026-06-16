@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-JarvisChat - Lightweight Ollama Coding Companion
+JarvisChat - Privacy-First Homelab Developer Platform
 A minimal replacement for Open-WebUI that actually runs on Python 3.13
 Talks to Ollama API on localhost:11434
 
