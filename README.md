@@ -1,4 +1,4 @@
-# ⚡ JarvisChat v1.8.0
+# ⚡ JarvisChat v1.9.0
 
 **A privacy-first, homelab-native developer knowledge platform.**
 
