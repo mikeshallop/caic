@@ -31,6 +31,7 @@ import routers.settings as settings
 import routers.skills as skills
 import routers.chat as chat
 import routers.search_route as search_route
+import routers.completions as completions
 
 # --- Logging ---
 log = logging.getLogger("jarvischat")
@@ -137,7 +138,7 @@ async def index(request: Request):
 for router_module in [
     auth_router, conversations.router, memories.router, models.router,
     presets.router, profile.router, settings.router, skills.router,
-    chat.router, search_route.router,
+    chat.router, search_route.router, completions.router,
 ]:
     app.include_router(router_module)
 
