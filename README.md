@@ -43,7 +43,7 @@ Solo developers and homelab enthusiasts who are:
 │                                                             │
 │  ┌─────────────────┐         ┌──────────────────────────┐  │
 │  │   jarvis        │◄──RPC───│   ultron                 │  │
-│  │   192.168.50.212│  50052  │   192.168.50.108         │  │
+│  │   192.168.50.210│  50052  │   192.168.50.108         │  │
 │  │                 │         │                          │  │
 │  │  jC :8080       │         │  llama-server :8081      │  │
 │  │  SearXNG :8888  │         │  llama-server :8082 (*)  │  │
@@ -122,7 +122,7 @@ Type=simple
 User=root
 ExecStart=/root/llama.cpp/build/bin/llama-server \
   --model /home/gramps/models/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf \
-  --rpc 192.168.50.212:50052 \
+  --rpc 192.168.50.210:50052 \
   --host 0.0.0.0 \
   --port 8081 \
   --n-gpu-layers 99
@@ -428,6 +428,11 @@ python3 -c "import sqlite3; print(sqlite3.connect('/opt/jarvischat/jarvischat.db
 **(K) RAG corpus management** — Weighted LRU eviction with composite score (recency + frequency + content age) + manual pin flag for load-bearing knowledge. Prevents corpus bloat from degrading retrieval quality. Analogous to memcache eviction policy.
 
 **(L) Dual inference model architecture** — Mistral-Nemo-12B on ultron:8081 (general assistant), Qwen2.5-Coder-14B-Q5_K_M on ultron:8082 (code/pair programming). jC selects endpoint based on active model. Only one model hot at a time given ultron's 16GB RAM constraint.
+
+**(M) MCP server compatibility** — Expose jC as an MCP server. Minimum scope: tool manifest endpoint, SSE transport, chat and RAG query as callable tools. Depends on TODO #22 (OpenAI-compat `/v1/chat/completions` endpoint). Reference: [bubblit](https://github.com/soup-oss/bubblit) for behavior-class lazy loading of tool manifests.
+
+**(N) AMQP Cluster Nervous System** — RabbitMQ on ultron as the cluster master/hub. Topic exchange `jc.cluster`, direct exchange `jc.commands`. Worker nodes (jarvis + future nodes) self-register by connecting to the ultron broker and publishing to `node.<hostname>.health` (GPU/RPC/RAM stats) and `node.<hostname>.models` (available GGUFs). jC subscribes to all `node.*` topics — drives UI status dots, model dropdown, and resource bars. Commands flow ultron→node via `cmd.<hostname>.*` queues (e.g. model load, service restart). **Long-term vision:** a resident AI model on each node acts as the AMQP agent — consuming its command queue, building a prompt, deciding action, publishing result. The message bus becomes the nervous system for a distributed agentic cluster where intelligence lives at the edges. ultron orchestrates; worker nodes are autonomous agents. Scales to arbitrary additional nodes with no topology changes.
+
 
 ---
 
