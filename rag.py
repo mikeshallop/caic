@@ -12,7 +12,7 @@ from config import MAX_SKILL_PROMPT_CHARS
 log = logging.getLogger("jarvischat")
 
 QDRANT_URL = "http://192.168.50.108:6333"
-EMBED_URL = "http://192.168.50.108:11434"
+EMBED_URL = "http://192.168.50.108:8081"
 EMBED_MODEL = "mxbai-embed-large"
 RAG_COLLECTION = "jarvis_rag"
 RAG_SCORE_THRESHOLD = 0.25
@@ -65,7 +65,7 @@ async def build_system_prompt(db, extra_prompt: str = "", user_message: str = ""
                 rag_lines = [r["payload"]["text"] for r in rag_results if r["score"] > RAG_SCORE_THRESHOLD]
                 if rag_lines:
                     parts.append("## Retrieved Context\n" + "\n\n---\n\n".join(rag_lines))
-                    log.warning(f"RAG injected {len(rag_lines)} chunks into context")
+                    log.info(f"RAG injected {len(rag_lines)} chunks into context")
         except Exception as e:
             log.warning(f"RAG injection error: {e}")
 

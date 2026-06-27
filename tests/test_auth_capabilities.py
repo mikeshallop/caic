@@ -3,16 +3,18 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-import app as app_module
+import app
+import db
+from security import SESSIONS, PIN_ATTEMPTS
 
 
 def make_client(tmp_path: Path) -> TestClient:
     os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    app_module.DB_PATH = tmp_path / "jarvischat-test.db"
-    app_module.SESSIONS.clear()
-    app_module.PIN_ATTEMPTS.clear()
-    app_module.init_db()
-    return TestClient(app_module.app)
+    db.DB_PATH = tmp_path / "jarvischat-test.db"
+    SESSIONS.clear()
+    PIN_ATTEMPTS.clear()
+    db.init_db()
+    return TestClient(app.app)
 
 
 def test_guest_read_only_admin_write_blocked(tmp_path: Path):

@@ -62,7 +62,13 @@ def search_memories(query: str, limit: int = 5) -> list:
     if not words:
         db.close()
         return []
-    safe_query = " OR ".join(word + "*" for word in words[:10])
+    escaped = []
+    for word in words[:10]:
+        if word.upper() in {"AND", "OR", "NOT", "NEAR"}:
+            escaped.append(f'"{word}"*')
+        else:
+            escaped.append(word + "*")
+    safe_query = " OR ".join(escaped)
     try:
         rows = db.execute(
             "SELECT rowid, fact, topic, source, created_at, bm25(memories) AS rank "

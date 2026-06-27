@@ -178,7 +178,7 @@ async def _stream_chat(payload: dict, model: str, conv_id: str, request: Request
                 async for line in resp.aiter_lines():
                     if not line.strip():
                         continue
-                    token, done, _ = parse_llama_stream_chunk(line)
+                    token, done, _, _ = parse_llama_stream_chunk(line)
                     if token:
                         full_response.append(token)
                         yield _build_openai_chunk(token, model, conv_id)
@@ -222,7 +222,7 @@ async def _blocking_chat(payload: dict, model: str, conv_id: str, request: Reque
                 async for line in resp.aiter_lines():
                     if not line.strip():
                         continue
-                    token, done, _ = parse_llama_stream_chunk(line)
+                    token, done, _, _ = parse_llama_stream_chunk(line)
                     if token:
                         full_response.append(token)
                     if done:

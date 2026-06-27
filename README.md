@@ -1,458 +1,260 @@
-![jarvisChat logo](static/jcscreenie.png)
-# ⚡ JarvisChat v1.9.0
+# JarvisChat v1.8.0
 
-**A privacy-first, homelab-native developer knowledge platform.**
+**A lightweight local inference coding companion with persistent memory, web search, and real-time system monitoring.**
 
-> JarvisChat turns a heterogeneous LAN of budget hardware into a distributed local AI inference cluster — accumulating institutional knowledge over time, keeping all data off the cloud, and squeezing real performance out of modest consumer hardware through architecture rather than dollars.
+Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
 
-This is not another AI chat wrapper. jC is the UX and knowledge-management layer for a local AI brain — analogous to what Windows was to DOS, or what the web is to the internet. The intelligence lives in the model and the RAG corpus. jC makes it accessible and keeps feeding it.
+Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
----
+## What's New in v1.8.0
 
-## The Four Pillars
+- **Modular refactor completed** — single-file `app.py` split into `config.py`, `db.py`, `auth.py`, `security.py`, `memory.py`, `search.py`, `rag.py`, `gpu.py`, and `routers/` package
+- **`COMPLETIONS_API_KEY`** — auto-generated secret key for the OpenAI-compatible endpoint, overridable via `JARVISCHAT_COMPLETIONS_API_KEY` env var
+- **Perplexity auto-search fixed** — upstream request now sends `"logprobs": true`, `parse_llama_stream_chunk()` extracts per-token logprobs, so `calculate_perplexity()` and `is_uncertain()` work correctly (was dead code)
+- **All `/api/models` endpoints** — now correctly target `LLAMA_SERVER_BASE` (llama-server on port 8081) instead of the old Ollama port; `/api/ps` uses `/v1/models` endpoint
+- **RAG embedding endpoint fixed** — `EMBED_URL` changed from port `:11434` (Ollama) to `:8081` (llama-server)
+- **Error messages corrected** — all user-facing errors say "inference server" instead of "Ollama" or "llama-server"
+- **Secure SSE protocol** — raw search results are no longer leaked in the SSE event stream
+- **FTS5 query safety** — operator keywords (`AND`, `OR`, `NOT`, `NEAR`) are double-quoted to prevent parse errors
+- **All 8 test files fixed** — rewired imports after the modular refactor; all 26 tests pass
 
-### 1. Privacy
-Everything runs on your LAN. No API keys, no cloud endpoints, no data leaving your network, no subscription, no terms-of-service surprises. Your conversations, your codebase, your decisions — stay yours.
+## Features
 
-### 2. Knowledge Retention
-Unlike stateless chat tools that forget everything when you close the tab, jC accumulates institutional memory. Every solved problem, every architectural decision, every working command gets absorbed into the RAG corpus via Qdrant. The system gets smarter the longer you use it.
+- **Persistent Memory** — SQLite FTS5 full-text search for fast, relevant memory retrieval
+- **Web Search** — SearXNG integration for automatic web lookups when the model is uncertain
+- **Explicit Search** — Search button to force web search without waiting for model uncertainty
+- **Profile Injection** — Custom system prompt injected into every conversation
+- **System Presets** — Save and switch between different system prompts
+- **Real-time Stats** — CPU, RAM, GPU, VRAM monitoring in sidebar
+- **Token Thermometer** — Visual context window usage indicator
+- **Streaming Responses** — Server-sent events for real-time token display
+- **Conversation History** — SQLite-backed chat persistence with mass-delete option
+- **Model Switching** — Change inference models on the fly
+- **Skills Framework** — Built-in skill registry with per-skill enable/disable controls
 
-### 3. Budget Hardware Maximization
-You don't need a $10,000 workstation. jC is designed for the developer who has a drawer full of machines and the skills to wire them together. RPC clustering, model splitting across CPU and GPU nodes, dynamic resource negotiation, and smart RAG eviction squeeze real performance out of modest consumer hardware.
-
-### 4. Homelab-Native Architecture
-Built specifically for the heterogeneous homelab: mixed hardware, mixed OS, consumer GPUs, ARM boards, NAS storage — all working together as a coherent AI platform. A designated master node hosts jC, llama-server, and SearXNG. GPU nodes self-register as RPC inference workers. The architecture scales horizontally across whatever you've got.
-
----
-
-## Target Audience
-
-Solo developers and homelab enthusiasts who are:
-- Budget-constrained but hardware-rich (multiple machines, NAS, spare GPUs)
-- Privacy-conscious (no cloud AI subscriptions)
-- Technically capable (if you can install jC, you can designate the master node)
-- Building something over time and want their AI to remember it
-
----
-
-## Architecture
+## File Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        YOUR LAN                             │
-│                                                             │
-│  ┌─────────────────┐         ┌──────────────────────────┐  │
-│  │   jarvis        │◄──RPC───│   ultron                 │  │
-│  │   192.168.50.210│  50052  │   192.168.50.108         │  │
-│  │                 │         │                          │  │
-│  │  jC :8080       │         │  llama-server :8081      │  │
-│  │  SearXNG :8888  │         │  llama-server :8082 (*)  │  │
-│  │  RX 6600 XT 8GB │         │  Qdrant :6333            │  │
-│  │  GPU RPC worker │         │  mxbai-embed :11434      │  │
-│  │  Vulkan backend │         │  AMD Ryzen 7 7840HS      │  │
-│  └─────────────────┘         │  Radeon 780M iGPU        │  │
-│                              └──────────────────────────┘  │
-│                                                             │
-│  ┌─────────────────┐         ┌──────────────────────────┐  │
-│  │   pivault       │         │   corsair                │  │
-│  │   192.168.50.158│         │   192.168.50.132         │  │
-│  │                 │         │                          │  │
-│  │  10.83TB RAID5  │         │  RTX 5070 Ti 16GB        │  │
-│  │  RPi 5 8GB      │         │  Ryzen 7 7800X3D         │  │
-│  │  NAS / Kopia    │         │  Gaming / Streaming      │  │
-│  └─────────────────┘         └──────────────────────────┘  │
-│                                                             │
-│  (*) Planned: Qwen2.5-Coder-14B on :8082                   │
-└─────────────────────────────────────────────────────────────┘
+/opt/jarvischat/
+├── app.py              # FastAPI app entry point
+├── config.py           # Constants, env vars, limits, skill registry
+├── db.py               # SQLite schema, connection factory
+├── auth.py             # PIN-based guest/admin sessions, auth routes
+├── security.py         # Rate limiting, origin checks, IP allowlist, audit
+├── memory.py           # FTS5 memory CRUD, remember/forget commands
+├── search.py           # SearXNG integration, perplexity, refusal detection
+├── rag.py              # Qdrant vector search + system prompt assembly
+├── gpu.py              # AMD GPU stats via rocm-smi
+├── routers/
+│   ├── chat.py         # /api/chat streaming endpoint
+│   ├── search_route.py # /api/search explicit search endpoint
+│   ├── completions.py  # /v1/chat/completions OpenAI-compat endpoint
+│   ├── conversations.py# Conversation CRUD
+│   ├── memories.py     # Memory CRUD API
+│   ├── models.py       # Model listing, system stats
+│   ├── presets.py      # System prompt presets
+│   ├── profile.py      # User profile
+│   ├── settings.py     # Runtime settings
+│   └── skills.py       # Skills management
+├── static/
+│   └── logo.png        # Logo image (optional)
+├── templates/
+│   └── index.html      # Frontend
+└── tests/              # 26 pytest tests
 ```
 
-**Data flow:**
-```
-Browser / IDE (Continue.dev)
-    → jC :8080 (FastAPI — auth, RAG, memory, conversation history)
-        → Qdrant :6333 (vector search, mxbai-embed-large for embeddings)
-        → llama-server :8081 (inference)
-            → jarvis RPC :50052 (GPU layer offload — RX 6600 XT)
-```
+## Requirements
 
----
-
-## The AMD + NVIDIA Cross-Cluster Reality
-
-This cluster intentionally mixes GPU architectures — **AMD RX 6600 XT on jarvis** and **NVIDIA RTX 5070 Ti on corsair**. This is deliberate and it works.
-
-The RPC layer in llama.cpp is GPU-vendor-agnostic. jarvis runs llama-rpc with a **Vulkan backend** (not ROCm, not CUDA) which provides hardware-neutral GPU acceleration. ultron's llama-server connects to it over TCP and offloads tensor layers without caring what GPU is on the other end.
-
-This means any machine on your LAN with any GPU (AMD, NVIDIA, Intel Arc) can participate as an RPC worker — as long as it can run llama-rpc with Vulkan support.
-
----
-
-## Cluster Performance Tuning
-
-### The Layer Offloading Trick
-
-The key to squeezing performance out of a CPU+GPU split cluster is `--n-gpu-layers`. This controls how many transformer layers get offloaded to the RPC GPU backend versus staying on the CPU.
-
-**Starting point (before tuning):** ~7 t/s  
-**After initial layer optimization:** ~17 t/s  
-**After full cluster tuning:** 30–35 t/s
-
-The progression that got us there:
-
-1. **Start with `--n-gpu-layers 99`** — tells llama-server to offload as many layers as possible. With Mistral-Nemo-12B Q4_K_M this results in all 41/41 layers offloading to jarvis GPU via RPC.
-
-2. **Verify GPU is actually working** — watch the llama-server startup log for:
-   ```
-   load_tensors: offloaded 41/41 layers to GPU
-   load_tensors: RPC[192.168.50.210:50052] model buffer size = 6763.30 MiB
-   load_tensors: CPU_Mapped model buffer size = 360.00 MiB
-   ```
-   If layers aren't offloading, the RPC connection isn't established.
-
-3. **Check actual throughput** — the timings block in llama-server responses shows real t/s. Tune from there.
-
-**Current llama-server service on ultron (`/etc/systemd/system/llama-server.service`):**
-```ini
-[Unit]
-Description=Llama.cpp Server (RPC frontend — Mistral-Nemo general)
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/llama.cpp/build/bin/llama-server \
-  --model /home/gramps/models/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf \
-  --rpc 192.168.50.210:50052 \
-  --host 0.0.0.0 \
-  --port 8081 \
-  --n-gpu-layers 99
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**llama-rpc service on jarvis (`/etc/systemd/system/llama-rpc.service`):**
-```ini
-[Unit]
-Description=Llama.cpp RPC Server (GPU backend — RX 6600 XT Vulkan)
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/llama.cpp/build/bin/llama-rpc-server \
-  --host 0.0.0.0 \
-  --port 50052
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
----
-
-## Models
-
-### Current
-| Model | Location | Port | Purpose |
-|-------|----------|------|---------|
-| Mistral-Nemo-Instruct-2407-Q4_K_M | `/home/gramps/models/` on jarvis | ultron:8081 | General assistant, chat |
-| mxbai-embed-large | ultron (Docker/Ollama) | ultron:11434 | RAG embeddings |
-
-### Planned
-| Model | Size | Port | Purpose |
-|-------|------|------|---------|
-| Qwen2.5-Coder-14B-Q5_K_M | ~10GB | ultron:8082 | Code completion, pair programming |
-
-> **Note:** ultron has 16GB RAM. Only one primary inference model can be hot at a time. llama-server instances are swapped via systemd when switching between general and code models.
-
----
-
-## RAG System
-
-jC uses **Qdrant** for vector storage and **mxbai-embed-large** (1024-dim) for embeddings.
-
-### Qdrant Collection
-- **Collection:** `jarvis_rag`
-- **Vector size:** 1024 (mxbai-embed-large output)
-- **Distance:** Cosine
-- **Score threshold:** 0.25 (filters low-relevance chunks)
-- **Chunks retrieved per query:** 3 (configurable)
-
-### RAM Ceiling
-Each vector = 4KB (1024 dims × float32). With ultron's ~4-6GB available to Qdrant after llama-server:
-- Practical ceiling: ~1–1.5M chunks before RAM becomes the bottleneck
-- Current corpus: 219 points (early stage)
-- Storage on disk: negligible against pivault's 10.83TB
-
-### What Gets Ingested
-- Code repositories (your actual codebase)
-- Pair-programming conversation history
-- Architecture decisions and working commands
-- Documentation and URLs (fetched and stripped via beautifulsoup4/httpx)
-
----
-
-## JarvisChat Service (`/etc/systemd/system/jarvischat.service`)
-
-```ini
-[Unit]
-Description=JarvisChat - Local LLM Developer Platform
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/jarvischat
-ExecStart=/opt/jarvischat/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080
-Restart=always
-RestartSec=5
-Environment=PYTHONUNBUFFERED=1
-Environment=OLLAMA_BASE=http://192.168.50.108:8081
-Environment=LLAMA_SERVER_BASE=http://192.168.50.108:8081
-
-[Install]
-WantedBy=multi-user.target
-```
-
----
+- Python 3.11+ (tested on 3.13)
+- llama-server running locally or on network (OpenAI-compatible API on port 8081)
+- SearXNG (optional, for web search)
 
 ## Installation
-
-### Prerequisites
-- Python 3.11+ (tested on 3.13)
-- llama.cpp built from source on both jarvis (RPC server) and ultron (llama-server)
-- Qdrant running on ultron
-- Ollama on ultron (for mxbai-embed-large embeddings)
-- SearXNG on jarvis:8888 (optional, for web search)
 
 ### Fresh Install
 
 ```bash
+# Create directory and venv
 sudo mkdir -p /opt/jarvischat
 sudo chown $USER:$USER /opt/jarvischat
 cd /opt/jarvischat
 python3 -m venv venv
-./venv/bin/pip install fastapi uvicorn httpx psutil jinja2 python-multipart qdrant-client
+
+# Install dependencies
+./venv/bin/pip install fastapi uvicorn httpx psutil jinja2 python-multipart
+
+# Set admin PIN before first startup (4 digits)
+export JARVISCHAT_ADMIN_PIN=4827
+
+# Create subdirectories
 mkdir -p templates static
+
+# Copy files
+# (copy all .py files to /opt/jarvischat/)
+# (copy routers/ directory to /opt/jarvischat/)
+# (copy templates/index.html to /opt/jarvischat/templates/)
 ```
 
-Copy `app.py` to `/opt/jarvischat/` and `index.html` to `/opt/jarvischat/templates/`.
+WARNING: Do not use `1234` as your admin PIN unless you accept weak local security.
 
-### Bootstrap the PIN
+NOTE: First boot requires `JARVISCHAT_ADMIN_PIN` unless you explicitly opt into insecure fallback with `JARVISCHAT_ALLOW_DEFAULT_PIN=true`.
+
+## Systemd Service
+
+Create `/etc/systemd/system/jarvischat.service`:
+
+```ini
+[Unit]
+Description=JarvisChat - Local Inference Web Interface
+After=network.target
+
+[Service]
+Type=simple
+User=jarvischat
+Group=jarvischat
+WorkingDirectory=/opt/jarvischat
+ExecStart=/opt/jarvischat/venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ```bash
-export JARVISCHAT_ADMIN_PIN=XXXX  # your 4-digit PIN
+sudo systemctl daemon-reload
+sudo systemctl enable jarvischat
+sudo systemctl start jarvischat
 ```
 
-Or allow the insecure default for testing:
-```bash
-export JARVISCHAT_ALLOW_DEFAULT_PIN=true
-```
+## Memory Commands
 
-### Environment Variables
+In chat, natural language triggers memory operations:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OLLAMA_BASE` | `http://localhost:11434` | Ollama-compatible endpoint (legacy) |
-| `LLAMA_SERVER_BASE` | `http://192.168.50.108:8081` | llama-server OpenAI-compat inference endpoint |
-| `JARVISCHAT_ADMIN_PIN` | (none) | 4-digit admin PIN (required on first boot) |
-| `JARVISCHAT_ALLOW_DEFAULT_PIN` | `false` | Allow insecure default PIN 1234 |
-| `JARVISCHAT_TRUSTED_ORIGINS` | (none) | Comma-separated trusted origins for CSRF |
-| `JARVISCHAT_ALLOWED_CIDRS` | RFC1918 + loopback | Allowed client IP CIDRs |
+| You say | What happens |
+|---------|--------------|
+| "remember that I prefer Rust over Go" | Stores as `preference` |
+| "remember that JarvisChat runs on port 8080" | Stores as `infrastructure` |
+| "note that the deadline is Friday" | Stores as `general` |
+| "forget about the deadline" | Removes matching memories |
 
----
+Memories are automatically searched based on your message content and injected into the system prompt when relevant.
+
+### Memory Topics
+
+Memories are auto-categorized:
+- `preference` — likes, dislikes, choices
+- `project` — active work, repos, tasks
+- `infrastructure` — servers, services, configs
+- `personal` — name, location, background
+- `general` — everything else
 
 ## API Endpoints
 
-### Auth
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/auth/guest` | Create guest session |
-| POST | `/api/auth/login` | Admin PIN login |
-| POST | `/api/auth/logout` | Revoke session |
-| GET | `/api/auth/session` | Check session status |
-| POST | `/api/auth/heartbeat` | Keep session alive |
+### Completions (OpenAI-compatible)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/chat/completions` | OpenAI-compatible chat (requires Bearer API key) |
 
 ### Chat & Search
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/chat` | Streaming chat (SSE) |
-| POST | `/api/search` | Explicit web search via SearXNG |
-| GET | `/api/search/status` | SearXNG health check |
 
-### Models
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/models` | List available models from llama-server |
-| GET | `/api/ps` | Running models |
-| POST | `/api/show` | Model info |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/chat` | Send message (streaming SSE) |
+| POST | `/api/search` | Explicit web search (streaming SSE) |
 
 ### Memory
-| Method | Path | Description |
-|--------|------|-------------|
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/memories` | List all memories |
 | POST | `/api/memories` | Add memory |
 | PUT | `/api/memories/{rowid}` | Update memory |
 | DELETE | `/api/memories/{rowid}` | Delete memory |
-| GET | `/api/memories/search?q=` | FTS5 search memories |
-| GET | `/api/memories/stats` | Memory statistics |
+| GET | `/api/memories/search?q=term` | Search memories |
+| GET | `/api/memories/stats` | Get counts by topic |
+
+### Models & System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models` | List available models |
+| GET | `/api/ps` | List loaded models |
+| POST | `/api/show` | Get model info |
+| GET | `/api/stats` | CPU, RAM, GPU, VRAM stats |
+| GET | `/api/search/status` | SearXNG availability |
+
+### Settings & Profile
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/profile` | Get profile content |
+| PUT | `/api/profile` | Update profile (admin) |
+| GET | `/api/profile/default` | Get default profile |
+| GET | `/api/settings` | Get settings |
+| PUT | `/api/settings` | Update settings (admin) |
 
 ### Conversations
-| Method | Path | Description |
-|--------|------|-------------|
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/conversations` | List conversations |
 | POST | `/api/conversations` | Create conversation |
-| GET | `/api/conversations/{id}` | Get conversation + messages |
-| PUT | `/api/conversations/{id}` | Update title/model |
+| GET | `/api/conversations/{id}` | Get conversation with messages |
+| PUT | `/api/conversations/{id}` | Update conversation title/model |
 | DELETE | `/api/conversations/{id}` | Delete conversation |
-| DELETE | `/api/conversations` | Delete all conversations |
+| DELETE | `/api/conversations` | Delete ALL conversations |
 
-### Profile & Settings
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/profile` | Get profile |
-| PUT | `/api/profile` | Update profile |
-| GET | `/api/settings` | Get settings |
-| PUT | `/api/settings` | Update settings |
-| GET | `/api/stats` | CPU/RAM/GPU stats |
+### Presets
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/presets` | List presets |
+| POST | `/api/presets` | Create preset |
+| PUT | `/api/presets/{id}` | Update preset |
+| DELETE | `/api/presets/{id}` | Delete preset |
 
 ### Skills
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/skills` | List all skills |
-| GET | `/api/skills/active` | List enabled skills |
-| PUT | `/api/skills/{key}` | Enable/disable skill |
 
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/skills` | List all skills with state |
+| GET | `/api/skills/active` | List active skills |
+| PUT | `/api/skills/{key}` | Toggle skill enabled (admin) |
 
-## Memory Commands
+### Auth
 
-Say these in chat to interact with the memory system:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/guest` | Create guest session |
+| POST | `/api/auth/login` | Admin PIN login |
+| POST | `/api/auth/logout` | Revoke session |
+| GET | `/api/auth/session` | Check session validity |
+| POST | `/api/auth/heartbeat` | Extend session TTL |
 
-| Command | Effect |
-|---------|--------|
-| `remember that [fact]` | Stores fact in FTS5 memory |
-| `please remember [fact]` | Same |
-| `don't forget [fact]` | Same |
-| `forget about [topic]` | Deletes matching memories |
+## Configuration
 
----
+Settings are stored in the `settings` table and include:
 
-## Troubleshooting
+- `profile_enabled` — Inject profile into chats (true/false)
+- `search_enabled` — Auto web search (true/false)
+- `memory_enabled` — Memory injection (true/false)
+- `skills_enabled` — Skills framework (true/false)
+- `default_model` — Default inference model
 
-### jC starts but inference is slow or failing
-Check that llama-rpc is running on jarvis and llama-server is connected:
+## Testing
+
 ```bash
-# On jarvis
-systemctl status llama-rpc
-
-# On ultron — look for "offloaded N/N layers to GPU" in logs
-journalctl -u llama-server -n 50 --no-pager
+./venv/bin/python -m pytest tests/ -v
 ```
 
-### ultron shows no CPU activity during inference
-Inference is being handled entirely by jarvis GPU via RPC — this is correct and expected. ultron's CPU is only involved for non-offloaded tensors (a small fraction of the model).
-
-### RAG not returning results
-Check Qdrant is up and the collection exists:
-```bash
-curl http://192.168.50.108:6333/collections/jarvis_rag
-```
-Verify `points_count` > 0. If zero, the corpus hasn't been seeded yet.
-
-### jC won't start — PIN bootstrap error
-Set the PIN via environment before first boot:
-```bash
-export JARVISCHAT_ADMIN_PIN=XXXX
-systemctl restart jarvischat
-```
-
-### sqlite3 not found
-Use Python instead:
-```bash
-python3 -c "import sqlite3; print(sqlite3.connect('/opt/jarvischat/jarvischat.db').execute('SELECT * FROM settings').fetchall())"
-```
-
----
-
-## Roadmap
-
-### TODO (Priority Order)
-1. **Tool calling** — read_file/write_file with /opt/jarvischat whitelist, tool_calls dispatch loop
-2. **git_tool** — Gitea integration for commit/push from jC
-3. **Audit logging** — structured audit trail to syslog
-4. SearXNG persistence (DONE ✅)
-5. search+ prefix for explicit search
-6. profile.example.md
-7. Conversation search/filter
-8. Export to markdown
-9. Keyboard shortcuts
-10. Retry button
-11. Source links in responses
-12. Rename conversations
-13. Multiple profiles
-14. KWIC auto-tags
-15. Image input (vision)
-16. btop split-screen integration
-17. Containerize
-18. SearXNG health indicator in UI
-19. check_patch_notes tool
-20. GitLab mirror of llgit repo
-
-### ROADMAP (Longer Horizon)
-
-**(A) Modular refactor** — Split monolithic app.py into routers/, services/, config.py, db.py, auth.py. Prerequisite for everything below.
-
-**(B) RAG ingest/manage UI** — File upload, URL ingest (fetch + strip HTML via beautifulsoup4/httpx, store URL as source metadata for citation), delete chunks/collections.
-
-**(C) Backend config panel** — Switch between Ollama/llama-server, endpoint URLs, model switching, restart — all from the UI without touching config files.
-
-**(D) Response metrics display** — tokens/sec, TTFT, context size, RAG chunks retrieved + scores — visible in the UI per response.
-
-**(E) Response quality feedback** — thumbs/stars/tags per response → feedback corpus → future RLHF dataset.
-
-**(F) IDE integration** — Continue.dev + VS Code, pointed at jC:8080 (not direct to inference endpoint). All IDE traffic — including pair-programming conversations — goes through jC so sessions are persisted and become RAG-worthy content. jC needs FIM request format handling to support inline autocomplete.
-
-**(G) Conversation history export → RAG ingest** — Bulk ingest existing conversation history into Qdrant.
-
-**(H) Fine-tuning pipeline** — LoRA on Mistral-Nemo from feedback corpus (item E).
-
-**(I) Autonomous RAG** — At conversation end, jC self-evaluates the transcript, extracts significant chunks (solved problems, working commands, architectural decisions), and ingests them into Qdrant automatically with metadata (date, conversation_id, reason). jC decides what it needs to remember. Closes the loop.
-
-**(J) Startup hardware/resource self-assessment** — On boot, jC queries ultron for available RAM, Qdrant consumption, and llama-server footprint. Derives dynamic high-water marks for RAG chunk limits, context window sizing, retrieval limits, and eviction thresholds. Writes a living config file. Replaces magic numbers with runtime-negotiated values.
-
-**(K) RAG corpus management** — Weighted LRU eviction with composite score (recency + frequency + content age) + manual pin flag for load-bearing knowledge. Prevents corpus bloat from degrading retrieval quality. Analogous to memcache eviction policy.
-
-**(L) Dual inference model architecture** — Mistral-Nemo-12B on ultron:8081 (general assistant), Qwen2.5-Coder-14B-Q5_K_M on ultron:8082 (code/pair programming). jC selects endpoint based on active model. Only one model hot at a time given ultron's 16GB RAM constraint.
-
-**(M) MCP server compatibility** — Expose jC as an MCP server. Minimum scope: tool manifest endpoint, SSE transport, chat and RAG query as callable tools. Depends on TODO #22 (OpenAI-compat `/v1/chat/completions` endpoint). Reference: [bubblit](https://github.com/soup-oss/bubblit) for behavior-class lazy loading of tool manifests.
-
-**(N) AMQP Cluster Nervous System** — RabbitMQ on ultron as the cluster master/hub. Topic exchange `jc.cluster`, direct exchange `jc.commands`. Worker nodes (jarvis + future nodes) self-register by connecting to the ultron broker and publishing to `node.<hostname>.health` (GPU/RPC/RAM stats) and `node.<hostname>.models` (available GGUFs). jC subscribes to all `node.*` topics — drives UI status dots, model dropdown, and resource bars. Commands flow ultron→node via `cmd.<hostname>.*` queues (e.g. model load, service restart). **Long-term vision:** a resident AI model on each node acts as the AMQP agent — consuming its command queue, building a prompt, deciding action, publishing result. The message bus becomes the nervous system for a distributed agentic cluster where intelligence lives at the edges. ultron orchestrates; worker nodes are autonomous agents. Scales to arbitrary additional nodes with no topology changes.
-
-
----
-
-## Primary Cluster Objectives
-
-1. **Generative AI inference** — Local, private, fast enough to be useful
-2. **Agentic functionality** — Autonomous RAG self-management is the canonical first example. The system acts, not just responds.
-
----
-
-## Repository
-
-```
-ssh://gitea@llgit.llamachile.tube:1319/gramps/jarvisChat.git
-```
-
-> SSH username is `gitea`, not `git`. Port 1319.
-
----
+All 26 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient.stream`. No external services needed.
 
 ## License
 
 MIT
+
+## Repository
+
+Gitea: `ssh://gitea@llgit.llamachile.tube:1319/gramps/jarvisChat.git`

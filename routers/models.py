@@ -8,7 +8,7 @@ import httpx
 import psutil
 from fastapi import APIRouter, HTTPException, Request
 
-from config import OLLAMA_BASE
+from config import LLAMA_SERVER_BASE
 from gpu import get_gpu_stats
 from security import read_json_body, BODY_LIMIT_DEFAULT_BYTES
 
@@ -20,34 +20,33 @@ router = APIRouter()
 async def list_models():
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.get(f"{OLLAMA_BASE}/v1/models", timeout=10)
+            resp = await client.get(f"{LLAMA_SERVER_BASE}/v1/models", timeout=10)
             data = resp.json()
             models = [{"name": m["id"], "model": m["id"]} for m in data.get("data", [])]
             return {"models": models}
         except httpx.ConnectError:
-            raise HTTPException(status_code=502, detail="Cannot connect to llama-server.")
+            raise HTTPException(status_code=502, detail="Cannot connect to inference server.")
 
 
 @router.get("/api/ps")
 async def running_models():
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.get(f"{OLLAMA_BASE}/api/ps", timeout=10)
+            resp = await client.get(f"{LLAMA_SERVER_BASE}/v1/models", timeout=10)
             return resp.json()
         except httpx.ConnectError:
-            raise HTTPException(status_code=502, detail="Cannot connect to Ollama.")
+            raise HTTPException(status_code=502, detail="Cannot connect to inference server.")
 
 
 @router.post("/api/show")
 async def show_model(request: Request):
-    from security import BODY_LIMIT_DEFAULT_BYTES
     body = await read_json_body(request, BODY_LIMIT_DEFAULT_BYTES)
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.post(f"{OLLAMA_BASE}/api/show", json=body, timeout=10)
+            resp = await client.post(f"{LLAMA_SERVER_BASE}/api/show", json=body, timeout=10)
             return resp.json()
         except httpx.ConnectError:
-            raise HTTPException(status_code=502, detail="Cannot connect to Ollama.")
+            raise HTTPException(status_code=502, detail="Cannot connect to inference server.")
 
 
 @router.get("/api/stats")

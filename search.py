@@ -80,16 +80,13 @@ def format_direct_answer(question: str, results: list) -> str:
 
 def extract_search_query(user_message: str) -> str:
     query = user_message.strip()
-    if re.search(r"temperature|weather", query, re.IGNORECASE):
-        query = re.sub(r"^what('?s| is) the ", "", query, flags=re.IGNORECASE) + " right now degrees"
-    if re.search(r"price|spot price", query, re.IGNORECASE):
-        query = re.sub(r"^(what('?s| is)|can you tell me) the ", "", query, flags=re.IGNORECASE) + " today USD"
-    query = re.sub(
-        r"^(what|who|where|when|why|how|is|are|can|could|would|should|do|does|did)\s+",
-        "", query, flags=re.IGNORECASE,
-    )
-    query = re.sub(r"[?!.]+$", "", query)
-    return query[:100].strip() or user_message[:100]
+    weather_lead = re.match(r"^(?:what('?s| is) the\s+)?(?:weather|temperature|forecast)\s+(?:in\s+|for\s+)?(.+)", query, re.IGNORECASE)
+    if weather_lead:
+        return (weather_lead.group(2) + " weather").strip()[:100]
+    price_lead = re.match(r"^(?:what('?s| is| are)\s+)?(?:the\s+)?(?:price|spot price)\s+(?:of\s+|for\s+)?(.+)", query, re.IGNORECASE)
+    if price_lead:
+        return (price_lead.group(2) + " price today USD").strip()[:100]
+    return query[:100]
 
 
 async def query_searxng(query: str, max_results: int = 5) -> list:

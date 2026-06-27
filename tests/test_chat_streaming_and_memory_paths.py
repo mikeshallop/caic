@@ -2,19 +2,24 @@ import json
 import os
 from pathlib import Path
 
+import httpx
 from fastapi.testclient import TestClient
 
-import app as app_module
+import app
+import config
+import db
+import routers.chat
+from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
 
 
 def make_client(tmp_path: Path) -> TestClient:
     os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    app_module.DB_PATH = tmp_path / "jarvischat-streaming.db"
-    app_module.SESSIONS.clear()
-    app_module.PIN_ATTEMPTS.clear()
-    app_module.RATE_EVENTS.clear()
-    app_module.init_db()
-    return TestClient(app_module.app, raise_server_exceptions=False)
+    db.DB_PATH = tmp_path / "jarvischat-streaming.db"
+    SESSIONS.clear()
+    PIN_ATTEMPTS.clear()
+    RATE_EVENTS.clear()
+    db.init_db()
+    return TestClient(app.app, raise_server_exceptions=False)
 
 
 def parse_sse_payloads(body: str) -> list[dict]:
@@ -65,11 +70,11 @@ def test_chat_stream_emits_tokens_and_done(tmp_path: Path, monkeypatch):
         def stream_stub(self, method, url, json=None, timeout=None):
             return _MockStreamResponse(events)
 
-        monkeypatch.setattr(app_module.httpx.AsyncClient, "stream", stream_stub)
+        monkeypatch.setattr(httpx.AsyncClient, "stream", stream_stub)
 
         resp = client.post(
             "/api/chat",
-            json={"message": "hello", "model": app_module.DEFAULT_MODEL},
+            json={"message": "hello", "model": config.DEFAULT_MODEL},
             headers=headers,
         )
         assert resp.status_code == 200
@@ -92,7 +97,7 @@ def test_chat_auto_search_trigger_emits_search_events(tmp_path: Path, monkeypatc
         first_stream = _stream_json_lines(
             [
                 {
-                    "message": {"content": "I am uncertain."},
+                    "message": {"content": "I don't have current data on that question."},
                     "logprobs": [{"logprob": -5.0}],
                 },
                 {"done": True, "eval_count": 2, "eval_duration": 1000000000},
@@ -118,12 +123,12 @@ def test_chat_auto_search_trigger_emits_search_events(tmp_path: Path, monkeypatc
                 }
             ]
 
-        monkeypatch.setattr(app_module.httpx.AsyncClient, "stream", stream_stub)
-        monkeypatch.setattr(app_module, "query_searxng", search_stub)
+        monkeypatch.setattr(httpx.AsyncClient, "stream", stream_stub)
+        monkeypatch.setattr(routers.chat, "query_searxng", search_stub)
 
         resp = client.post(
             "/api/chat",
-            json={"message": "what is the latest value", "model": app_module.DEFAULT_MODEL},
+            json={"message": "what is the latest value", "model": config.DEFAULT_MODEL},
             headers=headers,
         )
         assert resp.status_code == 200
@@ -153,13 +158,13 @@ def test_memory_command_paths_remember_and_forget(tmp_path: Path, monkeypatch):
         def stream_stub(self, method, url, json=None, timeout=None):
             return _MockStreamResponse(base_stream)
 
-        monkeypatch.setattr(app_module.httpx.AsyncClient, "stream", stream_stub)
+        monkeypatch.setattr(httpx.AsyncClient, "stream", stream_stub)
 
         remember_resp = client.post(
             "/api/chat",
             json={
                 "message": "remember that my favorite language is rust",
-                "model": app_module.DEFAULT_MODEL,
+                "model": config.DEFAULT_MODEL,
             },
             headers=headers,
         )
@@ -175,7 +180,7 @@ def test_memory_command_paths_remember_and_forget(tmp_path: Path, monkeypatch):
             "/api/chat",
             json={
                 "message": "forget about my favorite language",
-                "model": app_module.DEFAULT_MODEL,
+                "model": config.DEFAULT_MODEL,
             },
             headers=headers,
         )

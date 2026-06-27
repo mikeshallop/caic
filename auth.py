@@ -15,10 +15,10 @@ from fastapi.responses import JSONResponse
 from config import SESSION_TIMEOUT_SECONDS, MAX_PIN_ATTEMPTS, PIN_LOCKOUT_SECONDS, RATE_WINDOW_SECONDS
 from db import get_db, get_setting
 from security import (
-    SESSIONS, PIN_ATTEMPTS, SESSION_LOCK, audit_event, get_client_ip,
-    is_ip_allowed, check_rate_limit, rate_policy, origin_allowed,
-    is_state_changing, request_body_limit, read_json_body, hash_pin,
-    customer_error_envelope, log_incident,
+    SESSIONS, PIN_ATTEMPTS, SESSION_LOCK, BODY_LIMIT_DEFAULT_BYTES,
+    audit_event, get_client_ip, is_ip_allowed, check_rate_limit,
+    rate_policy, origin_allowed, is_state_changing, request_body_limit,
+    read_json_body, hash_pin, customer_error_envelope, log_incident,
 )
 
 log = logging.getLogger("jarvischat")
@@ -146,7 +146,6 @@ async def auth_guest(request: Request):
 
 @router.post("/api/auth/login")
 async def auth_login(request: Request):
-    from security import BODY_LIMIT_DEFAULT_BYTES
     body = await read_json_body(request, BODY_LIMIT_DEFAULT_BYTES)
     pin = str(body.get("pin", ""))
     ip = get_client_ip(request)
@@ -183,7 +182,6 @@ async def auth_heartbeat(request: Request):
 
 @router.post("/api/auth/logout")
 async def auth_logout(request: Request):
-    from security import BODY_LIMIT_DEFAULT_BYTES
     ip = get_client_ip(request)
     sid = request.headers.get("x-session-id", "").strip()
     role = "none"

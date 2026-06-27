@@ -26,7 +26,7 @@ def parse_llama_stream_chunk(line: str) -> tuple:
     if line.startswith("data: "):
         line = line[6:]
     if line.strip() == "[DONE]":
-        return None, True, {}
+        return None, True, {}, []
     try:
         chunk = json.loads(line)
         choices = chunk.get("choices", [])
@@ -35,10 +35,17 @@ def parse_llama_stream_chunk(line: str) -> tuple:
             token = delta.get("content")
             finish = choices[0].get("finish_reason")
             stats = {}
+            logprobs_list = []
+            logprobs_info = choices[0].get("logprobs")
+            if logprobs_info:
+                content_logprobs = logprobs_info.get("content", [])
+                for entry in content_logprobs:
+                    if "logprob" in entry:
+                        logprobs_list.append({"logprob": entry["logprob"]})
             if finish == "stop":
                 usage = chunk.get("usage", {})
                 stats["tokens_per_sec"] = usage.get("tokens_per_second", 0.0)
-            return token, finish == "stop", stats
+            return token, finish == "stop", stats, logprobs_list
         if "message" in chunk and "content" in chunk["message"]:
             token = chunk["message"]["content"]
             done = chunk.get("done", False)
@@ -47,10 +54,10 @@ def parse_llama_stream_chunk(line: str) -> tuple:
                 eval_count = chunk.get("eval_count", 0)
                 eval_duration = chunk.get("eval_duration", 0)
                 stats["tokens_per_sec"] = (eval_count / (eval_duration / 1e9)) if eval_duration > 0 else 0
-            return token, done, stats
+            return token, done, stats, []
     except json.JSONDecodeError:
         pass
-    return None, False, {}
+    return None, False, {}, []
 
 
 @router.post("/api/chat")
@@ -97,7 +104,7 @@ async def chat(request: Request):
     for row in history_rows:
         messages.append({"role": row["role"], "content": row["content"]})
 
-    ollama_payload = {"model": model, "messages": messages, "stream": True}
+    upstream_payload = {"model": model, "messages": messages, "stream": True, "logprobs": True}
 
     async def stream_response():
         full_response = []
@@ -111,12 +118,14 @@ async def chat(request: Request):
             try:
                 async with client.stream(
                     "POST", f"{LLAMA_SERVER_BASE}/v1/chat/completions",
-                    json=ollama_payload,
+                    json=upstream_payload,
                     timeout=httpx.Timeout(300.0, connect=10.0),
                 ) as resp:
                     async for line in resp.aiter_lines():
                         if line.strip():
-                            token, done, stats = parse_llama_stream_chunk(line)
+                            token, done, stats, chunk_logprobs = parse_llama_stream_chunk(line)
+                            if chunk_logprobs:
+                                all_logprobs.extend(chunk_logprobs)
                             if token:
                                 full_response.append(token)
                                 yield f"data: {json.dumps({'token': token, 'conversation_id': conv_id})}\n\n"
@@ -153,7 +162,7 @@ async def chat(request: Request):
                         ) as resp2:
                             async for line in resp2.aiter_lines():
                                 if line.strip():
-                                    token2, done2, _ = parse_llama_stream_chunk(line)
+                                    token2, done2, _, _ = parse_llama_stream_chunk(line)
                                     if token2:
                                         augmented_response.append(token2)
                                     if done2:
@@ -194,9 +203,9 @@ async def chat(request: Request):
             except httpx.RemoteProtocolError:
                 pass
             except httpx.ConnectError:
-                yield f"data: {json.dumps({'error': 'Cannot connect to Ollama. Is it running?'})}\n\n"
+                yield f"data: {json.dumps({'error': 'Cannot connect to inference server. Is it running?'})}\n\n"
             except Exception as e:
-                incident_key = log_incident("chat_stream", message="Ollama stream failure during chat response",
+                incident_key = log_incident("chat_stream", message="Inference stream failure during chat response",
                                             request=request, exc=e)
                 yield f"data: {json.dumps({'error': 'Chat response generation failed before completion. Use the incident key for support lookup.', 'error_key': incident_key})}\n\n"
 

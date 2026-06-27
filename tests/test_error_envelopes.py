@@ -1,19 +1,24 @@
 import os
 from pathlib import Path
 
+import httpx
 from fastapi.testclient import TestClient
 
-import app as app_module
+import app
+import config
+import db
+import routers.memories
+from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
 
 
 def make_client(tmp_path: Path) -> TestClient:
     os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    app_module.DB_PATH = tmp_path / "jarvischat-errors.db"
-    app_module.SESSIONS.clear()
-    app_module.PIN_ATTEMPTS.clear()
-    app_module.RATE_EVENTS.clear()
-    app_module.init_db()
-    return TestClient(app_module.app, raise_server_exceptions=False)
+    db.DB_PATH = tmp_path / "jarvischat-errors.db"
+    SESSIONS.clear()
+    PIN_ATTEMPTS.clear()
+    RATE_EVENTS.clear()
+    db.init_db()
+    return TestClient(app.app, raise_server_exceptions=False)
 
 
 def test_unhandled_api_exception_returns_friendly_error_with_incident_key(
@@ -28,7 +33,7 @@ def test_unhandled_api_exception_returns_friendly_error_with_incident_key(
         def boom(_topic=None):
             raise RuntimeError("super secret db internals")
 
-        monkeypatch.setattr(app_module, "get_all_memories", boom)
+        monkeypatch.setattr(routers.memories, "get_all_memories", boom)
 
         resp = client.get("/api/memories", headers=headers)
         assert resp.status_code == 500
@@ -57,11 +62,11 @@ def test_chat_stream_error_hides_internal_exception_and_emits_incident_key(
         def broken_stream(*args, **kwargs):
             return BrokenStreamContext()
 
-        monkeypatch.setattr(app_module.httpx.AsyncClient, "stream", broken_stream)
+        monkeypatch.setattr(httpx.AsyncClient, "stream", broken_stream)
 
         resp = client.post(
             "/api/chat",
-            json={"message": "hello", "model": app_module.DEFAULT_MODEL},
+            json={"message": "hello", "model": config.DEFAULT_MODEL},
             headers=headers,
         )
 

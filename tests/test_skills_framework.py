@@ -1,19 +1,23 @@
+import asyncio
 import os
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-import app as app_module
+import app
+import db
+from rag import build_system_prompt
+from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
 
 
 def make_client(tmp_path: Path) -> TestClient:
     os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    app_module.DB_PATH = tmp_path / "jarvischat-skills.db"
-    app_module.SESSIONS.clear()
-    app_module.PIN_ATTEMPTS.clear()
-    app_module.RATE_EVENTS.clear()
-    app_module.init_db()
-    return TestClient(app_module.app, raise_server_exceptions=False)
+    db.DB_PATH = tmp_path / "jarvischat-skills.db"
+    SESSIONS.clear()
+    PIN_ATTEMPTS.clear()
+    RATE_EVENTS.clear()
+    db.init_db()
+    return TestClient(app.app, raise_server_exceptions=False)
 
 
 def test_guest_can_list_skills(tmp_path: Path):
@@ -71,23 +75,23 @@ def test_unknown_skill_update_is_rejected(tmp_path: Path):
 
 def test_prompt_injection_respects_skills_enabled_setting(tmp_path: Path):
     with make_client(tmp_path):
-        db = app_module.get_db()
+        conn = db.get_db()
         try:
-            db.execute(
+            conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                 ("skills_enabled", "false"),
             )
-            db.commit()
-            without_skills = app_module.build_system_prompt(db, "", "hello")
+            conn.commit()
+            without_skills = asyncio.run(build_system_prompt(conn, "", "hello"))
             assert "## Active Skills" not in without_skills
 
-            db.execute(
+            conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                 ("skills_enabled", "true"),
             )
-            db.commit()
-            with_skills = app_module.build_system_prompt(db, "", "hello")
+            conn.commit()
+            with_skills = asyncio.run(build_system_prompt(conn, "", "hello"))
             assert "## Active Skills" in with_skills
             assert "memory.search" in with_skills
         finally:
-            db.close()
+            conn.close()

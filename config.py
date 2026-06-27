@@ -14,6 +14,7 @@ OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://192.168.50.108:8081")
 SEARXNG_BASE = "http://localhost:8888"
 DEFAULT_MODEL = "llama3.1:latest"
+COMPLETIONS_API_KEY = os.environ.get("JARVISCHAT_COMPLETIONS_API_KEY", "jc-sk-" + os.urandom(24).hex())
 
 # --- Auth ---
 SESSION_TIMEOUT_SECONDS = 90

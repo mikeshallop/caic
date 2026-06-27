@@ -3,17 +3,19 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-import app as app_module
+import app
+import db
+from security import SESSIONS, PIN_ATTEMPTS
 
 
 def make_admin_client(tmp_path: Path) -> tuple[TestClient, dict[str, str]]:
     os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    app_module.DB_PATH = tmp_path / "jarvischat-settings.db"
-    app_module.SESSIONS.clear()
-    app_module.PIN_ATTEMPTS.clear()
-    app_module.init_db()
+    db.DB_PATH = tmp_path / "jarvischat-settings.db"
+    SESSIONS.clear()
+    PIN_ATTEMPTS.clear()
+    db.init_db()
 
-    client = TestClient(app_module.app)
+    client = TestClient(app.app)
     login = client.post(
         "/api/auth/login",
         json={"pin": "1234"},

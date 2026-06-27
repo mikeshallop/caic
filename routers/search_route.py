@@ -35,14 +35,14 @@ async def explicit_search(request: Request):
 
     if not conv_id:
         conv_id = str(uuid.uuid4())
-        title = f"🔍 {query[:70]}..." if len(query) > 70 else f"🔍 {query}"
+        title = query[:70] + "..." if len(query) > 70 else query
         db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
                    (conv_id, title, model, now, now))
     else:
         db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
 
     db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-               (conv_id, "user", f"🔍 {query}", now))
+               (conv_id, "user", query, now))
     db.commit()
     db.close()
 
@@ -80,7 +80,7 @@ async def explicit_search(request: Request):
                 ) as resp:
                     async for line in resp.aiter_lines():
                         if line.strip():
-                            token, done, _ = parse_llama_stream_chunk(line)
+                            token, done, _, _ = parse_llama_stream_chunk(line)
                             if token:
                                 full_response.append(token)
                                 yield f"data: {json.dumps({'token': token, 'conversation_id': conv_id})}\n\n"
@@ -102,7 +102,6 @@ async def explicit_search(request: Request):
         db2.commit()
         db2.close()
 
-        yield f"data: {json.dumps({'raw_results': results, 'conversation_id': conv_id})}\n\n"
         yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'searched': True})}\n\n"
 
     return StreamingResponse(stream_search(), media_type="text/event-stream")
