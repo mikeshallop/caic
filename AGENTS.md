@@ -14,6 +14,30 @@
 
 All tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient.stream`. No external services needed. Test factories reset `SESSIONS`, `PIN_ATTEMPTS`, `RATE_EVENTS` globals — be careful not to let test state leak. After the modular refactor, tests import directly from the correct modules (`db`, `security`, `config`, `search`, `rag`, `memory`, `routers.*`) — not from the old monolithic `app` namespace.
 
+Every router has a dedicated test file:
+| File | Covers |
+|------|--------|
+| `test_auth_capabilities.py` | `auth.py` — guest/admin sessions, origin blocking, logout |
+| `test_chat_streaming_and_memory_paths.py` | `routers/chat.py` — streaming, auto-search, remember/forget |
+| `test_completions.py` | `routers/completions.py` — API key auth, FIM, streaming, blocking, errors |
+| `test_conversations.py` | `routers/conversations.py` — full CRUD, guest admin enforcement |
+| `test_memories.py` | `routers/memories.py` — edit, search, stats endpoints |
+| `test_models_router.py` | `routers/models.py` — models list, ps, show, stats, search/status |
+| `test_presets.py` | `routers/presets.py` — full CRUD, default preset protection |
+| `test_profile.py` | `routers/profile.py` — get, update, default, length validation |
+| `test_search_route.py` | `routers/search_route.py` — explicit search flow, no results, errors |
+| `test_search_url_sanitization.py` | `search.py` URL sanitizer |
+| `test_settings_allowlist.py` | `routers/settings.py` — allowlisted key enforcement |
+| `test_skills_framework.py` | `routers/skills.py` — list, toggle, unknown skill, prompt injection |
+| `test_ip_allowlist.py` | IP allowlist helper + middleware |
+| `test_rate_and_payload_guardrails.py` | Rate limits + payload size enforcement |
+| `test_error_envelopes.py` | Global exception handler + stream error incidents |
+
+Modules that call `httpx.AsyncClient` (chat, completions, models, search_route)
+are mocked via `monkeypatch.setattr` on `AsyncClient.stream`, `.get`, or `.post`.
+CPU stats in `models.py` (`api/stats`) use real `psutil`; GPU stats are
+monkeypatched via `routers.models.get_gpu_stats`.
+
 ## Architecture
 
 Refactored from single-file (`app.py`) into modules under project root:

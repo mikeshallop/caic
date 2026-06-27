@@ -19,6 +19,7 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 - **All 8 test files fixed** — rewired imports after the modular refactor; all 26 tests pass
 - **Origin check extended to all API methods** — GET/HEAD/OPTIONS requests no longer bypass origin checking (was limited to POST/PUT/DELETE/PATCH)
 - **Missing headers now rejected** — `origin_allowed()` returns `False` when both `Origin` and `Referer` are absent, closing the CSRF read gap for script-initiated requests
+- **Full router test coverage** — 7 new test files added: `test_conversations.py`, `test_presets.py`, `test_profile.py`, `test_models_router.py`, `test_completions.py`, `test_search_route.py`, `test_memories.py`; all 10 routers now have dedicated unit tests (92 total, up from 26)
 
 ## Features
 
