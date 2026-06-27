@@ -156,7 +156,7 @@ def origin_allowed(request: Request) -> bool:
         parsed = urlparse(referer)
         ref_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
         return ref_origin == expected_origin or ref_origin in TRUSTED_ORIGINS
-    return True
+    return False
 
 
 def is_state_changing(method: str) -> bool:

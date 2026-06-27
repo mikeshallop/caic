@@ -53,6 +53,7 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 - Guest session by default (`POST /api/auth/guest`), admin unlock via 4-digit PIN (`POST /api/auth/login`)
 - Admin required for PUT/DELETE/PATCH + all POST except allowlist (`/api/chat`, `/api/search`, `/api/auth/*`)
 - IP allowlist, rate limiting, origin checking, payload size limits — all enforced in `app.py` middleware
+- Origin check applies to **all** `/api/` requests (not just state-changing methods); `origin_allowed()` returns `False` when both `Origin` and `Referer` headers are absent, closing CSRF read gap
 - `JARVISCHAT_ADMIN_PIN` env var required on first boot (or `JARVISCHAT_ALLOW_DEFAULT_PIN=true`)
 
 ### Database

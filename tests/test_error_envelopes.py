@@ -28,7 +28,7 @@ def test_unhandled_api_exception_returns_friendly_error_with_incident_key(
         sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()[
             "session_id"
         ]
-        headers = {"X-Session-ID": sid}
+        headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
 
         def boom(_topic=None):
             raise RuntimeError("super secret db internals")

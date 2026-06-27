@@ -17,6 +17,8 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 - **Secure SSE protocol** — raw search results are no longer leaked in the SSE event stream
 - **FTS5 query safety** — operator keywords (`AND`, `OR`, `NOT`, `NEAR`) are double-quoted to prevent parse errors
 - **All 8 test files fixed** — rewired imports after the modular refactor; all 26 tests pass
+- **Origin check extended to all API methods** — GET/HEAD/OPTIONS requests no longer bypass origin checking (was limited to POST/PUT/DELETE/PATCH)
+- **Missing headers now rejected** — `origin_allowed()` returns `False` when both `Origin` and `Referer` are absent, closing the CSRF read gap for script-initiated requests
 
 ## Features
 

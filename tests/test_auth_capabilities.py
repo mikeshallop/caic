@@ -22,7 +22,7 @@ def test_guest_read_only_admin_write_blocked(tmp_path: Path):
         guest = client.post("/api/auth/guest", headers={"Origin": "http://testserver"})
         assert guest.status_code == 200
         sid = guest.json()["session_id"]
-        headers = {"X-Session-ID": sid}
+        headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
 
         read_resp = client.get("/api/memories", headers=headers)
         assert read_resp.status_code == 200
@@ -76,5 +76,5 @@ def test_logout_revokes_session(tmp_path: Path):
         logout = client.post("/api/auth/logout", headers=headers)
         assert logout.status_code == 200
 
-        after = client.get("/api/memories", headers={"X-Session-ID": sid})
+        after = client.get("/api/memories", headers={"X-Session-ID": sid, "Origin": "http://testserver"})
         assert after.status_code == 401

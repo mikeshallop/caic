@@ -28,8 +28,8 @@ def test_stats_rate_limit_hits_429(tmp_path: Path):
     app.RATE_WINDOW_SECONDS = 60
     try:
         with make_client(tmp_path) as client:
-            sid = client.post("/api/auth/guest").json()["session_id"]
-            headers = {"X-Session-ID": sid}
+            sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()["session_id"]
+            headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
 
             r1 = client.get("/api/stats", headers=headers)
             r2 = client.get("/api/stats", headers=headers)
@@ -56,7 +56,7 @@ def test_large_login_payload_rejected_413(tmp_path: Path):
 
 def test_chat_message_length_rejected_413(tmp_path: Path):
     with make_client(tmp_path) as client:
-        sid = client.post("/api/auth/guest").json()["session_id"]
+        sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()["session_id"]
         headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
         message = "x" * (config.MAX_CHAT_MESSAGE_CHARS + 1)
         resp = client.post(
@@ -69,7 +69,7 @@ def test_chat_message_length_rejected_413(tmp_path: Path):
 
 def test_search_query_length_rejected_413(tmp_path: Path):
     with make_client(tmp_path) as client:
-        sid = client.post("/api/auth/guest").json()["session_id"]
+        sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()["session_id"]
         headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
         query = "q" * (config.MAX_SEARCH_QUERY_CHARS + 1)
         resp = client.post(

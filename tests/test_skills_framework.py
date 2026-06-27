@@ -25,7 +25,7 @@ def test_guest_can_list_skills(tmp_path: Path):
         sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()[
             "session_id"
         ]
-        resp = client.get("/api/skills", headers={"X-Session-ID": sid})
+        resp = client.get("/api/skills", headers={"X-Session-ID": sid, "Origin": "http://testserver"})
         assert resp.status_code == 200
         payload = resp.json()
         assert payload["count"] >= 1
@@ -50,7 +50,7 @@ def test_admin_can_toggle_skill_enabled_state(tmp_path: Path):
         assert disable.status_code == 200
         assert disable.json()["skill"]["enabled"] is False
 
-        active = client.get("/api/skills/active", headers={"X-Session-ID": sid})
+        active = client.get("/api/skills/active", headers={"X-Session-ID": sid, "Origin": "http://testserver"})
         assert active.status_code == 200
         assert all(skill["key"] != "search.web" for skill in active.json()["skills"])
 

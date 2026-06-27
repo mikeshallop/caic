@@ -172,7 +172,7 @@ def test_memory_command_paths_remember_and_forget(tmp_path: Path, monkeypatch):
         remember_events = parse_sse_payloads(remember_resp.text)
         assert any("Remembered" in p.get("token", "") for p in remember_events)
 
-        memories_after_add = client.get("/api/memories", headers={"X-Session-ID": sid})
+        memories_after_add = client.get("/api/memories", headers={"X-Session-ID": sid, "Origin": "http://testserver"})
         assert memories_after_add.status_code == 200
         assert memories_after_add.json().get("count", 0) >= 1
 
@@ -188,6 +188,6 @@ def test_memory_command_paths_remember_and_forget(tmp_path: Path, monkeypatch):
         forget_events = parse_sse_payloads(forget_resp.text)
         assert any("Forgot" in p.get("token", "") for p in forget_events)
 
-        memories_after_forget = client.get("/api/memories", headers={"X-Session-ID": sid})
+        memories_after_forget = client.get("/api/memories", headers={"X-Session-ID": sid, "Origin": "http://testserver"})
         assert memories_after_forget.status_code == 200
         assert memories_after_forget.json().get("count", 0) == 0

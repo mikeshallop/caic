@@ -40,5 +40,5 @@ def test_middleware_blocks_disallowed_ip(tmp_path: Path, monkeypatch):
 def test_middleware_allows_local_ip(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(app, "get_client_ip", lambda _req: "192.168.50.109")
     with make_client(tmp_path) as client:
-        resp = client.post("/api/auth/guest")
+        resp = client.post("/api/auth/guest", headers={"Origin": "http://testserver"})
         assert resp.status_code == 200

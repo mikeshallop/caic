@@ -102,7 +102,7 @@ async def session_auth_middleware(request: Request, call_next):
         "/api/auth/heartbeat", "/api/auth/guest",
     }
 
-    if path.startswith("/api/") and is_state_changing(request.method):
+    if path.startswith("/api/"):
         if not origin_allowed(request):
             audit_event("origin_check", "denied", ip=ip, role="none",
                         details=f"{request.method} {path}", warning=True)
