@@ -12,7 +12,7 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 - **`COMPLETIONS_API_KEY`** — auto-generated secret key for the OpenAI-compatible endpoint, overridable via `JARVISCHAT_COMPLETIONS_API_KEY` env var
 - **Perplexity auto-search fixed** — upstream request now sends `"logprobs": true`, `parse_llama_stream_chunk()` extracts per-token logprobs, so `calculate_perplexity()` and `is_uncertain()` work correctly (was dead code)
 - **All `/api/models` endpoints** — now correctly target `LLAMA_SERVER_BASE` (llama-server on port 8081) instead of the old Ollama port; `/api/ps` uses `/v1/models` endpoint
-- **RAG embedding endpoint fixed** — hardcoded `EMBED_URL` replaced with `LLAMA_SERVER_BASE` from config, respecting the `JARVISCHAT_LLAMA_SERVER_BASE` env var
+- **RAG embedding endpoint fixed** — `EMBED_URL` changed from old server `:8081` to correct host/port `http://192.168.50.210:11434` (Ollama on new machine)
 - **Error messages corrected** — all user-facing errors say "inference server" instead of "Ollama" or "llama-server"
 - **Secure SSE protocol** — raw search results are no longer leaked in the SSE event stream
 - **FTS5 query safety** — operator keywords (`AND`, `OR`, `NOT`, `NEAR`) are double-quoted to prevent parse errors

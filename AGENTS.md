@@ -102,7 +102,7 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 - `ALLOWED_SETTINGS_KEYS` in `config.py` controls which keys the UI can write via `/api/settings`
 - Settings table seeded with defaults (`profile_enabled`, `search_enabled`, `memory_enabled`, `skills_enabled`, `default_model`) — never overwritten by `init_db()`
 - Profile table uses singleton row `id=1`
-- RAG embedding requests go to `LLAMA_SERVER_BASE` at `/api/embeddings`
+- RAG embedding requests go to `EMBED_URL` at `/api/embeddings` (separate Ollama instance)
 
 ### SSE Protocol
 
