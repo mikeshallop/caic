@@ -7,12 +7,11 @@ import httpx
 
 from db import get_db, get_setting, list_skills_with_state, format_active_skills_prompt
 from memory import search_memories
-from config import MAX_SKILL_PROMPT_CHARS
+from config import LLAMA_SERVER_BASE, MAX_SKILL_PROMPT_CHARS
 
 log = logging.getLogger("jarvischat")
 
 QDRANT_URL = "http://192.168.50.108:6333"
-EMBED_URL = "http://192.168.50.108:8081"
 EMBED_MODEL = "mxbai-embed-large"
 RAG_COLLECTION = "jarvis_rag"
 RAG_SCORE_THRESHOLD = 0.25
@@ -22,7 +21,7 @@ async def query_rag(query: str, limit: int = 3) -> list:
     try:
         async with httpx.AsyncClient() as client:
             embed_resp = await client.post(
-                f"{EMBED_URL}/api/embeddings",
+                f"{LLAMA_SERVER_BASE}/api/embeddings",
                 json={"model": EMBED_MODEL, "prompt": query},
                 timeout=10.0,
             )
