@@ -13,20 +13,25 @@ No new tests required for this task.
 
 ---
 
-## TASK 2 — Qwen2.5-Coder llama-server Service on Ultron (Infrastructure)
+## TASK 2 — Qwen2.5-Coder llama-server Service on Ultron (Infrastructure) [DEPENDENCY RESOLVED]
 
-This task runs on ultron (this machine). The Qwen2.5-Coder-14B-Instruct-Q5_K_M model is already downloaded at `/home/gramps/models/Qwen2.5-Coder-14B-Instruct-Q5_K_M.gguf`.
+**Status: Infrastructure complete (systemd unit created, verified).**
 
-Create a second llama-server systemd service that serves this model on port 8082. The existing service at `/etc/systemd/system/llama-server.service` serves Mistral-Nemo on port 8081 — do not modify it.
+This task originally defined creation of `/etc/systemd/system/llama-server-coder.service` (port 8082, Qwen2.5-Coder-14B Q5_K_M) as a prerequisite for dynamic model swapping. That sysadmin work is done.
 
-Create `/etc/systemd/system/llama-server-coder.service` with the following characteristics:
-- Description: `Llama.cpp Server (Qwen2.5-Coder-14B — code inference)`
-- ExecStart: use the same llama-server binary as the existing service, point at the Qwen model, bind to port 8082, include `--host 0.0.0.0`, `--n-gpu-layers 99`, `--rpc 192.168.50.210:50052`, and `--jinja`
-- User: root
-- Restart: on-failure, RestartSec: 5
-- WantedBy: multi-user.target
+**The real Task 2 deliverable — the ability to dynamically swap models based on query classification — is delivered by Roadmap N (Tasks 9–15).** The flow:
 
-After writing the file: run `systemctl daemon-reload`, then `systemctl start llama-server-coder`, verify it starts cleanly with `systemctl status llama-server-coder`. Do NOT enable it at boot — it will be managed by the AMQP cluster in a future task. Confirm port 8082 is responding by running: `curl -s http://localhost:8082/v1/models | python3 -m json.tool`
+1. **Task 13** — Phi-4-mini triage (`triage.py`) classifies the query as `general`, `code`, `search`, or `rag`
+2. **Task 13** — `select_node()` picks the best worker node; if the ideal model isn't active, it triggers a swap
+3. **Task 14** — `request_model_swap()` publishes `cmd.swap_model` via AMQP `jc.admin` exchange
+4. **Task 12** — The node agent on jarvis receives the command, stops the current llama-server, starts the correct one, waits for health, and publishes `model_ready`
+5. **Task 14** — ultron receives `model_ready`, updates the cluster registry, and routes the query to the node
+
+The swap is async and transparent — the user sees only latency. The UI (Task 15) shows a yellow "swapping" status dot during the transition.
+
+The service unit at `/etc/systemd/system/llama-server-coder.service` is the **target** the node agent starts when swapping to code inference. It is not enabled at boot — the AMQP cluster manages activation.
+
+See Tasks 9–15 for the actual model swap implementation.
 
 No pytest tests required for this infrastructure task.
 
