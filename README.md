@@ -1,4 +1,4 @@
-# JarvisChat v1.8.5
+# jarvisChat v1.8.5
 
 **A lightweight local inference coding companion with persistent memory, web search, and real-time system monitoring.**
 
@@ -108,7 +108,7 @@ Create `/etc/systemd/system/jarvischat.service`:
 
 ```ini
 [Unit]
-Description=JarvisChat - Local Inference Web Interface
+Description=jarvisChat - Local Inference Web Interface
 After=network.target
 
 [Service]
