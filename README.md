@@ -1,4 +1,4 @@
-# jarvisChat v1.8.5
+# jarvisChat v1.8.6
 
 **A lightweight local inference coding companion with persistent memory, web search, and real-time system monitoring.**
 
