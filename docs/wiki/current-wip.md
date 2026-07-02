@@ -4,7 +4,7 @@ Last updated: 2026-04-27
 Owner: Gramps + Copilot
 Scope: issues, bugs, security exposures, and feature enhancements.
 
-Total identified items: 27
+Total identified items: 28
 
 ## Priority Definitions
 - P0: Critical risk or data-loss/security exposure; do first.
@@ -63,20 +63,21 @@ Total identified items: 27
 15. Add preflight validation for required model/preset selection and block send with clear user guidance instead of timing out.
 
 ### P2 Important Features
-16. Skills system: load markdown skill files with YAML frontmatter from skills directory.
-17. Skills registry API: list/enable/disable skills and expose active skills to UI.
-18. Inject active skill instructions into system prompt with bounded token budget.
-19. Tool execution guardrails: allowlist, confirmation mode, and execution logs.
-20. Heartbeat scheduler (cron/systemd timer) for daily check-ins.
-21. Heartbeat endpoint for generated briefings and anomaly summaries.
-22. Model info UI panel (description, updated date, best-use purpose).
-23. Default model selection improvements and persistence validation.
-24. Hidden model list support (exclude models from dropdown).
-25. Model update action from UI (trigger controlled model pull).
+16. HTTPS via Let's Encrypt: set up reverse proxy (Caddy or Nginx) with auto-cert to fix clipboard API and enable secure context features.
+18. Skills system: load markdown skill files with YAML frontmatter from skills directory.
+19. Skills registry API: list/enable/disable skills and expose active skills to UI.
+20. Inject active skill instructions into system prompt with bounded token budget.
+21. Tool execution guardrails: allowlist, confirmation mode, and execution logs.
+22. Heartbeat scheduler (cron/systemd timer) for daily check-ins.
+23. Heartbeat endpoint for generated briefings and anomaly summaries.
+24. Model info UI panel (description, updated date, best-use purpose).
+25. Default model selection improvements and persistence validation.
+26. Hidden model list support (exclude models from dropdown).
+27. Model update action from UI (trigger controlled model pull).
 
 ### P3 Nice to Have
-26. Conversation search/filter and export tooling.
-27. Keyboard shortcuts, retry button, and source-link polish.
+28. Conversation search/filter and export tooling.
+29. Keyboard shortcuts, retry button, and source-link polish.
 
 ## Maintenance Rules
 - Keep this file as the single source of truth.
