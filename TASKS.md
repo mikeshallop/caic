@@ -13,9 +13,9 @@ No new tests required for this task.
 
 ---
 
-## TASK 2 — Qwen2.5-Coder llama-server Service on Ultron (Infrastructure) [DEPENDENCY RESOLVED]
+## TASK 2 — Qwen2.5-Coder llama-server Service on Ultron (Infrastructure) [DONE]
 
-**Status: Infrastructure complete (systemd unit created, verified).**
+**Status: Systemd unit created, verified, and restored.**
 
 This task originally defined creation of `/etc/systemd/system/llama-server-coder.service` (port 8082, Qwen2.5-Coder-14B Q5_K_M) as a prerequisite for dynamic model swapping. That sysadmin work is done.
 
