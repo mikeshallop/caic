@@ -1249,6 +1249,20 @@ function scrollToBottom() { const c = document.getElementById('chatContainer'); 
 const userInput = document.getElementById('userInput');
 userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px'; });
 userInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+const toastStyle = document.createElement('style');
+toastStyle.textContent = '.toast-error { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--danger); color:#fff; padding:12px 24px; border-radius:var(--radius); font-family:var(--font-body); font-size:14px; z-index:9999; animation:fadeIn 0.2s; } @keyframes fadeIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }';
+document.head.appendChild(toastStyle);
+userInput.addEventListener('paste', e => {
+    const hasImage = Array.from(e.clipboardData.items).some(i => i.type.startsWith('image/'));
+    if (hasImage) {
+        e.preventDefault();
+        const toast = document.createElement('div');
+        toast.className = 'toast-error';
+        toast.textContent = 'Image pasting is not supported — text only.';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+});
 </script>
 </body>
 </html>
