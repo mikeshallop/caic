@@ -84,7 +84,7 @@ cd /opt/jarvischat
 python3 -m venv venv
 
 # Install dependencies
-./venv/bin/pip install fastapi uvicorn httpx psutil jinja2 python-multipart
+./venv/bin/pip install fastapi uvicorn httpx psutil jinja2 python-multipart pypdf
 
 # Set admin PIN before first startup (4 digits)
 export JARVISCHAT_ADMIN_PIN=4827

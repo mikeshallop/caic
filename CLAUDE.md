@@ -19,7 +19,7 @@ sudo systemctl restart jarvischat
 
 ```bash
 ./venv/bin/pip install -r requirements.txt
-# Also requires: psutil jinja2 python-multipart (not in requirements.txt)
+# Also requires: psutil jinja2 python-multipart pypdf (not in requirements.txt)
 ```
 
 ## Architecture
