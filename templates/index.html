@@ -1258,7 +1258,12 @@ function addCopyButtons(msgDiv) {
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
         btn.textContent = 'copy';
-        btn.onclick = () => navigator.clipboard.writeText(pre.querySelector('code')?.textContent || pre.textContent).then(() => { btn.textContent = 'copied!'; setTimeout(() => btn.textContent = 'copy', 1500); });
+        btn.onclick = () => {
+            const text = pre.querySelector('code')?.textContent || pre.textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => { btn.textContent = 'copied!'; setTimeout(() => btn.textContent = 'copy', 1500); }).catch(() => fallbackCopy(text, btn));
+            } else { fallbackCopy(text, btn); }
+        };
         pre.style.position = 'relative';
         pre.appendChild(btn);
     });
@@ -1266,6 +1271,18 @@ function addCopyButtons(msgDiv) {
 
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 function scrollToBottom() { const c = document.getElementById('chatContainer'); c.scrollTop = c.scrollHeight; }
+function fallbackCopy(text, btn) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = 'copy', 1500);
+}
 
 const userInput = document.getElementById('userInput');
 userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px'; });
