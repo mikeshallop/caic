@@ -157,6 +157,12 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .perplexity-badge.low { background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); color:var(--success); }
 .perplexity-badge.medium { background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); color:var(--warning); }
 .perplexity-badge.high { background:rgba(231,76,60,0.15); border:1px solid rgba(231,76,60,0.3); color:var(--danger); }
+
+.ttr-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
+.ttr-badge.low { background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); color:var(--success); }
+.ttr-badge.medium { background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); color:var(--warning); }
+.ttr-badge.high { background:rgba(231,76,60,0.15); border:1px solid rgba(231,76,60,0.3); color:var(--danger); }
+.ttr-badge.search { background:rgba(230,126,34,0.15); border:1px solid rgba(230,126,34,0.3); color:#e67e22; }
 .tps-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; background:rgba(72,181,224,0.15); border:1px solid rgba(72,181,224,0.3); color:var(--accent); }
 
 .input-area { padding:16px 20px; border-top:1px solid var(--border); background:var(--bg-secondary); }
@@ -1057,6 +1063,8 @@ async function sendSearch() {
     const textEl = assistantDiv.querySelector('.text');
     textEl.innerHTML = '<div class="search-indicator"><div class="spinner"></div>Searching the web...</div>';
     setStreamingState(true);
+    const ttrStart = performance.now();
+    let ttr = 0;
     try {
         abortController = new AbortController();
         const resp = await authFetch('/api/search', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, query, model }), signal: abortController.signal });
@@ -1078,7 +1086,7 @@ async function sendSearch() {
                     if (data.error) { textEl.textContent = 'Error: ' + data.error; setStreamingState(false); return; }
                     if (data.conversation_id && !currentConvId) { currentConvId = data.conversation_id; await loadConversations(); }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results, summarizing...</div>'; }
-                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
                     if (data.raw_results) {
                         let rawHtml = '<details class="raw-results"><summary>🔍 View raw search results (' + data.raw_results.length + ')</summary><ul>';
                         data.raw_results.forEach(r => { 
@@ -1097,7 +1105,13 @@ async function sendSearch() {
                     }
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
-                        if (roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
+                        if (roleLabel) {
+                            roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
+                            if (ttr > 0) {
+                                const ttrSec = ttr / 1000;
+                                roleLabel.innerHTML += `<span class="ttr-badge search">ttr: ${ttrSec.toFixed(1)}s</span>`;
+                            }
+                        }
                         conversationHistory.push({ role: 'assistant', content: fullText });
                         updateTokenThermometer();
                         addCopyButtons(assistantDiv);
@@ -1132,6 +1146,8 @@ async function sendMessage() {
     textEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
     setStreamingState(true);
     let searchTriggered = false;
+    const ttrStart = performance.now();
+    let ttr = 0;
     try {
         abortController = new AbortController();
         const resp = await authFetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, message, model, system_prompt: presetPrompt }), signal: abortController.signal });
@@ -1154,12 +1170,17 @@ async function sendMessage() {
                     if (data.conversation_id && !currentConvId) { currentConvId = data.conversation_id; await loadConversations(); }
                     if (data.searching) { textEl.innerHTML = fullText ? renderMarkdown(fullText) + '<div class="search-indicator"><div class="spinner"></div>Searching...</div>' : '<div class="search-indicator"><div class="spinner"></div>Searching...</div>'; searchTriggered = true; }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results...</div>'; fullText = ''; firstToken = true; }
-                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
                         if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
                         if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; roleLabel.innerHTML += `<span class="perplexity-badge ${ppl >= 15 ? 'high' : ppl >= 8 ? 'medium' : 'low'}">ppl: ${ppl.toFixed(1)}</span>`; }
                         if (typeof data.tokens_per_sec === 'number' && data.tokens_per_sec > 0 && roleLabel) roleLabel.innerHTML += `<span class="tps-badge">${data.tokens_per_sec.toFixed(1)} t/s</span>`;
+                        if (roleLabel && ttr > 0) {
+                            const ttrSec = ttr / 1000;
+                            const ttrClass = data.searched ? 'search' : (ttrSec <= 2 ? 'low' : ttrSec < 11 ? 'medium' : 'high');
+                            roleLabel.innerHTML += `<span class="ttr-badge ${ttrClass}">ttr: ${ttrSec.toFixed(1)}s</span>`;
+                        }
                         conversationHistory.push({ role: 'assistant', content: fullText });
                         updateTokenThermometer();
                         addCopyButtons(assistantDiv);
