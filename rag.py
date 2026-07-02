@@ -18,6 +18,24 @@ RAG_COLLECTION = "jarvis_rag"
 RAG_SCORE_THRESHOLD = 0.25
 
 
+def chunk_text(text: str, chunk_size: int = 512, overlap: int = 128) -> list:
+    words = text.split()
+    # Approximate token count as len(words) * 1.3
+    target_words = int(chunk_size / 1.3)
+    overlap_words = int(overlap / 1.3)
+    if not words:
+        return []
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = min(start + target_words, len(words))
+        chunks.append(" ".join(words[start:end]))
+        if end == len(words):
+            break
+        start += target_words - overlap_words
+    return chunks
+
+
 async def query_rag(query: str, limit: int = 3) -> list:
     try:
         async with httpx.AsyncClient() as client:

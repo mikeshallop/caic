@@ -68,6 +68,30 @@ def format_active_skills_prompt(skills: list) -> str:
     return text
 
 
+def insert_upload_context(db, conversation_id: str, filename: str, content: str, expires_at: str) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    cur = db.execute(
+        "INSERT INTO upload_context (conversation_id, filename, content, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+        (conversation_id, filename, content, now, expires_at),
+    )
+    return cur.lastrowid
+
+
+def get_upload_context(db, context_id: int):
+    row = db.execute(
+        "SELECT id, conversation_id, filename, content, expires_at FROM upload_context WHERE id = ?",
+        (context_id,),
+    ).fetchone()
+    if not row:
+        return None
+    expires = datetime.fromisoformat(row["expires_at"])
+    if expires < datetime.now(timezone.utc):
+        db.execute("DELETE FROM upload_context WHERE id = ?", (context_id,))
+        db.commit()
+        return None
+    return dict(row)
+
+
 def init_db():
     from security import hash_pin
     conn = sqlite3.connect(DB_PATH)
@@ -106,6 +130,16 @@ def init_db():
     conn.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS memories USING fts5(
             fact, topic, source, created_at UNINDEXED
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS upload_context (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id TEXT,
+            filename TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
         )
     """)
 
