@@ -4,7 +4,7 @@ Last updated: 2026-04-27
 Owner: Gramps + Copilot
 Scope: issues, bugs, security exposures, and feature enhancements.
 
-Total identified items: 28
+Total identified items: 29
 
 ## Priority Definitions
 - P0: Critical risk or data-loss/security exposure; do first.
@@ -64,6 +64,7 @@ Total identified items: 28
 
 ### P2 Important Features
 16. HTTPS via Let's Encrypt: set up reverse proxy (Caddy or Nginx) with auto-cert to fix clipboard API and enable secure context features.
+17. Bidirectional image I/O: load multimodal models for both vision understanding (image inputs, describe/answer) and image generation (diffusion model or multimodal output). Enable image upload/paste and AI-generated image display in chat.
 18. Skills system: load markdown skill files with YAML frontmatter from skills directory.
 19. Skills registry API: list/enable/disable skills and expose active skills to UI.
 20. Inject active skill instructions into system prompt with bounded token budget.
