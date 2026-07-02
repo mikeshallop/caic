@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JarvisChat</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -228,7 +231,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     <div class="sidebar-header">
         <img class="logo" src="/static/logo.png" alt="JarvisChat Logo" onerror="this.style.display='none'">
         <h1>⚡ JarvisChat {{ version }}</h1>
-        <div class="subtitle">🦙 local coding companion</div>
+        <div class="subtitle">🦙 local coding companion <span id="tmplVer" style="font-size:9px;color:var(--danger)">v3</span></div>
         <div class="btn-row">
             <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
             <button class="settings-btn" onclick="openSettings()">⚙</button>
@@ -318,10 +321,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 
 <main class="main">
     <div class="topbar">
-        <div class="topbar-left">
-            <span class="topbar-label">Model</span>
-            <select id="modelSelect"></select>
-        </div>
+        <div class="topbar-left"></div>
         <div class="topbar-right">
             <button class="memory-badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">🧠 MEM ON</button>
             <button class="search-badge on" id="searchBadge" onclick="toggleSearch()" title="Toggle auto web search">🔍 SEARCH ON</button>
@@ -364,6 +364,7 @@ let memoryEnabled = true;
 let skillsEnabled = true;
 let presets = [];
 let skillsRegistry = [];
+let currentModel = '';
 let modelContextSize = 8192;
 let cachedProfile = '';
 let conversationHistory = [];
@@ -664,21 +665,20 @@ async function loadModels() {
     try {
         const resp = await authFetch('/api/models');
         const data = await resp.json();
-        const select = document.getElementById('modelSelect');
         const settingSelect = document.getElementById('defaultModelSetting');
-        select.innerHTML = '';
         settingSelect.innerHTML = '';
         (data.models || []).forEach(m => {
-            const gb = (m.size / (1024*1024*1024)).toFixed(1);
-            select.add(new Option(m.name + ' (' + gb + 'GB)', m.name));
             settingSelect.add(new Option(m.name, m.name));
         });
-        select.addEventListener('change', fetchModelContextSize);
+        if (!currentModel && data.models?.length) {
+            currentModel = data.models[0].name;
+            await fetchModelContextSize();
+        }
     } catch(e) {}
 }
 
 async function fetchModelContextSize() {
-    const model = document.getElementById('modelSelect').value;
+    const model = currentModel;
     if (!model) return;
     try {
         const resp = await authFetch('/api/show', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: model }) });
@@ -702,7 +702,7 @@ async function loadSettings() {
         updateMemoryUI();
         updateSkillsUI();
         if (s.default_model) {
-            document.getElementById('modelSelect').value = s.default_model;
+            currentModel = s.default_model;
             document.getElementById('defaultModelSetting').value = s.default_model;
         }
     } catch(e) {}
@@ -924,7 +924,12 @@ function renderPresetSelect() {
     const current = select.value;
     select.innerHTML = '<option value="">None (profile only)</option>';
     presets.forEach(p => select.add(new Option(p.name, p.id)));
-    select.value = current;
+    if (current) {
+        select.value = current;
+    } else {
+        const ga = presets.find(p => p.name === 'General Assistant');
+        if (ga) select.value = ga.id;
+    }
 }
 
 async function addPreset() {
@@ -993,7 +998,7 @@ async function loadConversation(convId) {
         const resp = await authFetch(`/api/conversations/${convId}`);
         const data = await resp.json();
         currentConvId = convId;
-        document.getElementById('modelSelect').value = data.conversation.model;
+        currentModel = data.conversation.model;
         fetchModelContextSize();
         const container = document.getElementById('chatContainer');
         container.innerHTML = '';
@@ -1040,7 +1045,7 @@ async function sendSearch() {
     const input = document.getElementById('userInput');
     const query = input.value.trim();
     if (!query || isStreaming) return;
-    const model = document.getElementById('modelSelect').value;
+    const model = currentModel;
     const welcome = document.getElementById('welcomeScreen');
     if (welcome) welcome.remove();
     appendMessage('user', '🔍 ' + query, true);
@@ -1113,7 +1118,7 @@ async function sendMessage() {
     const input = document.getElementById('userInput');
     const message = input.value.trim();
     if (!message || isStreaming) return;
-    const model = document.getElementById('modelSelect').value;
+    const model = currentModel;
     const presetPrompt = getSelectedPresetPrompt();
     const welcome = document.getElementById('welcomeScreen');
     if (welcome) welcome.remove();
