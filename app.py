@@ -34,6 +34,7 @@ import routers.chat as chat
 import routers.search_route as search_route
 import routers.completions as completions
 import routers.upload as upload
+import routers.ingest as ingest
 
 # --- Logging ---
 log = logging.getLogger("jarvischat")
@@ -102,7 +103,7 @@ async def session_auth_middleware(request: Request, call_next):
 
     unauth_paths = {
         "/api/auth/login", "/api/auth/logout", "/api/auth/session",
-        "/api/auth/heartbeat", "/api/auth/guest",
+        "/api/auth/heartbeat", "/api/auth/guest", "/api/ingest",
     }
 
     if path.startswith("/api/"):
@@ -141,7 +142,7 @@ async def index(request: Request):
 for router_module in [
     auth_router, conversations.router, memories.router, models.router,
     presets.router, profile.router, settings.router, skills.router,
-    chat.router, search_route.router, completions.router, upload.router,
+    chat.router, search_route.router, completions.router, upload.router, ingest.router,
 ]:
     app.include_router(router_module)
 
