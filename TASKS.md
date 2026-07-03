@@ -120,7 +120,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ## TASK 6 — Roadmap I: Terminal Command RAG Hook [DONE]
 
-**Status: `POST /api/ingest` with Bearer token auth, `chunk_text()` shared helper, `jc-ingest.sh` script. Committed `1ac21ad` (v1.11.0).**
+**Status: `POST /api/ingest` with Bearer token auth, `chunk_text()` shared helper, `jc-ingest.sh` script. Committed `1ac21ad` (v0.11.0).**
 
 This task implements autonomous RAG ingestion of significant terminal activity (TODO #23).
 

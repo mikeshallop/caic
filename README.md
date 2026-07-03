@@ -1,4 +1,4 @@
-# jarvisChat v1.11.0
+# jarvisChat v0.11.0
 
 You have a garage full of retired office PCs, a GPU that was mid-range when Obama was president, and a burning desire to chat with a language model without renting some billionaire's server farm. Congratulations — you've found your people.
 
@@ -8,7 +8,7 @@ Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. No Docker. It stitches
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
-## What's New in v1.11.0
+## What's New in v0.11.0
 
 ### File & Document Attachments (v1.9.0–v1.10.0)
 - **`POST /api/upload`** — multipart file upload with PDF/text extraction; modes: `context` (chat injection), `ingest` (RAG corpus), `both`
@@ -19,7 +19,7 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 - **Attachment indicators** — 📎 badge on conversations with attachments
 - **Chat context injection** — `upload_context_id` prepends document text to system prompt
 
-### Terminal RAG Hook — `POST /api/ingest` (v1.11.0)
+### Terminal RAG Hook — `POST /api/ingest` (v0.11.0)
 - Bearer token auth (same key as `/v1/chat/completions`)
 - Chunking via shared `chunk_text()` helper, embed via Ollama, upsert to Qdrant
 - `jc-ingest.sh` — PROMPT_COMMAND shell script for autonomous terminal history ingestion
