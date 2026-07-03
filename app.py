@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 
 from config import VERSION, RATE_WINDOW_SECONDS, UPLOAD_DIR
 from db import init_db
+from hardware import assess_hardware
 from memory import get_memory_count
 from security import (
     get_client_ip, is_ip_allowed, check_rate_limit, rate_policy,
@@ -35,6 +36,7 @@ import routers.search_route as search_route
 import routers.completions as completions
 import routers.upload as upload
 import routers.ingest as ingest
+import routers.hardware as hardware
 
 # --- Logging ---
 log = logging.getLogger("jarvischat")
@@ -53,6 +55,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     init_db()
     log.info(f"Memory system: {get_memory_count()} memories loaded")
+    await assess_hardware()
     yield
     log.info("JarvisChat shutting down")
 
@@ -103,7 +106,7 @@ async def session_auth_middleware(request: Request, call_next):
 
     unauth_paths = {
         "/api/auth/login", "/api/auth/logout", "/api/auth/session",
-        "/api/auth/heartbeat", "/api/auth/guest", "/api/ingest",
+        "/api/auth/heartbeat", "/api/auth/guest", "/api/ingest", "/api/hardware",
     }
 
     if path.startswith("/api/"):
@@ -142,7 +145,7 @@ async def index(request: Request):
 for router_module in [
     auth_router, conversations.router, memories.router, models.router,
     presets.router, profile.router, settings.router, skills.router,
-    chat.router, search_route.router, completions.router, upload.router, ingest.router,
+    chat.router, search_route.router, completions.router, upload.router, ingest.router, hardware.router,
 ]:
     app.include_router(router_module)
 
