@@ -1,8 +1,10 @@
 # jarvisChat v1.11.0
 
-**A lightweight local inference coding companion with persistent memory, web search, file attachments, and real-time system monitoring.**
+You have a garage full of retired office PCs, a GPU that was mid-range when Obama was president, and a burning desire to chat with a language model without renting some billionaire's server farm. Congratulations — you've found your people.
 
-Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
+jarvisChat is a chat UI that grew limbs. It started as a single-file Python script because OpenWebUI wouldn't install on Debian 13, and somewhere along the way it learned to file paperwork (file attachments), write things down (RAG ingest), boss around other computers (AMQP clustering), and check its own pulse (hardware self-assessment). It now does all the things you didn't ask for, plus a few you might actually use.
+
+Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. No Docker. It stitches together mismatched hardware via llama.cpp RPC — your gaming PC's dusty RX 580, the NUC in the closet, that old workstation from 2017 — and spreads inference across them like peanut butter on stale bread. It shouldn't work, but somehow it does.
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
