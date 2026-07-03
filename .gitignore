@@ -5,3 +5,4 @@ __pycache__/
 venv/
 readme.md-
 *.bak
+hardware_state.json
