@@ -1,25 +1,33 @@
-# jarvisChat v1.8.6
+# jarvisChat v1.11.0
 
-**A lightweight local inference coding companion with persistent memory, web search, and real-time system monitoring.**
+**A lightweight local inference coding companion with persistent memory, web search, file attachments, and real-time system monitoring.**
 
 Built with FastAPI + SQLite + Jinja2. Runs on Python 3.13. No Docker required.
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
-## What's New in v1.8.0
+## What's New in v1.11.0
 
-- **Modular refactor completed** — single-file `app.py` split into `config.py`, `db.py`, `auth.py`, `security.py`, `memory.py`, `search.py`, `rag.py`, `gpu.py`, and `routers/` package
-- **`COMPLETIONS_API_KEY`** — auto-generated secret key for the OpenAI-compatible endpoint, overridable via `JARVISCHAT_COMPLETIONS_API_KEY` env var
-- **Perplexity auto-search fixed** — upstream request now sends `"logprobs": true`, `parse_llama_stream_chunk()` extracts per-token logprobs, so `calculate_perplexity()` and `is_uncertain()` work correctly (was dead code)
-- **All `/api/models` endpoints** — now correctly target `LLAMA_SERVER_BASE` (llama-server on port 8081) instead of the old Ollama port; `/api/ps` uses `/v1/models` endpoint
-- **RAG embedding endpoint fixed** — `EMBED_URL` changed from old server `:8081` to correct host/port `http://192.168.50.210:11434` (Ollama on new machine)
-- **Error messages corrected** — all user-facing errors say "inference server" instead of "Ollama" or "llama-server"
-- **Secure SSE protocol** — raw search results are no longer leaked in the SSE event stream
-- **FTS5 query safety** — operator keywords (`AND`, `OR`, `NOT`, `NEAR`) are double-quoted to prevent parse errors
-- **All 8 test files fixed** — rewired imports after the modular refactor; all 26 tests pass
-- **Origin check extended to all API methods** — GET/HEAD/OPTIONS requests no longer bypass origin checking (was limited to POST/PUT/DELETE/PATCH)
-- **Missing headers now rejected** — `origin_allowed()` returns `False` when both `Origin` and `Referer` are absent, closing the CSRF read gap for script-initiated requests
-- **Full router test coverage** — 7 new test files added: `test_conversations.py`, `test_presets.py`, `test_profile.py`, `test_models_router.py`, `test_completions.py`, `test_search_route.py`, `test_memories.py`; all 10 routers now have dedicated unit tests (92 total, up from 26)
+### File & Document Attachments (v1.9.0–v1.10.0)
+- **`POST /api/upload`** — multipart file upload with PDF/text extraction; modes: `context` (chat injection), `ingest` (RAG corpus), `both`
+- **`DELETE /api/upload/{id}`** — removes upload from SQLite + Qdrant
+- **`PATCH /api/upload/{id}/link`** — associates upload with a conversation
+- **`GET /api/upload/by-conversation/{id}`** — list attachments per conversation
+- **Paperclip UI** — file picker, preview pill, image thumbnails, gallery overlay
+- **Attachment indicators** — 📎 badge on conversations with attachments
+- **Chat context injection** — `upload_context_id` prepends document text to system prompt
+
+### Terminal RAG Hook — `POST /api/ingest` (v1.11.0)
+- Bearer token auth (same key as `/v1/chat/completions`)
+- Chunking via shared `chunk_text()` helper, embed via Ollama, upsert to Qdrant
+- `jc-ingest.sh` — PROMPT_COMMAND shell script for autonomous terminal history ingestion
+
+### v1.8.0 Foundation (refactor & fixes)
+- **Modular refactor** — single-file `app.py` split into `config.py`, `db.py`, `auth.py`, `security.py`, `memory.py`, `search.py`, `rag.py`, `gpu.py`, and `routers/` package
+- **Perplexity auto-search fixed** — `logprobs: true` now properly extracted from stream chunks
+- **All `/api/models` endpoints** target `LLAMA_SERVER_BASE` (llama-server) not Ollama
+- **RAG embedding** via Ollama at `http://192.168.50.210:11434`
+- **Origin check** applies to all API methods, rejects absent Origin/Referer
 
 ## Features
 
@@ -58,12 +66,14 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 │   ├── presets.py      # System prompt presets
 │   ├── profile.py      # User profile
 │   ├── settings.py     # Runtime settings
-│   └── skills.py       # Skills management
+│   ├── skills.py       # Skills management
+│   ├── upload.py       # File attachment endpoints
+│   └── ingest.py       # Terminal RAG ingest
 ├── static/
 │   └── logo.png        # Logo image (optional)
 ├── templates/
 │   └── index.html      # Frontend
-└── tests/              # 26 pytest tests
+└── tests/              # 110 pytest tests
 ```
 
 ## Requirements
@@ -167,6 +177,16 @@ Memories are auto-categorized:
 | POST | `/api/chat` | Send message (streaming SSE) |
 | POST | `/api/search` | Explicit web search (streaming SSE) |
 
+### File Upload & Ingest
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/upload` | Upload file (multipart, admin) |
+| DELETE | `/api/upload/{id}` | Delete upload (admin) |
+| PATCH | `/api/upload/{id}/link` | Link upload to conversation (admin) |
+| GET | `/api/upload/by-conversation/{id}` | List uploads for conversation |
+| POST | `/api/ingest` | Ingest text into RAG (Bearer token auth) |
+
 ### Memory
 
 | Method | Endpoint | Description |
@@ -252,7 +272,7 @@ Settings are stored in the `settings` table and include:
 ./venv/bin/python -m pytest tests/ -v
 ```
 
-All 26 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient.stream`. No external services needed.
+All 110 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`. No external services needed.
 
 ## License
 
