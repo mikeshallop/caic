@@ -68,18 +68,31 @@ def format_active_skills_prompt(skills: list) -> str:
     return text
 
 
-def insert_upload_context(db, conversation_id: str, filename: str, content: str, expires_at: str) -> int:
+def insert_upload_context(db, conversation_id: str, filename: str, content: str, expires_at: str, content_type: str = "text/plain") -> int:
     now = datetime.now(timezone.utc).isoformat()
     cur = db.execute(
-        "INSERT INTO upload_context (conversation_id, filename, content, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-        (conversation_id, filename, content, now, expires_at),
+        "INSERT INTO upload_context (conversation_id, filename, content, content_type, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (conversation_id, filename, content, content_type, now, expires_at),
     )
     return cur.lastrowid
 
 
+def list_upload_context_by_conversation(db, conversation_id: str):
+    rows = db.execute(
+        "SELECT id, conversation_id, filename, content_type, created_at, expires_at FROM upload_context WHERE conversation_id = ? ORDER BY id ASC",
+        (conversation_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_upload_context_by_id(db, context_id: int) -> bool:
+    cur = db.execute("DELETE FROM upload_context WHERE id = ?", (context_id,))
+    return cur.rowcount > 0
+
+
 def get_upload_context(db, context_id: int):
     row = db.execute(
-        "SELECT id, conversation_id, filename, content, expires_at FROM upload_context WHERE id = ?",
+        "SELECT id, conversation_id, filename, content, content_type, expires_at FROM upload_context WHERE id = ?",
         (context_id,),
     ).fetchone()
     if not row:
@@ -138,10 +151,15 @@ def init_db():
             conversation_id TEXT,
             filename TEXT NOT NULL,
             content TEXT NOT NULL,
+            content_type TEXT DEFAULT 'text/plain',
             created_at TEXT NOT NULL,
             expires_at TEXT NOT NULL
         )
     """)
+    try:
+        conn.execute("ALTER TABLE upload_context ADD COLUMN content_type TEXT DEFAULT 'text/plain'")
+    except Exception:
+        pass
 
     if not conn.execute("SELECT id FROM profile WHERE id = 1").fetchone():
         now = datetime.now(timezone.utc).isoformat()

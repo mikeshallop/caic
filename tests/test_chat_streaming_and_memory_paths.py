@@ -141,6 +141,69 @@ def test_chat_auto_search_trigger_emits_search_events(tmp_path: Path, monkeypatc
         assert done_events and done_events[-1].get("searched") is True
 
 
+def test_chat_with_upload_context_id_injects_document(tmp_path: Path, monkeypatch):
+    captured_payload = {}
+
+    def stream_stub(self, method, url, json=None, timeout=None):
+        nonlocal captured_payload
+        captured_payload = json
+        events = [{"message": {"content": "ok"}, "logprobs": [{"logprob": -0.01}]}, {"done": True, "eval_count": 1, "eval_duration": 1000000000}]
+        return _MockStreamResponse([__import__('json').dumps(e) for e in events])
+
+    monkeypatch.setattr(httpx.AsyncClient, "stream", stream_stub)
+
+    with make_client(tmp_path) as client:
+        sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()["session_id"]
+        headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
+
+        db_local = db.get_db()
+        expires = "2099-12-31T23:59:59+00:00"
+        cid = db.insert_upload_context(db_local, "conv-up", "report.txt", "Confidential document content here", expires, "text/plain")
+        db_local.commit()
+        db_local.close()
+
+        resp = client.post(
+            "/api/chat",
+            json={"message": "summarize this", "upload_context_id": cid, "model": config.DEFAULT_MODEL},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        system_content = next((m["content"] for m in captured_payload.get("messages", []) if m["role"] == "system"), "")
+        assert "Confidential document content here" in system_content
+
+
+def test_chat_with_expired_upload_context_id_silent(tmp_path: Path, monkeypatch):
+    captured_payload = {}
+
+    def stream_stub(self, method, url, json=None, timeout=None):
+        nonlocal captured_payload
+        captured_payload = json
+        events = [{"message": {"content": "ok"}, "logprobs": [{"logprob": -0.01}]}, {"done": True, "eval_count": 1, "eval_duration": 1000000000}]
+        return _MockStreamResponse([__import__('json').dumps(e) for e in events])
+
+    monkeypatch.setattr(httpx.AsyncClient, "stream", stream_stub)
+
+    with make_client(tmp_path) as client:
+        sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()["session_id"]
+        headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
+
+        import datetime
+        db_local = db.get_db()
+        expires = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=2)).isoformat()
+        cid = db.insert_upload_context(db_local, "conv-exp", "old.txt", "Stale data", expires, "text/plain")
+        db_local.commit()
+        db_local.close()
+
+        resp = client.post(
+            "/api/chat",
+            json={"message": "hi", "upload_context_id": cid, "model": config.DEFAULT_MODEL},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        system_content = next((m["content"] for m in captured_payload.get("messages", []) if m["role"] == "system"), "")
+        assert "Stale data" not in system_content
+
+
 def test_memory_command_paths_remember_and_forget(tmp_path: Path, monkeypatch):
     with make_client(tmp_path) as client:
         sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()[

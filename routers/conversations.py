@@ -15,8 +15,16 @@ router = APIRouter()
 async def list_conversations():
     db = get_db()
     rows = db.execute("SELECT * FROM conversations ORDER BY updated_at DESC").fetchall()
+    result = []
+    for r in rows:
+        c = dict(r)
+        attach_count = db.execute(
+            "SELECT COUNT(*) FROM upload_context WHERE conversation_id = ?", (c["id"],)
+        ).fetchone()[0]
+        c["attachment_count"] = attach_count
+        result.append(c)
     db.close()
-    return [dict(r) for r in rows]
+    return result
 
 
 @router.post("/api/conversations")

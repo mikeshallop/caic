@@ -180,6 +180,39 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .search-btn { padding:12px 14px; background:var(--warning); border:none; border-radius:var(--radius); color:#fff; font-size:16px; cursor:pointer; transition:background 0.2s; }
 .search-btn:hover { background:#e67e22; }
 .search-btn:disabled { background:var(--text-muted); cursor:not-allowed; }
+.paperclip-btn { padding:12px 12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-secondary); font-size:18px; cursor:pointer; transition:all 0.2s; line-height:1; }
+.paperclip-btn:hover { background:var(--bg-hover); color:var(--accent); border-color:var(--accent-dim); }
+.file-preview { max-width:900px; margin:0 auto 8px; display:none; align-items:center; gap:10px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; }
+.file-preview.visible { display:flex; }
+.file-preview-thumb { width:48px; height:48px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
+.file-preview-icon { font-size:28px; flex-shrink:0; color:var(--text-muted); }
+.file-preview-info { flex:1; min-width:0; }
+.file-preview-name { font-size:13px; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file-preview-size { font-size:11px; color:var(--text-muted); }
+.file-preview-clear { background:none; border:none; color:var(--text-muted); font-size:18px; cursor:pointer; padding:4px; line-height:1; transition:color 0.15s; }
+.file-preview-clear:hover { color:var(--danger); }
+.file-preview-notice { font-size:11px; color:var(--warning); }
+.conv-attach { color:var(--text-muted); cursor:pointer; padding:2px 2px; font-size:14px; flex-shrink:0; transition:color 0.15s; margin-left:2px; }
+.conv-attach:hover { color:var(--accent); }
+.conv-attach.has-attachments { color:var(--accent-dim); }
+.gallery-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:none; justify-content:center; align-items:center; }
+.gallery-overlay.visible { display:flex; }
+.gallery-panel { background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius); width:90%; max-width:700px; max-height:85vh; display:flex; flex-direction:column; }
+.gallery-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+.gallery-header h3 { font-size:16px; color:var(--text-primary); font-family:var(--font-mono); }
+.gallery-close { background:none; border:none; color:var(--text-muted); font-size:24px; cursor:pointer; padding:4px; line-height:1; transition:color 0.15s; }
+.gallery-close:hover { color:var(--text-primary); }
+.gallery-body { flex:1; overflow-y:auto; padding:12px 20px; }
+.gallery-empty { text-align:center; padding:40px 20px; color:var(--text-muted); font-size:14px; }
+.gallery-item { display:flex; align-items:center; gap:12px; padding:12px; border-radius:var(--radius); margin-bottom:8px; background:var(--bg-tertiary); transition:background 0.15s; }
+.gallery-item:hover { background:var(--bg-hover); }
+.gallery-item-thumb { width:60px; height:60px; object-fit:cover; border-radius:4px; border:1px solid var(--border); flex-shrink:0; }
+.gallery-item-icon { font-size:32px; flex-shrink:0; color:var(--text-muted); text-align:center; width:60px; }
+.gallery-item-info { flex:1; min-width:0; }
+.gallery-item-name { font-size:14px; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gallery-item-meta { font-size:11px; color:var(--text-muted); margin-top:2px; }
+.gallery-item-delete { background:none; border:1px solid var(--danger); border-radius:var(--radius); color:var(--danger); font-size:12px; cursor:pointer; padding:6px 12px; transition:all 0.15s; flex-shrink:0; }
+.gallery-item-delete:hover { background:var(--danger); color:#fff; }
 
 .token-thermometer { display:flex; flex-direction:column; align-items:center; gap:4px; }
 .thermometer-bar { width:12px; height:80px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:6px; position:relative; overflow:hidden; }
@@ -335,6 +368,15 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="logout-btn" id="authActionBtn" onclick="handleAuthAction()" title="Unlock admin">ADMIN</button>
         </div>
     </div>
+    <div class="gallery-overlay" id="galleryOverlay" onclick="closeGallery(event)">
+        <div class="gallery-panel" onclick="event.stopPropagation()">
+            <div class="gallery-header">
+                <h3>📎 Attachments</h3>
+                <button class="gallery-close" onclick="closeGallery()">✕</button>
+            </div>
+            <div class="gallery-body" id="galleryBody"></div>
+        </div>
+    </div>
     <div class="chat-container" id="chatContainer">
         <div class="welcome-screen" id="welcomeScreen">
             <div class="logo">⚡</div>
@@ -346,7 +388,19 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <span class="preset-label">PRESET</span>
             <select id="presetSelect"><option value="">None (profile only)</option></select>
         </div>
+        <div class="file-preview" id="filePreview">
+            <img class="file-preview-thumb" id="filePreviewThumb" src="" alt="" style="display:none">
+            <span class="file-preview-icon" id="filePreviewIcon">📄</span>
+            <div class="file-preview-info">
+                <div class="file-preview-name" id="filePreviewName"></div>
+                <div class="file-preview-size" id="filePreviewSize"></div>
+                <div class="file-preview-notice" id="filePreviewNotice"></div>
+            </div>
+            <button class="file-preview-clear" onclick="clearFileSelection()" title="Remove file">✕</button>
+        </div>
         <div class="input-wrapper">
+            <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.pdf,.json,.py,.html,.png,.jpg,.jpeg,.gif,.svg,.webp" onchange="onFileSelected(event)">
+            <button class="paperclip-btn" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">📎</button>
             <textarea id="userInput" placeholder="Type a message... (Shift+Enter for new line)" rows="1" autofocus></textarea>
             <div class="token-thermometer" title="Context usage">
                 <div class="thermometer-bar"><div class="thermometer-fill" id="thermometerFill" style="height:0%"></div></div>
@@ -364,6 +418,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 let currentConvId = null;
 let isStreaming = false;
 let abortController = null;
+let selectedFile = null;
 let profileEnabled = true;
 let searchEnabled = true;
 let memoryEnabled = true;
@@ -993,7 +1048,8 @@ async function loadConversations() {
         convs.forEach(c => {
             const div = document.createElement('div');
             div.className = 'conv-item' + (c.id === currentConvId ? ' active' : '');
-            div.innerHTML = `<span class="conv-trash" onclick="event.stopPropagation();deleteConversation('${c.id}')" title="Delete conversation">🗑</span><span class="conv-title" onclick="loadConversation('${c.id}')">${c.title}</span>`;
+            const attachIcon = c.attachment_count > 0 ? `<span class="conv-attach has-attachments" onclick="event.stopPropagation();showGallery('${c.id}')" title="${c.attachment_count} attachment(s)">📎</span>` : '';
+            div.innerHTML = `<span class="conv-trash" onclick="event.stopPropagation();deleteConversation('${c.id}')" title="Delete conversation">🗑</span>${attachIcon}<span class="conv-title" onclick="loadConversation('${c.id}')">${c.title}</span>`;
             list.appendChild(div);
         });
     } catch(e) {}
@@ -1043,6 +1099,7 @@ function newChat() {
     updateTokenThermometer();
 }
 
+function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 function showWelcome() {
     document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="logo">⚡</div><p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Use 🔍 to force a web search.<br>Say "remember that..." to teach me things.</p></div>';
 }
@@ -1128,6 +1185,84 @@ async function sendSearch() {
     }
 }
 
+function onFileSelected(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    selectedFile = file;
+    const preview = document.getElementById('filePreview');
+    const thumb = document.getElementById('filePreviewThumb');
+    const icon = document.getElementById('filePreviewIcon');
+    const nameEl = document.getElementById('filePreviewName');
+    const sizeEl = document.getElementById('filePreviewSize');
+    const notice = document.getElementById('filePreviewNotice');
+    nameEl.textContent = file.name;
+    sizeEl.textContent = (file.size / 1024).toFixed(1) + ' KB';
+    if (file.type.startsWith('image/')) {
+        thumb.style.display = 'block';
+        thumb.src = URL.createObjectURL(file);
+        icon.style.display = 'none';
+        notice.textContent = 'Model does not support image input — filename only will be used as context.';
+    } else {
+        thumb.style.display = 'none';
+        icon.style.display = 'inline';
+        icon.textContent = '📄';
+        notice.textContent = '';
+    }
+    preview.classList.add('visible');
+    event.target.value = '';
+}
+function clearFileSelection() {
+    selectedFile = null;
+    const preview = document.getElementById('filePreview');
+    preview.classList.remove('visible');
+    const thumb = document.getElementById('filePreviewThumb');
+    thumb.src = '';
+}
+function showGallery(convId) {
+    document.getElementById('galleryOverlay').classList.add('visible');
+    loadGallery(convId);
+}
+function closeGallery(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('galleryOverlay').classList.remove('visible');
+}
+async function loadGallery(convId) {
+    const body = document.getElementById('galleryBody');
+    body.innerHTML = '<div class="gallery-empty">Loading...</div>';
+    try {
+        const resp = await authFetch('/api/upload/by-conversation/' + encodeURIComponent(convId));
+        const items = await resp.json();
+        if (!items || items.length === 0) {
+            body.innerHTML = '<div class="gallery-empty">No attachments in this conversation.</div>';
+            return;
+        }
+        body.innerHTML = '';
+        for (const item of items) {
+            const div = document.createElement('div');
+            div.className = 'gallery-item';
+            const isImage = item.content_type && item.content_type.startsWith('image/');
+            const thumbHtml = isImage
+                ? '<span class="gallery-item-icon">🖼</span>'
+                : '<span class="gallery-item-icon">📄</span>';
+            const expires = new Date(item.expires_at);
+            const expiresStr = expires.toLocaleString();
+            div.innerHTML = thumbHtml + '<div class="gallery-item-info"><div class="gallery-item-name">' + escapeHtml(item.filename) + '</div><div class="gallery-item-meta">Expires: ' + expiresStr + '</div></div><button class="gallery-item-delete" onclick="deleteGalleryItem(' + item.id + ')">Delete</button>';
+            body.appendChild(div);
+        }
+    } catch(e) {
+        body.innerHTML = '<div class="gallery-empty">Error loading attachments.</div>';
+    }
+}
+async function deleteGalleryItem(contextId) {
+    if (!confirm('Delete this attachment? It will also be removed from the RAG corpus.')) return;
+    try {
+        const resp = await authFetch('/api/upload/' + contextId, { method: 'DELETE' });
+        if (resp.ok) {
+            await loadGallery(currentConvId);
+            await loadConversations();
+        }
+    } catch(e) {}
+}
 async function sendMessage() {
     const input = document.getElementById('userInput');
     const message = input.value.trim();
@@ -1150,7 +1285,32 @@ async function sendMessage() {
     let ttr = 0;
     try {
         abortController = new AbortController();
-        const resp = await authFetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, message, model, system_prompt: presetPrompt }), signal: abortController.signal });
+        let uploadContextId = null;
+        if (selectedFile) {
+            const formData = new FormData();
+            formData.append('file', selectedFile, selectedFile.name);
+            formData.append('mode', 'both');
+            if (currentConvId) formData.append('conversation_id', currentConvId);
+            try {
+                const uploadResp = await authFetch('/api/upload', { method: 'POST', body: formData, signal: abortController.signal });
+                const uploadData = await uploadResp.json();
+                if (uploadResp.ok && uploadData.context_id) {
+                    uploadContextId = uploadData.context_id;
+                    if (!currentConvId && uploadData.conversation_id) currentConvId = uploadData.conversation_id;
+                } else {
+                    throw new Error(uploadData.detail || 'Upload failed');
+                }
+            } catch(e) {
+                if (e.name !== 'AbortError') textEl.textContent = 'Error uploading file: ' + e.message;
+                setStreamingState(false);
+                return;
+            }
+            clearFileSelection();
+            await loadConversations();
+        }
+        const chatBody = { conversation_id: currentConvId, message, model, system_prompt: presetPrompt };
+        if (uploadContextId) chatBody.upload_context_id = uploadContextId;
+        const resp = await authFetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(chatBody), signal: abortController.signal });
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
@@ -1167,7 +1327,13 @@ async function sendMessage() {
                 try {
                     const data = JSON.parse(line.slice(6));
                     if (data.error) { textEl.textContent = 'Error: ' + data.error; setStreamingState(false); return; }
-                    if (data.conversation_id && !currentConvId) { currentConvId = data.conversation_id; await loadConversations(); }
+                    if (data.conversation_id && !currentConvId) {
+                        currentConvId = data.conversation_id;
+                        if (uploadContextId) {
+                            authFetch('/api/upload/' + uploadContextId + '/link', { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId }) }).catch(()=>{});
+                        }
+                        await loadConversations();
+                    }
                     if (data.searching) { textEl.innerHTML = fullText ? renderMarkdown(fullText) + '<div class="search-indicator"><div class="spinner"></div>Searching...</div>' : '<div class="search-indicator"><div class="spinner"></div>Searching...</div>'; searchTriggered = true; }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results...</div>'; fullText = ''; firstToken = true; }
                     if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
@@ -1296,7 +1462,7 @@ userInput.addEventListener('paste', e => {
         e.preventDefault();
         const toast = document.createElement('div');
         toast.className = 'toast-error';
-        toast.textContent = 'Image pasting is not supported — text only.';
+        toast.textContent = 'Use the 📎 button to attach images — paste is text only.';
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
     }

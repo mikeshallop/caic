@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from config import DEFAULT_MODEL, LLAMA_SERVER_BASE
-from db import get_db
+from db import get_db, get_upload_context
 from memory import process_remember_command
 from rag import build_system_prompt
 from search import (calculate_perplexity, is_uncertain, is_refusal,
@@ -69,6 +69,7 @@ async def chat(request: Request):
         raise HTTPException(status_code=413, detail="Chat message is too long")
     model = body.get("model", DEFAULT_MODEL)
     preset_prompt = body.get("system_prompt", "")
+    upload_context_id = body.get("upload_context_id")
 
     if not user_message:
         raise HTTPException(status_code=400, detail="Empty message")
@@ -77,6 +78,14 @@ async def chat(request: Request):
     now = datetime.now(timezone.utc).isoformat()
     settings = {row["key"]: row["value"] for row in db.execute("SELECT key, value FROM settings").fetchall()}
     search_enabled = settings.get("search_enabled", "true") == "true"
+
+    upload_doc = None
+    if upload_context_id:
+        ctx = get_upload_context(db, upload_context_id)
+        if ctx:
+            upload_doc = f"[ATTACHED DOCUMENT: {ctx['filename']}]\n{ctx['content']}\n[END DOCUMENT]"
+        else:
+            log.warning(f"upload_context_id {upload_context_id} not found or expired, continuing without it")
 
     remember_response = process_remember_command(user_message)
 
@@ -95,7 +104,10 @@ async def chat(request: Request):
     history_rows = db.execute(
         "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,)
     ).fetchall()
-    system_prompt = await build_system_prompt(db, preset_prompt, user_message)
+    extra_prompt = preset_prompt
+    if upload_doc:
+        extra_prompt = (extra_prompt + "\n\n" + upload_doc) if extra_prompt else upload_doc
+    system_prompt = await build_system_prompt(db, extra_prompt, user_message)
     db.close()
 
     messages = []

@@ -9,11 +9,15 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
 from config import UPLOAD_DIR, MAX_UPLOAD_BYTES, SUPPORTED_UPLOAD_TYPES, UPLOAD_CONTEXT_EXPIRY_HOURS
-from db import get_db, insert_upload_context
+from db import get_db, insert_upload_context, list_upload_context_by_conversation, delete_upload_context_by_id
 from rag import chunk_text, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
 
 log = logging.getLogger("jarvischat")
 router = APIRouter()
+
+
+def _point_id(filename: str, chunk_idx: int) -> str:
+    return f"upload-{filename}-{chunk_idx}"
 
 
 @router.post("/api/upload")
@@ -66,12 +70,12 @@ async def upload_file(
                     log.warning(f"Embedding failed for chunk {i}: {embed_resp.status_code}")
                     continue
                 vector = embed_resp.json()["embedding"]
-                point_id = f"{file.filename}-{i}"
+                pid = _point_id(file.filename or "unnamed", i)
                 upsert_resp = await client.put(
                     f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points?wait=true",
                     json={
                         "points": [{
-                            "id": point_id,
+                            "id": pid,
                             "vector": vector,
                             "payload": {"text": chunk, "source": file.filename, "upload_date": datetime.now(timezone.utc).isoformat(), "type": "upload"},
                         }]
@@ -88,7 +92,7 @@ async def upload_file(
         expires = (datetime.now(timezone.utc) + timedelta(hours=UPLOAD_CONTEXT_EXPIRY_HOURS)).isoformat()
         db = get_db()
         try:
-            cid = insert_upload_context(db, conversation_id or "", file.filename or "unnamed", extracted, expires)
+            cid = insert_upload_context(db, conversation_id or "", file.filename or "unnamed", extracted, expires, content_type)
             db.commit()
             result["context_id"] = cid
         finally:
@@ -96,3 +100,69 @@ async def upload_file(
 
     result["message"] = f"Uploaded {file.filename}"
     return result
+
+
+@router.patch("/api/upload/{context_id}/link")
+async def link_upload_to_conversation(context_id: int, request: Request):
+    body = await request.json()
+    conv_id = body.get("conversation_id", "").strip()
+    if not conv_id:
+        raise HTTPException(status_code=422, detail="conversation_id required")
+    db = get_db()
+    try:
+        row = db.execute("SELECT id FROM upload_context WHERE id = ?", (context_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Upload context not found")
+        db.execute("UPDATE upload_context SET conversation_id = ? WHERE id = ?", (conv_id, context_id))
+        db.commit()
+        return {"status": "ok"}
+    finally:
+        db.close()
+
+
+@router.get("/api/upload/by-conversation/{conv_id}")
+async def get_upload_by_conversation(conv_id: str):
+    db = get_db()
+    try:
+        items = list_upload_context_by_conversation(db, conv_id)
+        return items
+    finally:
+        db.close()
+
+
+@router.delete("/api/upload/{context_id}")
+async def delete_upload(context_id: int):
+    db = get_db()
+    try:
+        row = db.execute("SELECT filename FROM upload_context WHERE id = ?", (context_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        filename = row["filename"]
+        if not filename:
+            filename = "unnamed"
+        delete_upload_context_by_id(db, context_id)
+        db.commit()
+    finally:
+        db.close()
+
+    try:
+        async with httpx.AsyncClient() as client:
+            scroll_resp = await client.post(
+                f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points/scroll",
+                json={"filter": {"must": [{"key": "source", "match": {"value": filename}}]}, "limit": 100, "with_payload": False},
+                timeout=10.0,
+            )
+            if scroll_resp.status_code == 200:
+                points = scroll_resp.json().get("result", {}).get("points", [])
+                point_ids = [p["id"] for p in points]
+                if point_ids:
+                    await client.post(
+                        f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points/delete",
+                        json={"points": point_ids},
+                        timeout=10.0,
+                    )
+                    log.info(f"Deleted {len(point_ids)} Qdrant points for source '{filename}'")
+    except Exception as e:
+        log.warning(f"Qdrant cleanup for '{filename}' failed: {e}")
+
+    return {"status": "ok", "filename": filename}
