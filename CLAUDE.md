@@ -24,41 +24,56 @@ sudo systemctl restart jarvischat
 
 ## Architecture
 
-Single-file FastAPI backend (`app.py`) + single-template frontend (`templates/index.html`). No build step. SQLite database auto-created at `jarvischat.db` on first run.
+Modular FastAPI app — `app.py` wires routers, middleware, and lifespan. SQLite database auto-created at `jarvischat.db` on first run. No build step, single `templates/index.html`.
 
 ### Request Flow: `/api/chat`
 
 1. User message saved to DB → conversation created if new
-2. `build_system_prompt()` assembles: profile + FTS5 memory search results + preset prompt
-3. Streamed to Ollama (`/api/chat`, `stream: true`, `logprobs: true`) via SSE
-4. **Auto web search trigger**: if perplexity > 15.0 OR response matches `REFUSAL_PATTERNS`, re-queries Ollama with SearXNG results prepended to system prompt
-5. Final response saved to DB; SSE `done` event sent with perplexity + tokens/sec
+2. `process_remember_command()` intercepts "remember that..." / "forget about..." first
+3. Optional `upload_context_id` → fetches document text from `upload_context` table, injects `[ATTACHED DOCUMENT]` into system prompt
+4. `build_system_prompt()` assembles: profile + FTS5 memory search + Qdrant RAG + preset + skills + uploaded doc
+5. Streamed to llama-server (`/v1/chat/completions`, `stream: true`, `logprobs: true`) via SSE
+6. **Auto web search trigger**: if perplexity > 15.0 OR response matches `REFUSAL_PATTERNS`, re-queries with SearXNG results
+7. Final response saved to DB; SSE `done` event sent with perplexity + tokens/sec
 
 ### Request Flow: `/api/search` (explicit search)
 
-Bypasses perplexity/refusal detection entirely — queries SearXNG directly then asks Ollama to summarize with results as system context.
+Bypasses perplexity/refusal — queries SearXNG directly then asks llama-server to summarize results.
+
+### Request Flow: `/api/upload`
+
+Multipart file upload → PDF/text extraction + chunking → optional Qdrant upsert + SQLite context storage (1hr expiry). Supports `mode=(context|ingest|both)`. Images upload as storage only — model cannot process image content.
+
+### Request Flow: `/api/ingest`
+
+Bearer-token-authenticated terminal RAG hook. Accepts raw text, chunks via `chunk_text()`, embeds via Ollama `/api/embeddings`, upserts to Qdrant.
 
 ### Memory System
 
-FTS5 virtual table (`memories`) in SQLite. `search_memories()` uses BM25 ranking. `process_remember_command()` intercepts "remember that..." / "forget about..." before the message reaches Ollama and returns a confirmation string. Topic auto-detection via keyword matching in `detect_topic()`.
+FTS5 virtual table (`memories`) in SQLite. `search_memories()` uses BM25 ranking. `process_remember_command()` intercepts "remember that..." / "forget about..." before the message reaches the model and returns a confirmation string.
 
-### Key Constants (top of `app.py`)
+### Key Constants (`config.py`)
 
-- `OLLAMA_BASE` — `http://localhost:11434`
+- `LLAMA_SERVER_BASE` — `http://192.168.50.108:8081` (ultron llama-server, RPC offloads to jarvis GPU)
 - `SEARXNG_BASE` — `http://localhost:8888`
-- `PERPLEXITY_THRESHOLD` — `15.0` (controls auto-search sensitivity)
-- `DEFAULT_MODEL` — `llama3.1:latest`
+- `PERPLEXITY_THRESHOLD` — `15.0`
+- `EMBED_URL` — `http://192.168.50.210:11434/api/embeddings` (Ollama on jarvis)
+- `VERSION` — current version string
 
 ### External Services
 
-- **Ollama** — required, must be running on port 11434
-- **SearXNG** — optional, port 8888; `GET /api/search/status` probes availability
-- **wttr.in** — weather shortcut in `query_searxng()`, bypasses SearXNG for weather queries
-- **rocm-smi** — AMD GPU stats via subprocess; gracefully degrades if not available
+| Service | Required | Port |
+|---------|----------|------|
+| **llama-server** (ultron) | Yes | 8081 + RPC :50052 (jarvis GPU) |
+| **SearXNG** | No | 8888 |
+| **wttr.in** | No | weather shortcut |
+| **rocm-smi** | No | AMD GPU stats |
+| **Qdrant** (ultron) | No | 6333 — RAG vector search |
+| **Ollama** (jarvis) | No | 11434 — embeddings only |
 
 ### Database
 
-`get_db()` opens a new connection per request (no connection pool). `init_db()` runs at startup via the FastAPI `lifespan` handler. The `profile` table uses a singleton row (`id = 1`). Default settings are seeded but never overwritten by `init_db()`.
+`get_db()` opens a new connection per request (no pool). `init_db()` runs at startup via FastAPI `lifespan`. Tables: `conversations`, `messages`, `settings`, `profile` (singleton id=1), `memories` (FTS5), `upload_context`. Default settings seeded but never overwritten.
 
 ### SSE Protocol
 
@@ -67,8 +82,8 @@ All streaming endpoints yield `data: {json}\n\n`. Key event shapes:
 - `{searching: true}` — web search triggered
 - `{search_results: N}` — N results retrieved
 - `{done: true, perplexity, tokens_per_sec, searched?}` — terminal event
-- `{error: "..."}` — error event
+- `{error: "...", error_key: "..."}` — error with incident key
 
 ### Deployment
 
-Runs as systemd service under user `jarvischat`, working directory `/opt/jarvischat`. Logs via syslog (`journalctl -u jarvischat`).
+Runs as systemd service under user `jarvischat`, working directory `/opt/jarvischat`. Logs via syslog (`journalctl -u jarvischat`). Version bumps via git tag + commit, deployed via `git pull && systemctl restart jarvischat`.

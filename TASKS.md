@@ -45,7 +45,9 @@ No pytest tests required for this task.
 
 ---
 
-## TASK 4 — File/Document Attachment: Backend Ingest Endpoint
+## TASK 4 — File/Document Attachment: Backend Ingest Endpoint [DONE]
+
+**Status: `POST /api/upload` with mode=(context|ingest|both), PDF/text extraction, Qdrant upsert, SQLite context (1hr expiry). Committed `4a891c8` (v1.9.0).**
 
 This task implements the backend half of file/document attachment (TODO #21). The goal is dual-aspect upload: a file can be used as immediate chat context, ingested into the RAG corpus (Qdrant), or both.
 
@@ -89,7 +91,9 @@ Run full test suite after implementation. All 26 existing tests must continue to
 
 ---
 
-## TASK 5 — File/Document Attachment: UI Integration
+## TASK 5 — File/Document Attachment: UI Integration [DONE]
+
+**Status: Paperclip icon, file preview pill, gallery overlay, attachment indicators, DELETE/PATCH link/by-conversation endpoints, chat context injection. Committed `81238c0` (v1.10.0).**
 
 This task implements the frontend half of TODO #21. The UI is a single file at `templates/index.html`.
 
@@ -114,7 +118,9 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 6 — Roadmap I: Terminal Command RAG Hook
+## TASK 6 — Roadmap I: Terminal Command RAG Hook [DONE]
+
+**Status: `POST /api/ingest` with Bearer token auth, `chunk_text()` shared helper, `jc-ingest.sh` script. Committed `1ac21ad` (v1.11.0).**
 
 This task implements autonomous RAG ingestion of significant terminal activity (TODO #23).
 
