@@ -165,6 +165,14 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .ttr-badge.search { background:rgba(230,126,34,0.15); border:1px solid rgba(230,126,34,0.3); color:#e67e22; }
 .tps-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; background:rgba(72,181,224,0.15); border:1px solid rgba(72,181,224,0.3); color:var(--accent); }
 
+.msg-toolbar { display:flex; gap:2px; margin-top:8px; opacity:0; transition:opacity 0.15s; align-items:center; }
+.message .content:hover .msg-toolbar { opacity:1; }
+.msg-toolbar button { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px 6px; border-radius:4px; font-size:13px; line-height:1; display:flex; align-items:center; gap:4px; transition:color 0.15s,background 0.15s; }
+.msg-toolbar button:hover { color:var(--text-primary); background:var(--bg-tertiary); }
+.msg-toolbar button.active { color:var(--accent); }
+.msg-toolbar .sep { width:1px; height:14px; background:var(--border); margin:0 4px; }
+.msg-toolbar .toolbar-label { font-size:10px; font-family:var(--font-mono); color:var(--text-muted); margin-right:4px; }
+
 .input-area { padding:16px 20px; border-top:1px solid var(--border); background:var(--bg-secondary); }
 .input-row-top { max-width:900px; margin:0 auto 8px; display:flex; gap:8px; align-items:center; }
 .input-row-top select { background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-secondary); font-family:var(--font-mono); font-size:11px; padding:4px 8px; border-radius:var(--radius); cursor:pointer; }
@@ -1172,6 +1180,7 @@ async function sendSearch() {
                         conversationHistory.push({ role: 'assistant', content: fullText });
                         updateTokenThermometer();
                         addCopyButtons(assistantDiv);
+                        addMessageToolbar(assistantDiv);
                         setStreamingState(false);
                         await loadConversations();
                     }
@@ -1350,6 +1359,7 @@ async function sendMessage() {
                         conversationHistory.push({ role: 'assistant', content: fullText });
                         updateTokenThermometer();
                         addCopyButtons(assistantDiv);
+                        addMessageToolbar(assistantDiv);
                         setStreamingState(false);
                         await loadConversations();
                         await loadMemoryStats();
@@ -1387,9 +1397,9 @@ function appendMessage(role, content, animate, isSearch = false) {
     const div = document.createElement('div');
     div.className = 'message ' + role + (isSearch && role === 'assistant' ? ' search-result' : '');
     if (!animate) div.style.animation = 'none';
-    div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}</div><div class="text">${content ? renderMarkdown(content) : ''}</div></div>`;
+    div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}</div><div class="text">${content ? renderMarkdown(content) : ''}</div>${role === 'assistant' ? '<div class="msg-toolbar"></div>' : ''}</div>`;
     container.appendChild(div);
-    if (content && role === 'assistant') addCopyButtons(div);
+    if (content && role === 'assistant') { addCopyButtons(div); addMessageToolbar(div); }
     scrollToBottom();
     return div;
 }
@@ -1433,6 +1443,68 @@ function addCopyButtons(msgDiv) {
         pre.style.position = 'relative';
         pre.appendChild(btn);
     });
+}
+
+function addMessageToolbar(msgDiv) {
+    const toolbar = msgDiv.querySelector('.msg-toolbar');
+    if (!toolbar || toolbar.hasChildNodes()) return;
+    const textDiv = msgDiv.querySelector('.text');
+    const getText = () => textDiv ? textDiv.textContent || textDiv.innerText : '';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.innerHTML = '📋';
+    copyBtn.title = 'Copy response';
+    copyBtn.onclick = () => {
+        const t = getText();
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(t).then(() => { copyBtn.textContent = '✓'; setTimeout(() => copyBtn.innerHTML = '📋', 1500); });
+        }
+    };
+
+    const printBtn = document.createElement('button');
+    printBtn.innerHTML = '🖨️';
+    printBtn.title = 'Print response';
+    printBtn.onclick = () => {
+        const w = window.open('', '_blank', 'width=800,height=600');
+        w.document.write(`<!DOCTYPE html><html><head><title>Print</title><style>body{font-family:system-ui;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6;font-size:14px}pre{background:#f4f4f4;padding:12px;border-radius:6px;overflow-x:auto}code{background:#f4f4f4;padding:2px 5px;border-radius:3px}pre code{background:none;padding:0}img{max-width:100%}@media print{body{margin:0}}</style></head><body>${textDiv ? textDiv.innerHTML : ''}</body></html>`);
+        w.document.close();
+        setTimeout(() => { w.focus(); w.print(); }, 500);
+    };
+
+    const saveBtn = document.createElement('button');
+    saveBtn.innerHTML = '💾';
+    saveBtn.title = 'Save as .md';
+    saveBtn.onclick = () => {
+        const t = getText();
+        const blob = new Blob([t], { type: 'text/markdown' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `jarvischat-response-${Date.now()}.md`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    };
+
+    const rating = { value: 0 };
+    const upBtn = document.createElement('button');
+    upBtn.innerHTML = '👍';
+    upBtn.title = 'Rate up';
+    upBtn.onclick = () => {
+        rating.value = rating.value === 1 ? 0 : 1;
+        upBtn.classList.toggle('active', rating.value === 1);
+        dnBtn.classList.toggle('active', false);
+    };
+
+    const dnBtn = document.createElement('button');
+    dnBtn.innerHTML = '👎';
+    dnBtn.title = 'Rate down';
+    dnBtn.onclick = () => {
+        rating.value = rating.value === -1 ? 0 : -1;
+        dnBtn.classList.toggle('active', rating.value === -1);
+        upBtn.classList.toggle('active', false);
+    };
+
+    toolbar.append(copyBtn, printBtn, saveBtn, sep(), upBtn, dnBtn);
+    function sep() { const s = document.createElement('span'); s.className = 'sep'; return s; }
 }
 
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
