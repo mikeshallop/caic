@@ -700,3 +700,27 @@ Commit all changes introduced across Tasks 9–15 with message: `feat: Roadmap N
 **Where:** In `routers/chat.py` `chat()` handler, after `user_message` is extracted. Strip the `!`, set a flag to always trigger auto-search regardless of perplexity/refusal.
 
 **Change:** Add a `force_search` flag when `user_message.startswith("!")`, strip the prefix from the message saved to DB, and route directly to the search+summarize path.
+
+### B3 — Docker distribution (v1.0 gate)
+
+**Goal:** Ship jarvisChat as a `docker compose` stack so a single command stands up everything.
+
+**Services to containerize:**
+- jarvisChat (FastAPI app + SQLite)
+- SearXNG
+- Qdrant
+- RabbitMQ
+- llama-server (with optional RPC sidecar for GPU offload)
+- Ollama (embeddings)
+
+**Also needed:**
+- `Dockerfile` for the jarvisChat app itself
+- `docker-compose.yml` with all services, volumes, networks, env vars
+- Setup wizard script (run on first boot) that:
+  - Probes CPU vs GPU (reuses `hardware.py`)
+  - Queries user for admin PIN, node name, IP
+  - Generates `.env` file with correct `LLAMA_SERVER_BASE`, `EMBED_URL`, etc.
+  - Optionally detects and configures RPC GPU offload
+- Manual install docs remain alongside for bare-metal deployment
+
+**This task is only actionable after Tasks 8–15 (RAG eviction + AMQP cluster) are complete.**
