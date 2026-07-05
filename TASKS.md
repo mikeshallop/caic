@@ -5,7 +5,7 @@
 
 ---
 
-## TASK 1 — README Cleanup
+## TASK 1 — README Cleanup [DONE]
 
 Review README.md in the current repo. Remove any node references other than `ultron` (192.168.50.108) and `jarvis` (192.168.50.210). Ensure all references to the project use the exact casing `jarvisChat` — not `Jarvischat`, `JarvisChat`, or `jarvischat`. Do not change any functional content, endpoint documentation, or architecture descriptions — this is a text cleanup only. After editing, verify the file renders cleanly as markdown. Commit with message: `docs: clean up node references and branding consistency`.
 
@@ -37,7 +37,7 @@ No pytest tests required for this infrastructure task.
 
 ---
 
-## TASK 3 — Update OpenCode Config to Use Qwen on :8082
+## TASK 3 — Update OpenCode Config to Use Qwen on :8082 [DONE]
 
 Update `/home/gramps/.config/opencode/opencode.jsonc` (on this machine, ultron) to point the configured provider at `http://127.0.0.1:8082/v1` instead of `http://127.0.0.1:8081/v1`. The model name in the config should be updated to reflect `qwen2.5-coder-14b` or whatever model ID the llama-server instance at :8082 reports via `/v1/models`. Verify the endpoint is reachable before writing the config change. Do not restart OpenCode — the config change takes effect on next session start.
 
@@ -175,7 +175,9 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 7 — Roadmap J: Startup Hardware Self-Assessment
+## TASK 7 — Roadmap J: Startup Hardware Self-Assessment [DONE]
+
+**Status: `hardware.py` + `routers/hardware.py` + 4 tests. Committed `7291b8f` (v0.12.0).**
 
 On jC startup, probe available hardware and write a living config snapshot. This replaces hardcoded assumptions about VRAM and RAM.
 
