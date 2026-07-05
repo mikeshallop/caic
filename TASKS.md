@@ -215,43 +215,111 @@ Run full test suite. All existing tests must continue to pass.
 
 ## TASK 8 — Roadmap K: RAG Corpus Management
 
-Qdrant collection `jarvischat` currently grows without bound. Implement weighted LRU eviction and pinning.
+Qdrant collection `jarvischat` currently grows without bound. Implement score-based eviction with hysteresis, pinned sources, operational stats, and a flush command.
 
-**Add to `config.py`:**
-- `RAG_MAX_VECTORS` — max vectors in Qdrant collection before eviction triggers, default 50000
-- `RAG_EVICTION_BATCH` — number of vectors to evict per cycle, default 1000
-- `RAG_PINNED_SOURCES` — list of source labels that are never evicted, default `["upload", "profile"]`
+### Config — add to `config.py`:
 
-**Add to `rag.py`:**
+```python
+RAG_MAX_VECTORS = 50000               # absolute ceiling; eviction targets thresholds below it
+RAG_EVICTION_HIGH_WATER = 0.80        # fraction of RAG_MAX_VECTORS that triggers eviction
+RAG_EVICTION_LOW_WATER = 0.20         # fraction where eviction stops
+RAG_EVICTION_BATCH = 1000             # max points to delete per Qdrant scroll/delete cycle
+RAG_PINNED_SOURCES = ["upload", "profile"]  # never evicted
+RAG_GRACE_HOURS = 1                   # new vectors ineligible for eviction until this old
+RAG_ACCESS_WEIGHT = 1.0               # score factor: retrieval_count * ACCESS_WEIGHT
+RAG_AGE_WEIGHT = 0.1                  # score factor: ingest_age_hours * AGE_WEIGHT
+```
+
+Validations on boot: `high_water > low_water`, `batch > 0`, `max_vectors > 0`.
+
+### Eviction algorithm — add to `rag.py`:
+
+```
+score = (retrieval_count * ACCESS_WEIGHT) + (age_hours * AGE_WEIGHT)
+```
+
+Lower score = evicted first. Tiebreak: `last_accessed` ASC (older wins).
 
 ```python
 async def get_collection_count() -> int
-    # GET Qdrant /collections/jarvischat, return vectors_count
+    # GET /collections/jarvischat → return vectors_count
 
-async def evict_oldest(batch_size: int) -> int
-    # Scroll Qdrant for vectors with source NOT in RAG_PINNED_SOURCES,
-    # ordered by ingest_date ascending (oldest first),
-    # delete batch_size of them. Return count deleted.
+async def get_collection_stats() -> dict
+    # Return {vector_count, max_vectors, high_water, low_water, percent_full, pinned_sources}
+
+async def evict_batch(batch_size: int) -> int
+    # Scroll Qdrant for vectors NOT in RAG_PINNED_SOURCES, WHERE ingest_age > RAG_GRACE_HOURS,
+    # ordered by score ASC, last_accessed ASC.
+    # Delete up to batch_size. Return count deleted.
+    # If 0 evictable vectors found: log warning, return 0 (break loop).
 
 async def maybe_evict() -> int
-    # If get_collection_count() >= RAG_MAX_VECTORS: call evict_oldest(RAG_EVICTION_BATCH)
-    # Return count evicted (0 if no eviction needed)
+    # Acquire eviction_lock (asyncio.Lock).
+    # count = get_collection_count()
+    # threshold_high = RAG_MAX_VECTORS * RAG_EVICTION_HIGH_WATER
+    # threshold_low  = RAG_MAX_VECTORS * RAG_EVICTION_LOW_WATER
+    # total_evicted = 0
+    # while count >= threshold_low:
+    #     if total_evicted > 0 and count < threshold_low: break
+    #     deleted = evict_batch(RAG_EVICTION_BATCH)
+    #     if deleted == 0: break  # no more unpinned targets
+    #     total_evicted += deleted
+    #     count -= deleted
+    #     if count < threshold_high and total_evicted > 0: break
+    #     # only one pass if batch spans the full gap
+    #     if count < threshold_low: break
+    # Record total_evicted + timestamp in EVICTION_LOG (list of dicts, kept in memory, max 1000 entries)
+    # Release lock. Return total_evicted.
+
+async def get_rag_operational_stats() -> dict
+    # Returns: vector_count, max_vectors, high_water_pct, low_water_pct,
+    # percent_full, pinned_sources, grace_hours,
+    # eviction_counts_last_1m, eviction_counts_last_5m, eviction_counts_last_30m,
+    # at_risk_count (vectors in bottom 10% by score),
+    # pinned_count, avg_retrieval_count
 ```
 
-**Call `maybe_evict()` from the ingest path** — both in `routers/upload.py` and `routers/ingest.py` — after each upsert batch completes.
+### Edge cases & guards:
 
-**Add `GET /api/rag/stats`** to a new `routers/rag_admin.py`:
-- Returns `{vector_count, max_vectors, pinned_sources, eviction_batch}`
-- Admin required
+1. **Newborn grace** — vectors < `RAG_GRACE_HOURS` old are excluded from eviction scroll (score=0 otherwise → immediate deletion)
+2. **All-pinned freeze** — if scroll returns 0 evictable vectors, log warning and break loop
+3. **Race** — `asyncio.Lock()` guards `maybe_evict()`; concurrent callers wait their turn
+4. **Zero config** — `RAG_MAX_VECTORS <= 0` → eviction disabled; `RAG_EVICTION_BATCH <= 0` → clamped to 1
+5. **Legacy payloads** — vectors without `retrieval_count` or `last_accessed` get defaults (0, `ingest_date`)
 
-**Wire `rag_admin.router` into `app.py`.**
+### Wire eviction:
 
-**Write `tests/test_rag_management.py`** covering:
-- `get_collection_count()` — mock Qdrant GET, assert correct count returned
-- `evict_oldest()` — mock Qdrant scroll + delete, assert correct batch size deleted, assert pinned sources excluded
-- `maybe_evict()` — below threshold: assert 0 evicted; at/above threshold: assert eviction triggered
-- `GET /api/rag/stats` — assert correct JSON shape returned
-- Guest attempt on `/api/rag/stats` — assert 403
+Call `maybe_evict()` after each upsert batch completes in:
+- `routers/upload.py` — after Qdrant upsert
+- `routers/ingest.py` — after Qdrant upsert
+
+### Admin endpoints — new `routers/rag_admin.py`:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/rag/stats` | Operational stats (see `get_rag_operational_stats()`) — admin required |
+| POST | `/api/rag/flush` | Delete ALL points from the Qdrant `jarvischat` collection. Returns `{deleted_count, collection: "jarvischat", status: "flushed"}`. Admin required. |
+
+### In-memory eviction log:
+
+```python
+EVICTION_LOG: list[dict] = []  # managed by rag.py, max 1000 entries
+# Each entry: {timestamp: iso, count: N, remaining: N}
+# Tied to RATE_EVENTS pattern from security.py for rolling window calculations
+```
+
+### Tests — `tests/test_rag_management.py`:
+
+- `get_collection_count()` — mock Qdrant GET, assert correct count
+- `get_collection_stats()` — assert shape matches config
+- `evict_batch()` — mock Qdrant scroll + delete, assert pinned sources excluded, grace period enforced, batch size respected
+- `maybe_evict()` — below high water: 0 evicted; at high water: eviction fires; stops at low water; all-pinned scroll returns 0 → breaks
+- `GET /api/rag/stats` — assert full shape
+- `POST /api/rag/flush` — assert points deleted, admin required, guest 403
+- `POST /api/rag/flush` by guest — assert 403
+- Race lock — concurrent calls to `maybe_evict()` queue up, only one evicts
+
+Mock all Qdrant calls via monkeypatch. Do not require live services.
 
 Run full test suite. All existing tests must continue to pass.
 
