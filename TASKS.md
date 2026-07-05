@@ -5,7 +5,7 @@
 
 ---
 
-## TASK 1 — README Cleanup [DONE]
+## ~~TASK 1 — README Cleanup [DONE]~~
 
 Review README.md in the current repo. Remove any node references other than `ultron` (192.168.50.108) and `jarvis` (192.168.50.210). Ensure all references to the project use the exact casing `jarvisChat` — not `Jarvischat`, `JarvisChat`, or `jarvischat`. Do not change any functional content, endpoint documentation, or architecture descriptions — this is a text cleanup only. After editing, verify the file renders cleanly as markdown. Commit with message: `docs: clean up node references and branding consistency`.
 
@@ -13,7 +13,7 @@ No new tests required for this task.
 
 ---
 
-## TASK 2 — Qwen2.5-Coder llama-server Service on Ultron (Infrastructure) [DONE]
+## ~~TASK 2 — Qwen2.5-Coder llama-server Service on Ultron (Infrastructure) [DONE]~~
 
 **Status: Systemd unit created, verified, and restored.**
 
@@ -37,7 +37,7 @@ No pytest tests required for this infrastructure task.
 
 ---
 
-## TASK 3 — Update OpenCode Config to Use Qwen on :8082 [DONE]
+## ~~TASK 3 — Update OpenCode Config to Use Qwen on :8082 [DONE]~~
 
 Update `/home/gramps/.config/opencode/opencode.jsonc` (on this machine, ultron) to point the configured provider at `http://127.0.0.1:8082/v1` instead of `http://127.0.0.1:8081/v1`. The model name in the config should be updated to reflect `qwen2.5-coder-14b` or whatever model ID the llama-server instance at :8082 reports via `/v1/models`. Verify the endpoint is reachable before writing the config change. Do not restart OpenCode — the config change takes effect on next session start.
 
@@ -45,7 +45,7 @@ No pytest tests required for this task.
 
 ---
 
-## TASK 4 — File/Document Attachment: Backend Ingest Endpoint [DONE]
+## ~~TASK 4 — File/Document Attachment: Backend Ingest Endpoint [DONE]~~
 
 **Status: `POST /api/upload` with mode=(context|ingest|both), PDF/text extraction, Qdrant upsert, SQLite context (1hr expiry). Committed `4a891c8` (v1.9.0).**
 
@@ -91,7 +91,7 @@ Run full test suite after implementation. All 26 existing tests must continue to
 
 ---
 
-## TASK 5 — File/Document Attachment: UI Integration [DONE]
+## ~~TASK 5 — File/Document Attachment: UI Integration [DONE]~~
 
 **Status: Paperclip icon, file preview pill, gallery overlay, attachment indicators, DELETE/PATCH link/by-conversation endpoints, chat context injection. Committed `81238c0` (v1.10.0).**
 
@@ -118,7 +118,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 6 — Roadmap I: Terminal Command RAG Hook [DONE]
+## ~~TASK 6 — Roadmap I: Terminal Command RAG Hook [DONE]~~
 
 **Status: `POST /api/ingest` with Bearer token auth, `chunk_text()` shared helper, `jc-ingest.sh` script. Committed `1ac21ad` (v0.11.0).**
 
@@ -175,7 +175,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 7 — Roadmap J: Startup Hardware Self-Assessment [DONE]
+## ~~TASK 7 — Roadmap J: Startup Hardware Self-Assessment [DONE]~~
 
 **Status: `hardware.py` + `routers/hardware.py` + 4 tests. Committed `7291b8f` (v0.12.0).**
 
@@ -679,7 +679,7 @@ Commit all changes introduced across Tasks 9–15 with message: `feat: Roadmap N
 
 ---
 
-## Backlog (Post-Roadmap N)
+## Backlog (Post-Roadmap N) ⏳
 
 ### B1 — Context loss in follow-up questions
 
