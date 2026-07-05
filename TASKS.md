@@ -606,3 +606,27 @@ Surface cluster awareness in the jC frontend (`templates/index.html`).
 Run full test suite. All 26+ existing tests must continue to pass.
 
 Commit all changes introduced across Tasks 9–15 with message: `feat: Roadmap N — AMQP cluster nervous system complete`
+
+---
+
+## Backlog (Post-Roadmap N)
+
+### B1 — Context loss in follow-up questions
+
+**Symptom:** After asking "in {context}, explain {b}", a follow-up "what is {b}'s {x}?" gets a non-sequitur response that ignores the original context.
+
+**Diagnosis:** `build_system_prompt()` is called fresh per-request with new RAG/memory results keyed to the current message text. These can change between turns and may dilute or override the conversation history. The original system prompt used for turn 1 (including its RAG context) is not stored in the DB — only user/assistant messages are. The inference server receives a different system prompt each turn.
+
+**Possible fixes:**
+- Store the assembled system prompt with each assistant message in the DB
+- When replaying history, re-send the original system prompts from DB rather than rebuilding
+- Or: cap RAG/memory injection to only fire on the first message of a conversation, then rely solely on conversation history for follow-ups
+- Check that llama-server isn't truncating history due to context window overflow (Mistral-Nemo 12B = 128K context, unlikely)
+
+### B2 — Bang-prefixed search routing
+
+**Spec:** If a query begins with `!`, route to SearXNG search instead of local inference.
+
+**Where:** In `routers/chat.py` `chat()` handler, after `user_message` is extracted. Strip the `!`, set a flag to always trigger auto-search regardless of perplexity/refusal.
+
+**Change:** Add a `force_search` flag when `user_message.startswith("!")`, strip the prefix from the message saved to DB, and route directly to the search+summarize path.
