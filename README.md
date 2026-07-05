@@ -4,9 +4,9 @@ You have a garage full of retired office PCs, a GPU that was mid-range when Obam
 
 jarvisChat is a chat UI that grew limbs. It started as a single-file Python script because OpenWebUI wouldn't install on Debian 13, and somewhere along the way it learned to file paperwork (file attachments), write things down (RAG ingest), boss around other computers (AMQP clustering), and check its own pulse (hardware self-assessment). It now does all the things you didn't ask for, plus a few you might actually use.
 
-Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. Stitches together mismatched hardware via llama.cpp RPC — your gaming PC's dusty RX 580, the NUC in the closet, that old workstation from 2017 — and spreads inference across them like peanut butter on stale bread. It shouldn't work, but somehow it does.
+Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. Works with or without Docker — no container required for basic operation. Stitches together mismatched hardware via llama.cpp RPC — your gaming PC's dusty RX 580, the NUC in the closet, that old workstation from 2017 — and spreads inference across them like peanut butter on stale bread. It shouldn't work, but somehow it does.
 
-When we hit v1.0, this will ship as a Docker-based distribution with a setup wizard that detects CPU vs GPU, probes your hardware, and stands up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. Manual install docs will also be maintained for the bare-metal crowd.
+At v1.0, this ships as a Docker-based distribution with a setup wizard that detects CPU vs GPU, probes your hardware, and stands up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. Manual install docs are maintained alongside for the bare-metal crowd.
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
