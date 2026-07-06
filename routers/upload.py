@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 from config import UPLOAD_DIR, MAX_UPLOAD_BYTES, SUPPORTED_UPLOAD_TYPES, UPLOAD_CONTEXT_EXPIRY_HOURS
 from db import get_db, insert_upload_context, list_upload_context_by_conversation, delete_upload_context_by_id
-from rag import chunk_text, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
+from rag import chunk_text, maybe_evict, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
 
 log = logging.getLogger("jarvischat")
 router = APIRouter()
@@ -87,6 +87,10 @@ async def upload_file(
                 else:
                     log.warning(f"Qdrant upsert failed for chunk {i}: {upsert_resp.status_code}")
         result["chunks_ingested"] = ingested
+        if ingested > 0:
+            evicted = await maybe_evict()
+            if evicted:
+                log.info(f"Evicted {evicted} vectors after upload")
 
     if mode in ("context", "both"):
         expires = (datetime.now(timezone.utc) + timedelta(hours=UPLOAD_CONTEXT_EXPIRY_HOURS)).isoformat()

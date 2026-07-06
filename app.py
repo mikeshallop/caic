@@ -37,6 +37,7 @@ import routers.completions as completions
 import routers.upload as upload
 import routers.ingest as ingest
 import routers.hardware as hardware
+import routers.rag_admin as rag_admin
 
 # --- Logging ---
 log = logging.getLogger("jarvischat")
@@ -146,6 +147,7 @@ for router_module in [
     auth_router, conversations.router, memories.router, models.router,
     presets.router, profile.router, settings.router, skills.router,
     chat.router, search_route.router, completions.router, upload.router, ingest.router, hardware.router,
+    rag_admin.router,
 ]:
     app.include_router(router_module)
 

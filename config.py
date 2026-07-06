@@ -9,7 +9,7 @@ import logging
 
 log = logging.getLogger("jarvischat")
 
-VERSION = "v0.11.0"
+VERSION = "v0.13.0"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://192.168.50.108:8081")
 SEARXNG_BASE = "http://localhost:8888"
@@ -52,6 +52,16 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 SUPPORTED_UPLOAD_TYPES = {"text/plain", "text/markdown", "application/pdf", "application/json", "text/x-python", "text/html", "image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp"}
 UPLOAD_CONTEXT_EXPIRY_HOURS = 1
 BODY_LIMIT_UPLOAD_BYTES = MAX_UPLOAD_BYTES
+
+# --- RAG eviction ---
+RAG_MAX_VECTORS = 50000
+RAG_EVICTION_HIGH_WATER = 0.80
+RAG_EVICTION_LOW_WATER = 0.20
+RAG_EVICTION_BATCH = 1000
+RAG_PINNED_SOURCES = ["upload", "profile"]
+RAG_GRACE_HOURS = 1
+RAG_ACCESS_WEIGHT = 1.0
+RAG_AGE_WEIGHT = 0.1
 
 MAX_CHAT_MESSAGE_CHARS = 8000
 MAX_SEARCH_QUERY_CHARS = 500

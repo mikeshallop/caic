@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from config import COMPLETIONS_API_KEY
-from rag import chunk_text, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
+from rag import chunk_text, maybe_evict, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
 
 log = logging.getLogger("jarvischat")
 router = APIRouter()
@@ -60,5 +60,10 @@ async def ingest_content(request: Request):
                 ingested += 1
             else:
                 log.warning(f"Ingest Qdrant upsert failed for chunk {i}: {upsert_resp.status_code}")
+
+    if ingested > 0:
+        evicted = await maybe_evict()
+        if evicted:
+            log.info(f"Evicted {evicted} vectors after ingest")
 
     return {"chunks_ingested": ingested, "source": source, "message": f"Ingested {ingested} chunks from {source}"}
