@@ -720,6 +720,7 @@ Commit all changes introduced across Tasks 9–15 with message: `feat: Roadmap N
   - Probes CPU vs GPU (reuses `hardware.py`)
   - Queries user for admin PIN, node name, IP
   - Generates `.env` file with correct `LLAMA_SERVER_BASE`, `EMBED_URL`, etc.
+  - Auto-calculates `RAG_MAX_VECTORS` from available RAM: `max(1000, int(available_ram_gb * 100_000))`
   - Optionally detects and configures RPC GPU offload
 - Manual install docs remain alongside for bare-metal deployment
 
