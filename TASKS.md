@@ -213,7 +213,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 8 — Roadmap K: RAG Corpus Management
+## ~~TASK 8 — Roadmap K: RAG Corpus Management [DONE]~~
 
 Qdrant collection `jarvischat` currently grows without bound. Implement score-based eviction with hysteresis, pinned sources, operational stats, and a flush command.
 
