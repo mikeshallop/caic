@@ -325,7 +325,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 9 — Roadmap N1: RabbitMQ Install and Service on Ultron (Infrastructure)
+## ~~TASK 9 — Roadmap N1: RabbitMQ Install and Service on Ultron (Infrastructure) [DONE]~~
 
 This task runs on ultron (this machine). Install RabbitMQ and verify it is operational.
 
