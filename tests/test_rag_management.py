@@ -267,6 +267,23 @@ def test_maybe_evict_zero_config_disabled(monkeypatch):
         config.RAG_MAX_VECTORS = orig
 
 
+def test_maybe_evict_all_pinned_breaks(monkeypatch):
+    """Above high water but only pinned points exist → eviction breaks with 0 deleted."""
+    class AllPinnedClient(FakeAsyncClient):
+        async def get(self, url, **kw):
+            return FakeResponse(200, {"result": {"vectors_count": 45000}})
+        async def post(self, url, **kw):
+            if "/points/scroll" in url:
+                return FakeResponse(200, {"result": {"points": []}})
+            return FakeResponse(200)
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: AllPinnedClient())
+    rag.EVICTION_LOG.clear()
+    evicted = asyncio.run(rag.maybe_evict())
+    assert evicted == 0
+    assert len(rag.EVICTION_LOG) == 0
+
+
 # ---------- get_rag_operational_stats ----------
 
 def test_rag_operational_stats_shape(monkeypatch):
