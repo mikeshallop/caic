@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from config import VERSION, RATE_WINDOW_SECONDS, UPLOAD_DIR
+from config import VERSION, RATE_WINDOW_SECONDS, UPLOAD_DIR, RAG_MAX_VECTORS, RAG_EVICTION_HIGH_WATER, RAG_EVICTION_LOW_WATER, RAG_EVICTION_BATCH
 from db import init_db
 from hardware import assess_hardware
 from memory import get_memory_count
@@ -57,6 +57,18 @@ async def lifespan(app: FastAPI):
     init_db()
     log.info(f"Memory system: {get_memory_count()} memories loaded")
     await assess_hardware()
+
+    if RAG_MAX_VECTORS > 0:
+        if RAG_EVICTION_HIGH_WATER <= RAG_EVICTION_LOW_WATER:
+            log.warning(
+                f"RAG_EVICTION_HIGH_WATER={RAG_EVICTION_HIGH_WATER} <= "
+                f"RAG_EVICTION_LOW_WATER={RAG_EVICTION_LOW_WATER} — eviction will never fire"
+            )
+        if RAG_EVICTION_BATCH <= 0:
+            log.warning(f"RAG_EVICTION_BATCH={RAG_EVICTION_BATCH} clamped to 1")
+    else:
+        log.warning("RAG_MAX_VECTORS <= 0 — RAG eviction disabled")
+
     yield
     log.info("JarvisChat shutting down")
 
