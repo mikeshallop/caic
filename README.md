@@ -1,4 +1,4 @@
-# jarvisChat v0.11.0
+# jarvisChat v0.13.0
 
 You have a garage full of retired office PCs, a GPU that was mid-range when Obama was president, and a burning desire to chat with a language model without renting some billionaire's server farm. Congratulations — you've found your people.
 
@@ -10,7 +10,18 @@ At v1.0, this ships as a Docker-based distribution with a setup wizard that dete
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
-## What's New in v0.11.0
+## What's New in v0.13.0
+
+### RabbitMQ / AMQP Cluster Nervous System (Roadmap N)
+- **Task 9** — RabbitMQ installed on ultron with `jc.admin` and `jc.system` topic exchanges, jarvischat vhost, dedicated user, management plugin enabled
+- **Task 10** — `amqp.py` connection manager with aio-pika: persistent connection, auto-reconnect, fire-and-forget publish, lazy secret loading from `/home/gramps/.jc_amqp_secret`
+
+### RAG Corpus Management — `POST /api/rag/flush`, `GET /api/rag/stats` (v0.13.0)
+- **Score-based eviction** with hysteresis (80% high-water, 20% low-water) and pinned sources
+- **Eviction engine** in `eviction.py` — scroll Qdrant, score by retrieval count + age, evict lowest scores first
+- **Grace period** — vectors younger than 1 hour are never evicted
+- **Flush endpoint** — `POST /api/rag/flush` (admin) deletes all non-pinned vectors
+- **Stats endpoint** — `GET /api/rag/stats` (admin) returns vector count, at-risk count, pinned count, eviction rates
 
 ### File & Document Attachments (v1.9.0–v1.10.0)
 - **`POST /api/upload`** — multipart file upload with PDF/text extraction; modes: `context` (chat injection), `ingest` (RAG corpus), `both`
@@ -51,10 +62,12 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
 ```
 /opt/jarvischat/
+├── amqp.py             # aio-pika AMQP connection manager
 ├── app.py              # FastAPI app entry point
 ├── config.py           # Constants, env vars, limits, skill registry
 ├── db.py               # SQLite schema, connection factory
 ├── auth.py             # PIN-based guest/admin sessions, auth routes
+├── eviction.py         # Score-based RAG eviction engine
 ├── security.py         # Rate limiting, origin checks, IP allowlist, audit
 ├── memory.py           # FTS5 memory CRUD, remember/forget commands
 ├── search.py           # SearXNG integration, perplexity, refusal detection
@@ -77,7 +90,7 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 │   └── logo.png        # Logo image (optional)
 ├── templates/
 │   └── index.html      # Frontend
-└── tests/              # 110 pytest tests
+└── tests/              # 135 pytest tests
 ```
 
 ## Requirements
@@ -85,6 +98,8 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 - Python 3.11+ (tested on 3.13)
 - llama-server running locally or on network (OpenAI-compatible API on port 8081)
 - SearXNG (optional, for web search)
+- RabbitMQ (optional, for AMQP cluster — coordinator only)
+- Qdrant (optional, for RAG vector search)
 
 ## Installation
 
@@ -98,7 +113,7 @@ cd /opt/jarvischat
 python3 -m venv venv
 
 # Install dependencies
-./venv/bin/pip install fastapi uvicorn httpx psutil jinja2 python-multipart pypdf
+pip install fastapi uvicorn httpx psutil jinja2 python-multipart pypdf aio-pika
 
 # Set admin PIN before first startup (4 digits)
 export JARVISCHAT_ADMIN_PIN=4827
@@ -202,6 +217,13 @@ Memories are auto-categorized:
 | GET | `/api/memories/search?q=term` | Search memories |
 | GET | `/api/memories/stats` | Get counts by topic |
 
+### RAG Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/rag/stats` | RAG corpus stats (admin) |
+| POST | `/api/rag/flush` | Delete non-pinned vectors (admin) |
+
 ### Models & System
 
 | Method | Endpoint | Description |
@@ -273,10 +295,10 @@ Settings are stored in the `settings` table and include:
 ## Testing
 
 ```bash
-./venv/bin/python -m pytest tests/ -v
+python3 -m pytest tests/ -v
 ```
 
-All 110 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`. No external services needed.
+All 135 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
 
 ## License
 
