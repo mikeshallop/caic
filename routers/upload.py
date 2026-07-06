@@ -10,7 +10,8 @@ from fastapi.responses import JSONResponse
 
 from config import UPLOAD_DIR, MAX_UPLOAD_BYTES, SUPPORTED_UPLOAD_TYPES, UPLOAD_CONTEXT_EXPIRY_HOURS
 from db import get_db, insert_upload_context, list_upload_context_by_conversation, delete_upload_context_by_id
-from rag import chunk_text, maybe_evict, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
+from eviction import maybe_evict
+from rag import chunk_text, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
 
 log = logging.getLogger("jarvischat")
 router = APIRouter()

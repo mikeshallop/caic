@@ -7,6 +7,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 import app
+import config
 import db
 import rag
 from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
@@ -257,13 +258,13 @@ def test_maybe_evict_at_high_water(monkeypatch):
 
 def test_maybe_evict_zero_config_disabled(monkeypatch):
     """RAG_MAX_VECTORS <= 0 should disable eviction."""
-    orig = rag.RAG_MAX_VECTORS
+    orig = config.RAG_MAX_VECTORS
     try:
-        rag.RAG_MAX_VECTORS = 0
+        config.RAG_MAX_VECTORS = 0
         evicted = asyncio.run(rag.maybe_evict())
         assert evicted == 0
     finally:
-        rag.RAG_MAX_VECTORS = orig
+        config.RAG_MAX_VECTORS = orig
 
 
 # ---------- get_rag_operational_stats ----------

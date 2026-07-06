@@ -5,10 +5,8 @@ import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from rag import (
-    get_rag_operational_stats, EVICTION_LOG,
-    QDRANT_URL, RAG_COLLECTION,
-)
+from eviction import get_rag_operational_stats, EVICTION_LOG
+from rag import QDRANT_URL, RAG_COLLECTION
 
 log = logging.getLogger("jarvischat")
 router = APIRouter()
