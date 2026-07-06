@@ -1,165 +1,250 @@
 # Developer Architecture Guide
 
-This document explains how JarvisChat is structured, why key guardrails exist, and what the test suite validates.
+This document explains how JarvisChat is structured, the external services it integrates with, and the key architectural changes made during development.
 
 ## 1. System Overview
 
-JarvisChat is a single-process FastAPI service with a Jinja2 frontend and SQLite persistence.
+JarvisChat is a single-process FastAPI service with a Jinja2 frontend and SQLite persistence. It connects to an external llama-server for inference and optionally to SearXNG (web search), Qdrant (vector search), and RabbitMQ (AMQP cluster messaging).
 
-Primary files:
+### 1.1 Module Layout
 
-- `app.py`: API, middleware, streaming/chat logic, auth, memory, skills, and DB bootstrap
-- `templates/index.html`: main WebUX, settings panels, auth flow, streaming UI handlers
-- `jarvischat.db`: runtime SQLite database created and migrated at startup
+Refactored from single-file (`app.py`) into modules under project root:
 
-Core runtime integrations:
+| File | Role |
+|------|------|
+| `app.py` | FastAPI app, middleware, router registration, lifespan |
+| `config.py` | Constants, env vars, rate/payload limits, built-in skills registry, upload limits, RAG eviction config |
+| `db.py` | SQLite schema, connection factory, settings helpers, upload_context CRUD |
+| `auth.py` | PIN-based guest/admin sessions, auth routes |
+| `security.py` | Rate limiting, origin checks, IP allowlist, audit/incident logging |
+| `memory.py` | FTS5 memory CRUD, remember/forget command parsing |
+| `search.py` | SearXNG integration, perplexity scoring, refusal detection |
+| `rag.py` | Qdrant vector search, system prompt assembly, chunk_text() helper, collection stats |
+| `eviction.py` | Score-based RAG eviction engine (extracted from rag.py) |
+| `gpu.py` | AMD GPU stats via rocm-smi |
+| `amqp.py` | (WIP) aio-pika connection manager for RabbitMQ |
+| `routers/` | One module per endpoint group |
 
-- Ollama for chat/model interaction
-- SearXNG for web search (optional)
-- wttr.in for weather shortcut queries
-- rocm-smi for GPU stats when available
+### 1.2 External Services
+
+| Service | Required | Port | Purpose |
+|---------|----------|------|---------|
+| llama-server (ultron) | Yes | 8081 | LLM inference (OpenAI-compat), RPC offload to jarvis:50052 |
+| SearXNG | No | 8888 | Privacy-respecting web search |
+| Qdrant (ultron) | No | 6333 | Vector database for RAG |
+| Ollama (jarvis) | No | 11434 | Embeddings for RAG chunk vectors |
+| RabbitMQ (ultron) | No | 5672 | AMQP broker for cluster messaging |
+| rocm-smi | No | — | AMD GPU stats (host-level) |
+
+### 1.3 Config Discovery
+
+Key base URLs are configured via environment variables with sensible defaults:
+
+| Variable | Default | Service |
+|----------|---------|---------|
+| `LLAMA_SERVER_BASE` | `http://192.168.50.108:8081` | llama-server on ultron |
+| `OLLAMA_BASE` | `http://localhost:11434` | Legacy — all inference goes through LLAMA_SERVER_BASE |
+| `SEARXNG_BASE` | `http://localhost:8888` | SearXNG |
+| `QDRANT_URL` | `http://192.168.50.108:6333` | Qdrant on ultron |
+| `JARVISCHAT_AMQP_URL` | `amqp://jarvischat:password@localhost:5672/jarvischat` | RabbitMQ |
 
 ## 2. Request/Response Architecture
 
 ### 2.1 Chat Pipeline (`/api/chat`)
 
 1. Validate session, role, origin, rate, and payload limits in middleware
-2. Persist user message and conversation metadata
-3. Build system prompt from enabled profile, memory context, and active skills metadata
-4. Stream model response over SSE token-by-token
-5. Evaluate uncertainty/refusal; if needed, trigger search augmentation and stream augmented result
-6. Persist final assistant message and emit terminal SSE event
+2. Intercept "remember that..." / "forget about..." commands → process_remember_command()
+3. Persist user message and conversation metadata
+4. Build system prompt: profile + FTS5 memory + Qdrant RAG results + preset + active skills + uploaded document (if upload_context_id)
+5. Stream from llama-server with `logprobs: true` for perplexity scoring
+6. If perplexity > 15.0 OR refusal patterns match → re-query with SearXNG results
+7. Persist final assistant message and emit terminal SSE event
 
 ### 2.2 Explicit Search Pipeline (`/api/search`)
 
-1. Persist search-as-message into the target/new conversation
+1. Persist search-as-message into conversation
 2. Emit `searching` SSE event
 3. Pull web results from SearXNG
-4. Summarize with Ollama via SSE stream
-5. Persist summary and emit `done` event (plus raw results payload)
+4. Summarize via llama-server SSE stream
+5. Persist summary and emit `done` event
 
-### 2.3 Settings/Control Surface
+### 2.3 RAG Ingest Pipeline (`/api/ingest`)
 
-- Profile, presets, memory, conversation management, and settings APIs
-- Skills APIs for phase-1 registry and enable/disable controls
-- Auth/session APIs for guest/admin role handling and keepalive
+1. Bearer token auth (same key as completions API)
+2. Chunk text via shared `chunk_text()` helper (512-token chunks, 128-token overlap)
+3. Embed via Ollama `/api/embeddings`
+4. Upsert to Qdrant collection `jarvis_rag`
+5. Trigger `maybe_evict()` if collection exceeds high-water mark
+
+### 2.4 Upload Pipeline (`/api/upload`)
+
+1. Admin required, multipart file upload
+2. Validate MIME type + size against config limits
+3. PDF text extraction via pypdf; plain text for all other types
+4. Three modes: `context` (SQLite with 1hr expiry), `ingest` (RAG/Qdrant), `both`
+5. Trigger `maybe_evict()` if ingest mode
 
 ## 3. Data Model (SQLite)
 
 Key tables:
 
-- `conversations`: conversation headers and timestamps
-- `messages`: ordered chat history entries
-- `profile`: singleton row for injected profile prompt
-- `settings`: runtime toggles and selected defaults
-- `system_presets`: named reusable system prompts
-- `skills`: per-skill enabled state and timestamp
-- `memories` (FTS5 virtual table): searchable user memory facts
+- `conversations` — headers, timestamps, attachment_count
+- `messages` — ordered chat history per conversation
+- `profile` — singleton row for injected profile prompt
+- `settings` — runtime toggles and selected defaults
+- `system_presets` — named reusable system prompts
+- `skills` — per-skill enabled state and timestamp
+- `memories` (FTS5 virtual table) — full-text searchable user memory facts
+- `upload_context` — auto-expiring document storage for context injection
 
 Design notes:
-
-- Startup is idempotent: tables are created if missing and defaults seeded only when absent
-- No connection pool: each request opens a short-lived SQLite connection
+- Startup is idempotent: tables created if missing, defaults seeded only when absent
+- No connection pool: each request opens and closes a short-lived SQLite connection
+- `init_db()` called in FastAPI lifespan
 
 ## 4. Security Implementations
 
-This section documents explicit controls currently in code.
-
 ### 4.1 Auth Model
 
-- Guest session is default for conversational access
-- Admin unlock uses 4-digit PIN and creates admin-capable session
-- Admin required for write/destructive routes
-- Session heartbeat/timeout and explicit logout/revoke flow
+- Guest session by default (POST /api/auth/guest)
+- Admin unlock via 4-digit PIN (POST /api/auth/login)
+- Admin required for PUT/DELETE/PATCH + all POST except allowlist (/api/chat, /api/search, /api/auth/*)
+- /api/ingest is exempt from session auth — self-authenticates via Bearer token
+- Session heartbeat/timeout (90s default) and explicit logout
 
-### 4.2 PIN and Session Hardening
+### 4.2 PIN Hardening
 
 - Admin PIN hashed with PBKDF2-HMAC-SHA256 + salt
-- Failed PIN attempts tracked per client IP
-- Lockout window enforced after max failed attempts
+- Failed PIN attempts tracked per client IP (max 5, 300s lockout)
+- Default PIN allowed only if JARVISCHAT_ALLOW_DEFAULT_PIN=true
 
 ### 4.3 Browser and API Abuse Controls
 
-- Origin checks on state-changing requests
-- Rate limiting by endpoint category and identity (IP/session)
-- Payload size limits per route class
-- Settings key allowlist to block arbitrary configuration injection
-- IP allowlist/CIDR gate with optional trusted proxy forwarding mode
+- Origin checks on all /api/ requests (rejects absent Origin AND Referer)
+- Rate limiting per endpoint category and identity (IP/session)
+- Payload size limits per route class (64KB default, 128KB chat, 20MB upload)
+- Settings key allowlist (5 keys: profile_enabled, default_model, etc.)
+- IP allowlist/CIDR gate with trusted proxy forwarding mode
 
 ### 4.4 Output and Error Safety
 
-- Search result URLs sanitized to `http`/`https` only
+- Search result URLs sanitized to http/https only
 - Client-safe error envelopes with incident key correlation
-- Full stack traces and diagnostic metadata logged server-side only
+- Full stack traces logged server-side only
 
 ### 4.5 Operational Auditability
 
-- Structured audit events for auth actions, admin operations, and guardrail denials
-- Incident logs include event type, key, path/method context, and runtime metadata
+- Structured audit events for auth actions, admin ops, guardrail denials
+- Incident logs with event type, key, path/method, and runtime metadata
 
-## 5. Skills Framework (Phase 1)
+## 5. RAG Architecture
 
-Goal: introduce a governed skills control plane inside the local JarvisChat sandbox.
+### 5.1 Vector Search
 
-Current behavior:
+- Qdrant collection `jarvis_rag` on ultron:6333
+- Embeddings via Ollama on jarvis:11434 (`/api/embeddings`)
+- Shared `chunk_text(text, chunk_size=512, overlap=128)` helper in rag.py
+- Upload and ingest endpoints share the same chunk+embed+upsert pipeline
 
-- Built-in skill registry defined server-side
-- Per-skill enable/disable persisted in DB
-- Global `skills_enabled` master toggle in settings
-- Active skills injected into system prompt with bounded text budget
-- API endpoints to list skills, list active skills, and toggle skill state
-- WebUX settings panel to control master/per-skill toggles
+### 5.2 Score-Based Eviction
 
-Non-goals in phase 1:
+When `RAG_MAX_VECTORS` is exceeded, eviction fires with hysteresis:
 
-- No unrestricted shell/tool execution
-- No external connector execution (filesystem, Gmail, etc.)
+- High-water mark: 80% of max → trigger eviction
+- Low-water mark: 20% of max → stop eviction
+- Batch size: 1000 vectors per cycle
+- Score formula: `score = (access_weight * retrieval_count) + (age_weight * hours_since_ingested)`
+- Lower score evicted first (least useful)
+- Tiebreaker: oldest last_accessed ASC
+- Excluded sources: `upload`, `profile` (pinned)
+- Grace period: 1 hour before any vector is eligible
+- Thread-safe via `asyncio.Lock`
 
-## 6. Testing Strategy and Validation Intent
+Eviction module at `eviction.py` (re-exported through `rag.py` for backward compat).
 
-The test suite validates both behavior and guardrail assumptions.
+### 5.3 Operational Stats
 
-### 6.1 What We Test
+`GET /api/rag/stats` (admin required) returns:
+- vector_count, max_vectors, high_water_pct, low_water_pct, percent_full
+- pinned_sources list, grace_hours
+- at_risk_count, pinned_count, avg_retrieval_count
+- eviction_counts_last_{1,5,30}m
 
-- Auth capability separation (guest vs admin)
-- URL sanitization safety for outbound links
-- Rate and payload guardrails
-- IP allowlist behavior
-- Safe error envelope behavior and SSE error leakage prevention
-- Streaming chat/search and memory command paths
-- Skills framework toggles and prompt-injection behavior
+### 5.4 Flush
 
-### 6.2 Why These Tests Matter
+`POST /api/rag/flush` (admin required) — deletes all non-pinned vectors. Returns `{deleted_count, collection, status}`.
 
-- Confirms security controls are active and regression-resistant
-- Ensures streaming UX protocol remains stable (`token`, `searching`, `done`, `error`)
-- Verifies policy intent: dangerous actions require admin capability
-- Validates new features preserve prior guarantees
+## 6. AMQP Cluster Architecture (WIP)
 
-### 6.3 Internal Process Validation
+RabbitMQ on ultron with dedicated `jarvischat` vhost:
 
-For substantive changes, Definition of Done includes:
+| Exchange | Type | Purpose |
+|----------|------|---------|
+| `jc.admin` | topic | Commands: swap model, shutdown, heartbeat request |
+| `jc.system` | topic | Events: model_ready, model_failed, heartbeat, registration |
 
+Pending implementation (Tasks 10–15):
+- `amqp.py` — aio-pika connection manager with reconnect
+- Node agent on jarvis — registration, heartbeat, command consumer
+- `triage.py` — Phi-4-mini query classification (general/code/search/rag)
+- Dynamic model swap via llama-server RPC
+
+## 7. SSE Protocol
+
+All streaming endpoints yield `data: {json}\n\n`:
+
+- `{token, conversation_id}` — streaming token
+- `{searching: true}` — web search triggered
+- `{search_results: N}` — N results found (no raw payload)
+- `{done: true, perplexity, tokens_per_sec, searched?}` — terminal
+- `{error: "...", error_key: "..."}` — error with incident key
+
+## 8. Testing Strategy
+
+### 8.1 Test Framework
+
+- pytest with `tmp_path` + monkeypatched httpx.AsyncClient
+- No live external services required
+- Test factories reset `SESSIONS`, `PIN_ATTEMPTS`, `RATE_EVENTS` globals per test
+
+### 8.2 Test Coverage Areas (132 tests)
+
+| Test file | Coverage |
+|-----------|----------|
+| test_auth_capabilities.py | Guest/admin sessions, origin blocking, logout |
+| test_chat_streaming_and_memory_paths.py | Streaming, auto-search, remember/forget, upload context injection |
+| test_completions.py | API key auth, FIM, streaming, blocking, errors |
+| test_conversations.py | Full CRUD, guest admin, attachment_count |
+| test_ingest.py | Bearer auth, chunk/embed/upsert, validation |
+| test_memories.py | Edit, search, stats |
+| test_models_router.py | Models list, ps, show, stats, search/status |
+| test_presets.py | Full CRUD, default preset protection |
+| test_profile.py | Get, update, default, length validation |
+| test_rag_management.py | Collection stats, eviction algorithm (pinned/grace/scoring/batch), maybe_evict hysteresis, operational stats, flush, concurrency lock |
+| test_search_route.py | Explicit search flow, no results, errors |
+| test_search_url_sanitization.py | URL sanitizer |
+| test_settings_allowlist.py | Allowlisted key enforcement |
+| test_skills_framework.py | List, toggle, unknown skill, prompt injection |
+| test_ip_allowlist.py | IP allowlist helper + middleware |
+| test_rate_and_payload_guardrails.py | Rate limits + payload size |
+| test_error_envelopes.py | Global exception handler + stream errors |
+| test_upload.py | Upload, delete, link, by-conversation, attachment_count |
+
+### 8.3 DoD Process
+
+For substantive changes:
 1. Implement code change
 2. Add/adjust tests proving behavior and guardrail intent
-3. Update README release notes for user-facing impact
-4. Update wiki architecture/security/testing docs for maintainers
-5. Validate with targeted test runs before merge/deploy
+3. Update this wiki and README in the same change set
+4. Validate with full test run before commit
 
-This process is intentionally explicit so design decisions remain auditable over time.
+## 9. Hardware Self-Assessment
 
-## 7. Deployment and Operations Notes
+On startup, `assess_hardware()` probes:
+- RAM total/available (psutil)
+- VRAM total/free (rocm-smi, best-effort)
+- llama-server reachability + model list
+- Qdrant reachability + collection list
+- SearXNG reachability
 
-- Primary deployment target: local/homelab systemd service
-- Required dependency: Ollama
-- Optional dependency: SearXNG
-- Recommended log review path: system journal for startup, guardrail denials, and incidents
-
-## 8. Contribution Guidance
-
-When adding a feature:
-
-1. Define security posture first (who can execute, what can fail, and failure mode)
-2. Implement smallest safe slice with clear limits
-3. Add tests that prove both happy path and guardrail path
-4. Update this wiki and README in the same change
+Writes `hardware_state.json` to working directory.
