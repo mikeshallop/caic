@@ -174,9 +174,67 @@ Eviction module at `eviction.py` (re-exported through `rag.py` for backward comp
 
 `POST /api/rag/flush` (admin required) — deletes all non-pinned vectors. Returns `{deleted_count, collection, status}`.
 
-## 6. AMQP Cluster Architecture (WIP)
+## 6. Cluster Architecture
 
-RabbitMQ on ultron with dedicated `jarvischat` vhost:
+### 6.1 Design Model: Broker-Mediated
+
+JarvisChat uses a **broker-mediated** cluster design. This is the preferred architecture and is reflected in all implementation decisions below.
+
+**How it works:**
+- A single RabbitMQ broker (or clustered set of brokers) acts as the central nervous system
+- **Coordinator nodes** run the FastAPI app, host the HTTP API/UI, and publish commands to the broker
+- **Worker nodes** connect as AMQP *clients only* — they consume commands and publish status events, but run no broker software themselves
+- Communication is asynchronous and persistent: each node opens a TCP connection on startup and keeps it alive. The AMQP-0-9-1 heartbeat detects silent failures within ~60s.
+
+**Why broker-mediated:**
+- Workers are heterogeneous (different GPUs, different models, ARM vs x86) — no assumption of uniform software
+- Workers are lightweight — a Raspberry Pi with a USB AI accelerator can participate without running a broker
+- The coordinator delegates work via messages, not by SSH'ing into workers or requiring shared filesystems
+- Failure is isolated: a crashed worker drops off the heartbeat list; the coordinator reassigns its work
+
+**What it is NOT:**
+- Not a service mesh — workers do not run identical software stacks
+- Not autonomous failover — if the coordinator dies, a replacement must be manually promoted (or pre-configured as a secondary coordinator). Workers cannot self-promote to coordinator because they lack the required services (FastAPI, SQLite, DB schema, SearXNG, Qdrant, etc.)
+- Not a peer-to-peer cluster — all orchestration flows through the coordinator
+
+### 6.2 Node Types
+
+Every physical machine in the cluster is classified by which services it runs. Two node types are defined:
+
+| Aspect | Coordinator | Worker |
+|--------|------------|--------|
+| **Role** | Serves HTTP API/UI, orchestrates inference, owns cluster state | Runs inference models on behalf of the coordinator |
+| **Python** | Required — runs FastAPI app | Required — runs node agent (aio-pika consumer) |
+| **RabbitMQ server** | Required — hosts the broker | Not required — connects as AMQP client only |
+| **RabbitMQ client (aio-pika)** | Required — publishes commands, consumes events | Required — consumes commands, publishes events |
+| **FastAPI / uvicorn** | Required | Not needed |
+| **SQLite** | Required — owns jarvischat.db | Not needed |
+| **Qdrant** | Optional (recommended) — vector DB for RAG | Not needed |
+| **SearXNG** | Optional — web search | Not needed |
+| **llama-server** | Optional — can share its own GPU for inference | Required — this is why the worker exists |
+| **Ollama** | Optional — embeddings for RAG | Not needed |
+| **rocm-smi / nvidia-smi** | Optional — hardware stats | Optional — node agent reports this at registration |
+
+### 6.3 Service Distribution Summary
+
+```
+Coordinator                          Worker(s)
+┌────────────────────┐               ┌─────────────────────────┐
+│  jarvisChat        │               │  llama-server           │
+│  (FastAPI + SQLite)│               │  (inference)            │
+│  RabbitMQ server   │◄──AMQP───────│  aio-pika (agent)       │
+│  SearXNG (opt)     │    persistent │  ROCm / CUDA (if GPU)   │
+│  Qdrant (opt)      │    TCP        │                         │
+│  Ollama (opt)      │    conn       │  No broker              │
+│  llama-server(opt) │               │  No jC                  │
+└────────────────────┘               │  No DB                  │
+                                     │  No search/vector       │
+                                     └─────────────────────────┘
+```
+
+### 6.4 RabbitMQ Topology
+
+Every RabbitMQ server belongs to a cluster. Currently only the coordinator runs one; if high availability is needed, additional nodes can join the RMQ cluster without changing the architecture.
 
 | Exchange | Type | Purpose |
 |----------|------|---------|

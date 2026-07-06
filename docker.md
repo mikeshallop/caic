@@ -31,6 +31,8 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
+> **This compose stack defines the coordinator.** A coordinator runs jC, the broker, and optional infrastructure services. Workers (headless inference nodes) do not use Docker — they install just llama-server + a Python node agent. See §12 for the worker deployment model.
+
 ### Service roles
 
 | Service | Image | Role |
@@ -644,7 +646,74 @@ If the setup wizard fails mid-way, a partial rollback is better than leaving det
 | **LLM model download** | HuggingFace CLI integration in setup.sh, or manual download. Manual is simpler. | Low |
 | **Dockerfile optimization** | Pin pip hashes, use `--no-cache-dir`, consider `slim` vs `alpine`. Alpine has musl compatibility issues with psutil. Stay with slim. | Medium |
 
-## 9. Checklist (pre-v1.0 gate)
+## 9. Worker Node Deployment Model
+
+The Docker stack above defines the **coordinator** only. Workers (headless inference nodes) have a radically lighter footprint.
+
+### 9.1 What a worker runs
+
+```
+Worker machine (e.g. jarvis, Corsair)
+┌────────────────────────────────────┐
+│  llama-server                      │
+│  (single binary, no build needed)  │
+│                                    │
+│  node_agent.py                     │
+│  (Python script, aio-pika client)  │
+│    ─ connects to coordinator's RMQ │
+│    ─ publishes heartbeat + reg     │
+│    ─ consumes model_swap commands  │
+│                                    │
+│  ROCm or CUDA runtime (if GPU)     │
+└────────────────────────────────────┘
+```
+
+### 9.2 What a worker does NOT run
+
+| Service | Reason |
+|---------|--------|
+| RabbitMQ server | Connects as AMQP *client* only (aio-pika) |
+| FastAPI / uvicorn / jC | No HTTP API, no UI, no database |
+| SQLite | No persistent state of its own |
+| SearXNG | No web search needs |
+| Qdrant | No local vector store |
+| Ollama | Uses coordinator's embedding endpoint |
+| Docker | Everything runs as bare binaries |
+| Python venv with full jC deps | Only needs `aio-pika` + `httpx` |
+
+### 9.3 Worker setup
+
+```bash
+# Install llama-server binary
+wget https://github.com/ggml-org/llama.cpp/releases/.../llama-server
+chmod +x llama-server
+
+# Install node agent deps
+pip install aio-pika httpx
+
+# Create node agent script (from repo: tools/node_agent.py)
+# Configure COORDINATOR_AMQP_URL in environment
+```
+
+### 9.4 Multiple workers
+
+Each worker registers independently with the coordinator's RabbitMQ. The coordinator tracks all registered workers via `CLUSTER_NODES` and routes inference requests to the best-matching node based on classification and availability.
+
+### 9.5 RabbitMQ and workers — architecture note
+
+Workers connect to RabbitMQ as **standard AMQP TCP clients** — no broker software required. The AMQP-0-9-1 protocol has always been client-server (since 2006), and libraries like `aio-pika`, `pika`, `amqplib`, `php-amqplib`, etc. connect over a single persistent socket. This is distinct from a service-mesh design where every node runs the same software stack and role is determined by config.
+
+```
+Broker-mediated model (this project):
+  Coordinator runs  RabbitMQ broker  ←── Workers connect as AMQP clients
+
+Service-mesh model (alternative):
+  Every node runs    RabbitMQ broker  ←── Nodes cluster together, all autonomous
+```
+
+The broker-mediated model is the preferred architecture for this project because workers are intentionally heterogeneous (different GPUs, different models, ARM vs x86) and should not be burdened with infrastructure services.
+
+## 10. Checklist (pre-v1.0 gate)
 
 - [ ] `Dockerfile` written and builds clean
 - [ ] `docker-compose.yml` boots all containers
@@ -663,7 +732,7 @@ If the setup wizard fails mid-way, a partial rollback is better than leaving det
 
 ---
 
-## 10. Files to create for B3
+## 11. Files to create for B3
 
 ```
 docker.md             ← this file (planning doc)
