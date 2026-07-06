@@ -199,10 +199,70 @@ async def get_rag_operational_stats() -> dict:
         if datetime.fromisoformat(e["timestamp"]) > cutoff_30m
     )
 
+    pinned_count = 0
+    avg_retrieval_count = 0.0
+    at_risk_count = 0
+
+    try:
+        async with httpx.AsyncClient() as client:
+            pinned_filter = {
+                "should": [
+                    {"match": {"key": "source", "value": src}}
+                    for src in RAG_PINNED_SOURCES
+                ]
+            }
+            pinned_resp = await client.post(
+                f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points/scroll",
+                json={"filter": pinned_filter, "limit": 10000, "with_payload": True, "with_vector": False},
+                timeout=10.0,
+            )
+            if pinned_resp.status_code == 200:
+                pinned_count = len(pinned_resp.json().get("result", {}).get("points", []))
+
+            nonpinned_filter = {
+                "must_not": [
+                    {"match": {"key": "source", "value": src}}
+                    for src in RAG_PINNED_SOURCES
+                ]
+            }
+            np_resp = await client.post(
+                f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points/scroll",
+                json={"filter": nonpinned_filter, "limit": 10000, "with_payload": True, "with_vector": False},
+                timeout=10.0,
+            )
+            if np_resp.status_code == 200:
+                points = np_resp.json().get("result", {}).get("points", [])
+                if points:
+                    retrievals = []
+                    scored = []
+                    for p in points:
+                        payload = p.get("payload", {})
+                        rc = payload.get("retrieval_count", 0) or 0
+                        retrievals.append(rc)
+                        date_str = payload.get("ingest_date") or payload.get("upload_date", "")
+                        if date_str:
+                            age_hours = (now - datetime.fromisoformat(date_str)).total_seconds() / 3600
+                        else:
+                            age_hours = 999999
+                        score = rc * RAG_ACCESS_WEIGHT + age_hours * RAG_AGE_WEIGHT
+                        last_accessed = payload.get("last_accessed", date_str)
+                        scored.append((score, last_accessed))
+
+                    avg_retrieval_count = round(sum(retrievals) / len(retrievals), 2)
+
+                    scored.sort(key=lambda x: (x[0], x[1]))
+                    at_risk_threshold = max(1, len(scored) // 10)
+                    at_risk_count = at_risk_threshold
+    except Exception as e:
+        log.warning(f"RAG operational stats scroll error: {e}")
+
     stats.update({
         "grace_hours": RAG_GRACE_HOURS,
         "eviction_counts_last_1m": eviction_1m,
         "eviction_counts_last_5m": eviction_5m,
         "eviction_counts_last_30m": eviction_30m,
+        "pinned_count": pinned_count,
+        "avg_retrieval_count": avg_retrieval_count,
+        "at_risk_count": at_risk_count,
     })
     return stats

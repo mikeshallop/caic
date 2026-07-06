@@ -2,7 +2,7 @@
 import logging
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from eviction import get_rag_operational_stats, EVICTION_LOG
@@ -13,7 +13,9 @@ router = APIRouter()
 
 
 @router.get("/api/rag/stats")
-async def rag_stats():
+async def rag_stats(request: Request):
+    if getattr(request.state, "session_role", "none") != "admin":
+        raise HTTPException(status_code=403, detail="Admin PIN required for this action")
     stats = await get_rag_operational_stats()
     stats["eviction_log_size"] = len(EVICTION_LOG)
     return stats

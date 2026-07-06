@@ -291,14 +291,32 @@ def test_rag_operational_stats_shape(monkeypatch):
 def test_rag_stats_endpoint(tmp_path, monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FakeAsyncClient())
     with make_client(tmp_path) as client:
-        resp = client.get("/api/rag/stats", headers=_guest_headers(client))
+        resp = client.get("/api/rag/stats", headers=_admin_headers(client))
         assert resp.status_code == 200
         data = resp.json()
-        assert "vector_count" in data
-        assert "max_vectors" in data
-        assert "grace_hours" in data
-        assert "eviction_log_size" in data
         assert data["vector_count"] == 123
+        assert data["max_vectors"] == 50000
+        assert "high_water_mark" in data
+        assert "low_water_mark" in data
+        assert data["high_water_pct"] == 80
+        assert data["low_water_pct"] == 20
+        assert "percent_full" in data
+        assert data["pinned_sources"] == ["upload", "profile"]
+        assert data["grace_hours"] == 1
+        assert "eviction_counts_last_1m" in data
+        assert "eviction_counts_last_5m" in data
+        assert "eviction_counts_last_30m" in data
+        assert "pinned_count" in data
+        assert "avg_retrieval_count" in data
+        assert "at_risk_count" in data
+        assert "eviction_log_size" in data
+
+
+def test_rag_stats_requires_admin(tmp_path, monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FakeAsyncClient())
+    with make_client(tmp_path) as client:
+        resp = client.get("/api/rag/stats", headers=_guest_headers(client))
+        assert resp.status_code == 403
 
 
 # ---------- POST /api/rag/flush ----------
