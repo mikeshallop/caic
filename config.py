@@ -16,6 +16,23 @@ SEARXNG_BASE = "http://localhost:8888"
 DEFAULT_MODEL = "llama3.1:latest"
 COMPLETIONS_API_KEY = os.environ.get("JARVISCHAT_COMPLETIONS_API_KEY", "jc-sk-" + os.urandom(24).hex())
 
+# --- AMQP ---
+AMQP_RECONNECT_DELAY = 5
+AMQP_EXCHANGE_ADMIN = "jc.admin"
+AMQP_EXCHANGE_SYSTEM = "jc.system"
+AMQP_SECRET_PATH = "/home/gramps/.jc_amqp_secret"
+
+def get_amqp_url() -> str:
+    url = os.environ.get("JARVISCHAT_AMQP_URL")
+    if url:
+        return url
+    try:
+        with open(AMQP_SECRET_PATH) as f:
+            pw = f.read().strip()
+    except (FileNotFoundError, OSError):
+        pw = "password"
+    return f"amqp://jarvischat:{pw}@localhost:5672/jarvischat"
+
 # --- Auth ---
 SESSION_TIMEOUT_SECONDS = 90
 MAX_PIN_ATTEMPTS = 5

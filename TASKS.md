@@ -352,7 +352,7 @@ No pytest tests required for this infrastructure task.
 
 ---
 
-## TASK 10 — Roadmap N2: AMQP Connection Layer in jC
+## ~~TASK 10 — Roadmap N2: AMQP Connection Layer in jC [DONE]~~
 
 This task adds the core AMQP connection manager to jC. It must connect to RabbitMQ on ultron (localhost from jC's perspective since jC runs on ultron), handle reconnection, and provide a shared channel for all AMQP operations.
 

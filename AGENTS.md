@@ -3,13 +3,13 @@
 ## Run
 
 ```bash
-./venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+uvicorn app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 ## Tests
 
 ```bash
-./venv/bin/python -m pytest tests/ -v
+python3 -m pytest tests/ -v
 ```
 
 All tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient.stream/get/post/put`. No external services needed. Test factories reset `SESSIONS`, `PIN_ATTEMPTS`, `RATE_EVENTS` globals — be careful not to let test state leak. Tests import directly from the correct modules (`db`, `security`, `config`, `search`, `rag`, `memory`, `routers.*`).

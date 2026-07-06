@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from amqp import connect as amqp_connect, disconnect as amqp_disconnect
 from config import VERSION, RATE_WINDOW_SECONDS, UPLOAD_DIR, RAG_MAX_VECTORS, RAG_EVICTION_HIGH_WATER, RAG_EVICTION_LOW_WATER, RAG_EVICTION_BATCH
 from db import init_db
 from hardware import assess_hardware
@@ -57,6 +58,7 @@ async def lifespan(app: FastAPI):
     init_db()
     log.info(f"Memory system: {get_memory_count()} memories loaded")
     await assess_hardware()
+    await amqp_connect()
 
     if RAG_MAX_VECTORS > 0:
         if RAG_EVICTION_HIGH_WATER <= RAG_EVICTION_LOW_WATER:
@@ -71,6 +73,7 @@ async def lifespan(app: FastAPI):
 
     yield
     log.info("JarvisChat shutting down")
+    await amqp_disconnect()
 
 
 app = FastAPI(title="JarvisChat", lifespan=lifespan)
