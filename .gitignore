@@ -6,3 +6,6 @@ venv/
 readme.md-
 *.bak
 hardware_state.json
+.env
+secrets/
+searxng/
