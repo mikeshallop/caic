@@ -1,5 +1,5 @@
 """
-JarvisChat — AMQP connection manager.
+cAIc — AMQP connection manager.
 Single persistent aio-pika connection with auto-reconnect.
 """
 import asyncio
@@ -21,7 +21,7 @@ from config import (
     get_amqp_url,
 )
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 _connection = None
 _channel = None

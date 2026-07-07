@@ -9,8 +9,8 @@ from security import SESSIONS, PIN_ATTEMPTS
 
 
 def make_admin_client(tmp_path: Path) -> tuple[TestClient, dict[str, str]]:
-    os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    db.DB_PATH = tmp_path / "jarvischat-settings.db"
+    os.environ["CAIC_ADMIN_PIN"] = "1234"
+    db.DB_PATH = tmp_path / "caic-settings.db"
     SESSIONS.clear()
     PIN_ATTEMPTS.clear()
     db.init_db()

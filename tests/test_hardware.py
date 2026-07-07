@@ -16,8 +16,8 @@ from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
 
 
 def make_client(tmp_path: Path) -> TestClient:
-    os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    db.DB_PATH = tmp_path / "jarvischat-hardware.db"
+    os.environ["CAIC_ADMIN_PIN"] = "1234"
+    db.DB_PATH = tmp_path / "caic-hardware.db"
     hardware.HARDWARE_STATE_PATH = tmp_path / "hardware_state.json"
     SESSIONS.clear()
     PIN_ATTEMPTS.clear()
@@ -72,7 +72,7 @@ def test_assess_hardware_all_services_reachable(tmp_path: Path, monkeypatch):
         if "v1/models" in url:
             return _MockGet(200, {"data": [{"id": "mistral-nemo:latest"}]})
         if "6333" in url:
-            return _MockGet(200, {"result": {"collections": [{"name": "jarvischat"}]}})
+            return _MockGet(200, {"result": {"collections": [{"name": "caic"}]}})
         if "8888" in url:
             return _MockGet(200, {})
         return _MockGet(200, {})
@@ -88,7 +88,7 @@ def test_assess_hardware_all_services_reachable(tmp_path: Path, monkeypatch):
     assert state["llama_reachable"] is True
     assert state["llama_models"] == ["mistral-nemo:latest"]
     assert state["qdrant_reachable"] is True
-    assert state["qdrant_collections"] == ["jarvischat"]
+    assert state["qdrant_collections"] == ["caic"]
     assert state["searxng_reachable"] is True
     assert tmp_path.joinpath("hardware_state.json").exists()
 
@@ -130,7 +130,7 @@ def test_assess_hardware_llama_unreachable(tmp_path: Path, monkeypatch):
         if "v1/models" in url:
             raise httpx.ConnectError("refused")
         if "6333" in url:
-            return _MockGet(200, {"result": {"collections": [{"name": "jarvischat"}]}})
+            return _MockGet(200, {"result": {"collections": [{"name": "caic"}]}})
         if "8888" in url:
             return _MockGet(200, {})
         return _MockGet(200, {})
@@ -156,7 +156,7 @@ def test_get_hardware_endpoint(tmp_path: Path, monkeypatch):
         if "v1/models" in url:
             return _MockGet(200, {"data": [{"id": "mistral-nemo:latest"}]})
         if "6333" in url:
-            return _MockGet(200, {"result": {"collections": [{"name": "jarvischat"}]}})
+            return _MockGet(200, {"result": {"collections": [{"name": "caic"}]}})
         if "8888" in url:
             return _MockGet(200, {})
         return _MockGet(200, {})

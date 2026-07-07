@@ -12,7 +12,7 @@ from config import LLAMA_SERVER_BASE
 from gpu import get_gpu_stats
 from security import read_json_body, BODY_LIMIT_DEFAULT_BYTES
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 router = APIRouter()
 
 

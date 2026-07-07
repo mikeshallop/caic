@@ -1,5 +1,5 @@
 """
-JarvisChat - SearXNG integration, perplexity scoring, refusal/hedge detection.
+cAIc - SearXNG integration, perplexity scoring, refusal/hedge detection.
 """
 import logging
 import math
@@ -10,7 +10,7 @@ import httpx
 
 from config import SEARXNG_BASE, PERPLEXITY_THRESHOLD, REFUSAL_PATTERNS, HEDGE_PATTERNS
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 
 def sanitize_outbound_url(url: str) -> str:

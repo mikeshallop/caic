@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-JarvisChat - Entry point.
+cAIc - Entry point.
 Creates the FastAPI app, registers middleware, mounts all routers.
 """
 import logging
@@ -43,10 +43,10 @@ import routers.rag_admin as rag_admin
 import routers.cluster as cluster_router
 
 # --- Logging ---
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 log.setLevel(logging.DEBUG)
 syslog_handler = logging.handlers.SysLogHandler(address="/dev/log")
-syslog_handler.setFormatter(logging.Formatter("jarvischat[%(process)d]: %(levelname)s %(message)s"))
+syslog_handler.setFormatter(logging.Formatter("caic[%(process)d]: %(levelname)s %(message)s"))
 log.addHandler(syslog_handler)
 
 BASE_DIR = Path(__file__).parent
@@ -55,7 +55,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info(f"JarvisChat {VERSION} starting up")
+    log.info(f"cAIc {VERSION} starting up")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     init_db()
     log.info(f"Memory system: {get_memory_count()} memories loaded")
@@ -75,11 +75,11 @@ async def lifespan(app: FastAPI):
         log.warning("RAG_MAX_VECTORS <= 0 — RAG eviction disabled")
 
     yield
-    log.info("JarvisChat shutting down")
+    log.info("cAIc shutting down")
     await amqp_disconnect()
 
 
-app = FastAPI(title="JarvisChat", lifespan=lifespan)
+app = FastAPI(title="cAIc", lifespan=lifespan)
 
 
 @app.exception_handler(Exception)

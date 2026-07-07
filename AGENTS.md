@@ -1,4 +1,4 @@
-# JarvisChat — Agents Guide
+# cAIc — Agents Guide
 
 ## Run
 
@@ -60,8 +60,8 @@ Refactored from single-file (`app.py`) into modules under project root:
 ### Entrypoint / API keys
 
 - `app.py` line 148: `uvicorn.run(app, ...)` when called directly
-- `config.py` line 14: `LLAMA_SERVER_BASE` defaults to `http://192.168.50.108:8081` — llama-server on ultron, RPC-offloads GPU layers to jarvis :50052
-- `config.py` line 17: `COMPLETIONS_API_KEY` read from `JARVISCHAT_COMPLETIONS_API_KEY` env var or auto-generates
+- `config.py` line 14: `LLAMA_SERVER_BASE` defaults to `http://192.168.50.108:8081` — llama-server on coordinator, RPC-offloads GPU layers to worker :50052
+- `config.py` line 17: `COMPLETIONS_API_KEY` read from `CAIC_COMPLETIONS_API_KEY` env var or auto-generates
 - `config.py` line 13: `OLLAMA_BASE` is legacy/unused — all endpoints use `LLAMA_SERVER_BASE`
 
 ### Key flows
@@ -83,11 +83,11 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 - `/api/ingest` is exempt from session auth — self-authenticates via Bearer token
 - IP allowlist, rate limiting, origin checking, payload size limits — all enforced in `app.py` middleware
 - Origin check applies to **all** `/api/` requests; returns `False` when both `Origin` and `Referer` are absent
-- `JARVISCHAT_ADMIN_PIN` env var required on first boot (or `JARVISCHAT_ALLOW_DEFAULT_PIN=true`)
+- `CAIC_ADMIN_PIN` env var required on first boot (or `CAIC_ALLOW_DEFAULT_PIN=true`)
 
 ### Database
 
-- SQLite at `jarvischat.db`, auto-created by `init_db()` on startup via FastAPI `lifespan`
+- SQLite at `caic.db`, auto-created by `init_db()` on startup via FastAPI `lifespan`
 - `get_db()` opens new connection per request (no pool). Close after use.
 - FTS5 virtual table `memories` for full-text search with BM25 ranking.
 - `upload_context` table: auto-expiring document storage for chat context injection.
@@ -96,11 +96,11 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 
 | Service | Required | Port |
 |---------|----------|------|
-| llama-server (ultron) | Yes | 8081 + RPC :50052 (jarvis GPU) |
+| llama-server (coordinator) | Yes | 8081 + RPC :50052 (worker GPU) |
 | SearXNG | No | 8888 |
 | wttr.in | No | weather shortcut |
 | rocm-smi | No | AMD GPU stats |
-| Qdrant | No | 6333 (ultron) — RAG vector search |
+| Qdrant | No | 6333 (coordinator) — RAG vector search |
 
 ### Config quirks
 
@@ -108,7 +108,7 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 - `SUPPORTED_UPLOAD_TYPES` includes images (png/jpeg/gif/svg/webp) + text + PDF + JSON
 - `UPLOAD_CONTEXT_EXPIRY_HOURS` = 1 hour
 - Rate limits and payload caps in `config.py` — patch `security.RL_*` not `config.RL_*` for tests
-- RAG embedding requests go to `EMBED_URL` at `/api/embeddings` (Ollama on jarvis :11434)
+- RAG embedding requests go to `EMBED_URL` at `/api/embeddings` (Ollama on worker :11434)
 
 ### SSE Protocol
 

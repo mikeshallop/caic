@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JarvisChat</title>
+<title>cAIc</title>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -263,7 +263,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 
 <div class="auth-screen" id="authScreen">
     <div class="auth-card">
-        <div class="auth-title">JarvisChat Unlock</div>
+        <div class="auth-title">cAIc Unlock</div>
         <div class="auth-subtitle">Enter 4-digit admin PIN to unlock advanced actions</div>
         <div class="auth-warning">Security warning: PIN 1234 is weak. Use a non-trivial 4-digit PIN.</div>
         <input id="pinInput" class="pin-input" type="password" inputmode="numeric" maxlength="4" autocomplete="off" />
@@ -276,8 +276,8 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <img class="logo" src="/static/logo.png" alt="JarvisChat Logo" onerror="this.style.display='none'">
-        <h1>⚡ JarvisChat {{ version }}</h1>
+        <img class="logo" src="/static/logo.png" alt="cAIc Logo" onerror="this.style.display='none'">
+        <h1>⚡ cAIc {{ version }}</h1>
         <div class="subtitle">🦙 local coding companion</div>
         <div class="btn-row">
             <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
@@ -332,7 +332,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             </div>
             <div class="modal-section">
                 <h3>Web Search (SearXNG)</h3>
-                <p class="desc">When enabled, JarvisChat will automatically search the web if the model indicates uncertainty. Use the 🔍 button to force a web search.</p>
+                <p class="desc">When enabled, cAIc will automatically search the web if the model indicates uncertainty. Use the 🔍 button to force a web search.</p>
                 <div class="toggle-row">
                     <span class="toggle-label">Enable automatic web search</span>
                     <div class="toggle-switch on" id="searchToggle" onclick="toggleSearch()"></div>
@@ -388,7 +388,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     <div class="chat-container" id="chatContainer">
         <div class="welcome-screen" id="welcomeScreen">
             <div class="logo">⚡</div>
-            <p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Use 🔍 to force a web search.<br>Say "remember that..." to teach me things.</p>
+<p>cAIc — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Use 🔍 to force a web search.<br>Say "remember that..." to teach me things.</p>
         </div>
     </div>
     <div class="input-area">
@@ -1109,7 +1109,7 @@ function newChat() {
 
 function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 function showWelcome() {
-    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="logo">⚡</div><p>JarvisChat — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Use 🔍 to force a web search.<br>Say "remember that..." to teach me things.</p></div>';
+    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="logo">⚡</div><p>cAIc — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Use 🔍 to force a web search.<br>Say "remember that..." to teach me things.</p></div>';
 }
 
 async function sendSearch() {
@@ -1479,7 +1479,7 @@ function addMessageToolbar(msgDiv) {
         const blob = new Blob([t], { type: 'text/markdown' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `jarvischat-response-${Date.now()}.md`;
+        a.download = `caic-response-${Date.now()}.md`;
         a.click();
         URL.revokeObjectURL(a.href);
     };

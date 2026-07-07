@@ -1,4 +1,4 @@
-# JarvisChat Current WiP Backlog
+# cAIc Current WiP Backlog
 
 Last updated: 2026-07-06
 Owner: Gramps
@@ -9,9 +9,9 @@ Scope: Active roadmap items and backlog.
 | Task | Description | Status |
 |------|-------------|--------|
 | Task 8  | RAG Corpus Management (score-based eviction, pinned sources, operational stats) | **DONE** |
-| Task 9  | RabbitMQ install + exchange setup on ultron | **DONE** |
+| Task 9  | RabbitMQ install + exchange setup on coordinator | **DONE** |
 | Task 10 | AMQP connection layer in jC (`amqp.py`, aio-pika) | **NEXT** |
-| Task 11 | Node agent on jarvis — registration, heartbeat, command listeners | Pending |
+| Task 11 | Node agent on worker — registration, heartbeat, command listeners | Pending |
 | Task 12 | AMQP wiring: inject context into chat/completions pipeline | Pending |
 | Task 13 | Query triage via Phi-4-mini (`triage.py`) | Pending |
 | Task 14 | Dynamic model swap — publish cmd, handle ready/failed | Pending |

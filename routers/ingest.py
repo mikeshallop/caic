@@ -10,7 +10,7 @@ from config import COMPLETIONS_API_KEY
 from eviction import maybe_evict
 from rag import chunk_text, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 router = APIRouter()
 
 

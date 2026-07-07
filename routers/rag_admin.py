@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from eviction import get_rag_operational_stats, EVICTION_LOG
 from rag import QDRANT_URL, RAG_COLLECTION
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 router = APIRouter()
 
 

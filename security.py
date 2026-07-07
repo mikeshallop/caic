@@ -1,5 +1,5 @@
 """
-JarvisChat - Security utilities.
+cAIc - Security utilities.
 PIN hashing, audit logging, incident tracking, CSRF/origin checks,
 rate limiting, request helpers.
 """
@@ -30,7 +30,7 @@ from config import (
 
 import ipaddress
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 SESSIONS: dict = {}
 PIN_ATTEMPTS: dict = {}

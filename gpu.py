@@ -1,11 +1,11 @@
 """
-JarvisChat - AMD GPU stats via rocm-smi.
+cAIc - AMD GPU stats via rocm-smi.
 """
 import json
 import logging
 import subprocess
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 
 def get_gpu_stats() -> dict:

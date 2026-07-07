@@ -13,8 +13,8 @@ from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
 
 
 def make_client(tmp_path: Path) -> TestClient:
-    os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    db.DB_PATH = tmp_path / "jarvischat-search-route.db"
+    os.environ["CAIC_ADMIN_PIN"] = "1234"
+    db.DB_PATH = tmp_path / "caic-search-route.db"
     SESSIONS.clear()
     PIN_ATTEMPTS.clear()
     RATE_EVENTS.clear()

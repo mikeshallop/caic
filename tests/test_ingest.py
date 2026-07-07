@@ -12,8 +12,8 @@ from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
 
 
 def make_client(tmp_path: Path) -> TestClient:
-    os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    db.DB_PATH = tmp_path / "jarvischat-ingest.db"
+    os.environ["CAIC_ADMIN_PIN"] = "1234"
+    db.DB_PATH = tmp_path / "caic-ingest.db"
     SESSIONS.clear()
     PIN_ATTEMPTS.clear()
     RATE_EVENTS.clear()
@@ -21,7 +21,7 @@ def make_client(tmp_path: Path) -> TestClient:
     return TestClient(app.app, raise_server_exceptions=False)
 
 
-TEST_API_KEY = "test-sk-jarvischat-ingest"
+TEST_API_KEY = "test-sk-caic-ingest"
 
 
 def _auth_headers() -> dict:

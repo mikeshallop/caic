@@ -1,5 +1,5 @@
 """
-JarvisChat — Startup hardware self-assessment.
+cAIc — Startup hardware self-assessment.
 """
 import asyncio
 import json
@@ -12,7 +12,7 @@ import psutil
 
 from config import LLAMA_SERVER_BASE, SEARXNG_BASE
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 HARDWARE_STATE_PATH = Path("hardware_state.json")
 _TIMEOUT_EXPIRED = subprocess.TimeoutExpired

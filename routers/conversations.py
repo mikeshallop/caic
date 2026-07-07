@@ -7,7 +7,7 @@ from db import get_db
 from security import read_json_body, BODY_LIMIT_DEFAULT_BYTES
 from config import DEFAULT_MODEL, MAX_CONVERSATION_TITLE_CHARS
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 router = APIRouter()
 
 

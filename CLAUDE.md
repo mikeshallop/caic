@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080 --reload
 
 # Production (via systemd)
-sudo systemctl restart jarvischat
+sudo systemctl restart caic
 
 # Direct run
 ./venv/bin/python app.py
@@ -24,7 +24,7 @@ sudo systemctl restart jarvischat
 
 ## Architecture
 
-Modular FastAPI app — `app.py` wires routers, middleware, and lifespan. SQLite database auto-created at `jarvischat.db` on first run. No build step, single `templates/index.html`.
+Modular FastAPI app — `app.py` wires routers, middleware, and lifespan. SQLite database auto-created at `caic.db` on first run. No build step, single `templates/index.html`.
 
 ### Request Flow: `/api/chat`
 
@@ -54,22 +54,22 @@ FTS5 virtual table (`memories`) in SQLite. `search_memories()` uses BM25 ranking
 
 ### Key Constants (`config.py`)
 
-- `LLAMA_SERVER_BASE` — `http://192.168.50.108:8081` (ultron llama-server, RPC offloads to jarvis GPU)
+- `LLAMA_SERVER_BASE` — `http://192.168.50.108:8081` (coordinator llama-server, RPC offloads to worker GPU)
 - `SEARXNG_BASE` — `http://localhost:8888`
 - `PERPLEXITY_THRESHOLD` — `15.0`
-- `EMBED_URL` — `http://192.168.50.210:11434/api/embeddings` (Ollama on jarvis)
+- `EMBED_URL` — `http://192.168.50.210:11434/api/embeddings` (Ollama on worker)
 - `VERSION` — current version string
 
 ### External Services
 
 | Service | Required | Port |
 |---------|----------|------|
-| **llama-server** (ultron) | Yes | 8081 + RPC :50052 (jarvis GPU) |
+| **llama-server** (coordinator) | Yes | 8081 + RPC :50052 (worker GPU) |
 | **SearXNG** | No | 8888 |
 | **wttr.in** | No | weather shortcut |
 | **rocm-smi** | No | AMD GPU stats |
-| **Qdrant** (ultron) | No | 6333 — RAG vector search |
-| **Ollama** (jarvis) | No | 11434 — embeddings only |
+| **Qdrant** (coordinator) | No | 6333 — RAG vector search |
+| **Ollama** (worker) | No | 11434 — embeddings only |
 
 ### Database
 
@@ -86,4 +86,4 @@ All streaming endpoints yield `data: {json}\n\n`. Key event shapes:
 
 ### Deployment
 
-Runs as systemd service under user `jarvischat`, working directory `/opt/jarvischat`. Logs via syslog (`journalctl -u jarvischat`). Version bumps via git tag + commit, deployed via `git pull && systemctl restart jarvischat`.
+Runs as systemd service under user `caic`, working directory `/opt/caic`. Logs via syslog (`journalctl -u caic`). Version bumps via git tag + commit, deployed via `git pull && systemctl restart caic`.

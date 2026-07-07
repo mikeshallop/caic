@@ -14,8 +14,8 @@ from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
 
 
 def make_client(tmp_path: Path) -> TestClient:
-    os.environ["JARVISCHAT_ADMIN_PIN"] = "1234"
-    db.DB_PATH = tmp_path / "jarvischat-rag-mgmt.db"
+    os.environ["CAIC_ADMIN_PIN"] = "1234"
+    db.DB_PATH = tmp_path / "caic-rag-mgmt.db"
     SESSIONS.clear()
     PIN_ATTEMPTS.clear()
     RATE_EVENTS.clear()
@@ -54,7 +54,7 @@ class FakeAsyncClient:
         pass
 
     async def get(self, url, **kw):
-        if "/collections/jarvis_rag" in url:
+        if "/collections/caic_rag" in url:
             return FakeResponse(200, {"result": {"vectors_count": 123}})
         return FakeResponse(200)
 

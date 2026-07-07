@@ -14,7 +14,7 @@ from search import query_searxng, format_search_results
 from routers.chat import parse_llama_stream_chunk
 from security import read_json_body, log_incident, BODY_LIMIT_CHAT_BYTES
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 router = APIRouter()
 
 

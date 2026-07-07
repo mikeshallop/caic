@@ -1,5 +1,5 @@
 """
-JarvisChat - Database layer.
+cAIc - Database layer.
 Schema init, connection factory, settings helpers, skill state management.
 """
 import logging
@@ -16,10 +16,10 @@ from config import (
     MAX_SKILL_PROMPT_CHARS, ALLOWED_NETWORKS,
 )
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 BASE_DIR = Path(__file__).parent
-DB_PATH = BASE_DIR / "jarvischat.db"
+DB_PATH = BASE_DIR / "caic.db"
 
 
 def get_db():
@@ -190,15 +190,15 @@ def init_db():
     existing_pin_salt = conn.execute("SELECT value FROM settings WHERE key = 'admin_pin_salt'").fetchone()
     if not existing_pin_hash or not existing_pin_salt:
         from config import ALLOW_DEFAULT_PIN
-        configured_pin = os.getenv("JARVISCHAT_ADMIN_PIN", "").strip()
+        configured_pin = os.getenv("CAIC_ADMIN_PIN", "").strip()
         if re.fullmatch(r"\d{4}", configured_pin):
             seed_pin, pin_source = configured_pin, "env"
         elif ALLOW_DEFAULT_PIN:
             seed_pin, pin_source = "1234", "default"
         else:
             raise RuntimeError(
-                "Admin PIN bootstrap blocked: set JARVISCHAT_ADMIN_PIN to a 4-digit PIN "
-                "or set JARVISCHAT_ALLOW_DEFAULT_PIN=true."
+                "Admin PIN bootstrap blocked: set CAIC_ADMIN_PIN to a 4-digit PIN "
+                "or set CAIC_ALLOW_DEFAULT_PIN=true."
             )
         salt_hex, pin_hash_hex = hash_pin(seed_pin)
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("admin_pin_hash", pin_hash_hex))

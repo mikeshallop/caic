@@ -1,5 +1,5 @@
 """
-JarvisChat - RAG pipeline: Qdrant vector search + system prompt assembly.
+cAIc - RAG pipeline: Qdrant vector search + system prompt assembly.
 """
 import asyncio
 import logging
@@ -11,7 +11,7 @@ from db import get_db, get_setting, list_skills_with_state, format_active_skills
 from memory import search_memories
 from config import MAX_SKILL_PROMPT_CHARS, QDRANT_URL, RAG_COLLECTION
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 EMBED_URL = "http://192.168.50.210:11434"
 EMBED_MODEL = "mxbai-embed-large"

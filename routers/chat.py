@@ -18,7 +18,7 @@ from search import (calculate_perplexity, is_uncertain, is_refusal,
 from security import read_json_body, log_incident, BODY_LIMIT_CHAT_BYTES
 from config import MAX_CHAT_MESSAGE_CHARS
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 router = APIRouter()
 
 

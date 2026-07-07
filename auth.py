@@ -1,5 +1,5 @@
 """
-JarvisChat - Auth: session management, PIN verification, middleware, auth routes.
+cAIc - Auth: session management, PIN verification, middleware, auth routes.
 """
 import hashlib
 import hmac
@@ -21,7 +21,7 @@ from security import (
     read_json_body, hash_pin, customer_error_envelope, log_incident,
 )
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 router = APIRouter()
 
 

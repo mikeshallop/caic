@@ -1,5 +1,5 @@
 """
-JarvisChat — Cluster protocol implementation.
+cAIc — Cluster protocol implementation.
 Maintains node registry, event log, coordinator state, and ping-based health checks.
 """
 import asyncio
@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from amqp import publish, subscribe
 from config import AMQP_EXCHANGE_ADMIN, AMQP_EXCHANGE_SYSTEM
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 CLUSTER_NODES: dict[str, dict] = {}
 CLUSTER_EVENTS: deque = deque(maxlen=1000)

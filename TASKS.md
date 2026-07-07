@@ -1,4 +1,4 @@
-# jarvisChat — OpenCode Prompt Sequence
+# cAIc — OpenCode Prompt Sequence
 # Generated: 2026-07-01
 # Execute sequentially. Run full test suite after each task before proceeding.
 # Test command: ./venv/bin/python -m pytest tests/ -v
@@ -7,13 +7,13 @@
 
 ## ~~TASK 1 — README Cleanup [DONE]~~
 
-Review README.md in the current repo. Remove any node references other than `ultron` (192.168.50.108) and `jarvis` (192.168.50.210). Ensure all references to the project use the exact casing `jarvisChat` — not `Jarvischat`, `JarvisChat`, or `jarvischat`. Do not change any functional content, endpoint documentation, or architecture descriptions — this is a text cleanup only. After editing, verify the file renders cleanly as markdown. Commit with message: `docs: clean up node references and branding consistency`.
+Review README.md in the current repo. Remove any node references other than `coordinator` (192.168.50.108) and `worker` (192.168.50.210). Ensure all references to the project use the exact casing `cAIc` — not `Jarvischat`, `JarvisChat`, or `jarvischat`. Do not change any functional content, endpoint documentation, or architecture descriptions — this is a text cleanup only. After editing, verify the file renders cleanly as markdown. Commit with message: `docs: clean up node references and branding consistency`.
 
 No new tests required for this task.
 
 ---
 
-## ~~TASK 2 — Qwen2.5-Coder llama-server Service on Ultron (Infrastructure) [DONE]~~
+## ~~TASK 2 — Qwen2.5-Coder llama-server Service on Coordinator (Infrastructure) [DONE]~~
 
 **Status: Systemd unit created, verified, and restored.**
 
@@ -24,8 +24,8 @@ This task originally defined creation of `/etc/systemd/system/llama-server-coder
 1. **Task 13** — Phi-4-mini triage (`triage.py`) classifies the query as `general`, `code`, `search`, or `rag`
 2. **Task 13** — `select_node()` picks the best worker node; if the ideal model isn't active, it triggers a swap
 3. **Task 14** — `request_model_swap()` publishes `cmd.swap_model` via AMQP `jc.admin` exchange
-4. **Task 12** — The node agent on jarvis receives the command, stops the current llama-server, starts the correct one, waits for health, and publishes `model_ready`
-5. **Task 14** — ultron receives `model_ready`, updates the cluster registry, and routes the query to the node
+4. **Task 12** — The node agent on worker receives the command, stops the current llama-server, starts the correct one, waits for health, and publishes `model_ready`
+5. **Task 14** — coordinator receives `model_ready`, updates the cluster registry, and routes the query to the node
 
 The swap is async and transparent — the user sees only latency. The UI (Task 15) shows a yellow "swapping" status dot during the transition.
 
@@ -39,7 +39,7 @@ No pytest tests required for this infrastructure task.
 
 ## ~~TASK 3 — Update OpenCode Config to Use Qwen on :8082 [DONE]~~
 
-Update `/home/gramps/.config/opencode/opencode.jsonc` (on this machine, ultron) to point the configured provider at `http://127.0.0.1:8082/v1` instead of `http://127.0.0.1:8081/v1`. The model name in the config should be updated to reflect `qwen2.5-coder-14b` or whatever model ID the llama-server instance at :8082 reports via `/v1/models`. Verify the endpoint is reachable before writing the config change. Do not restart OpenCode — the config change takes effect on next session start.
+Update `/home/gramps/.config/opencode/opencode.jsonc` (on this machine, coordinator) to point the configured provider at `http://127.0.0.1:8082/v1` instead of `http://127.0.0.1:8081/v1`. The model name in the config should be updated to reflect `qwen2.5-coder-14b` or whatever model ID the llama-server instance at :8082 reports via `/v1/models`. Verify the endpoint is reachable before writing the config change. Do not restart OpenCode — the config change takes effect on next session start.
 
 No pytest tests required for this task.
 
@@ -52,7 +52,7 @@ No pytest tests required for this task.
 This task implements the backend half of file/document attachment (TODO #21). The goal is dual-aspect upload: a file can be used as immediate chat context, ingested into the RAG corpus (Qdrant), or both.
 
 **Add to `config.py`:**
-- `UPLOAD_DIR` — path for temporary upload storage, default `/tmp/jarvischat_uploads`
+- `UPLOAD_DIR` — path for temporary upload storage, default `/tmp/caic_uploads`
 - `MAX_UPLOAD_BYTES` — max file size, default 20MB
 - `SUPPORTED_UPLOAD_TYPES` — set of MIME types: `text/plain`, `text/markdown`, `application/pdf`, `application/json`, `text/x-python`, `text/html`
 
@@ -68,7 +68,7 @@ Behavior:
 - Validate MIME type against `SUPPORTED_UPLOAD_TYPES` — return 415 if unsupported
 - For PDF files, extract text using `pypdf` (add to requirements.txt)
 - For all other types, read as UTF-8 text
-- If mode includes `ingest`: chunk the extracted text into 512-token overlapping chunks (128-token overlap), generate embeddings via `EMBED_URL` (http://192.168.50.108:11434/api/embeddings, model mxbai-embed-large), upsert into Qdrant collection `jarvischat` with metadata `{source: filename, upload_date: iso_timestamp, type: "upload"}`
+- If mode includes `ingest`: chunk the extracted text into 512-token overlapping chunks (128-token overlap), generate embeddings via `EMBED_URL` (http://192.168.50.108:11434/api/embeddings, model mxbai-embed-large), upsert into Qdrant collection `caic` with metadata `{source: filename, upload_date: iso_timestamp, type: "upload"}`
 - If mode includes `context`: store the full extracted text in a new SQLite table `upload_context` with columns `(id INTEGER PRIMARY KEY, conversation_id TEXT, filename TEXT, content TEXT, created_at TEXT, expires_at TEXT)`. Context entries expire after 1 hour.
 - Return JSON: `{filename, size_bytes, mode, chunks_ingested (if ingest), context_id (if context), message}`
 
@@ -120,7 +120,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ## ~~TASK 6 — Roadmap I: Terminal Command RAG Hook [DONE]~~
 
-**Status: `POST /api/ingest` with Bearer token auth, `chunk_text()` shared helper, `jc-ingest.sh` script. Committed `1ac21ad` (v0.11.0).**
+**Status: `POST /api/ingest` with Bearer token auth, `chunk_text()` shared helper, `caic-ingest.sh` script. Committed `1ac21ad` (v0.11.0).**
 
 This task implements autonomous RAG ingestion of significant terminal activity (TODO #23).
 
@@ -134,21 +134,21 @@ Implement `POST /api/ingest` (requires Bearer token auth — use same `COMPLETIO
 Behavior:
 - Chunk `content` into 512-token overlapping chunks (128-token overlap) — extract this logic into a shared helper `chunk_text(text, chunk_size=512, overlap=128)` in `rag.py` if not already present
 - Generate embeddings via `EMBED_URL`
-- Upsert into Qdrant collection `jarvischat` with metadata `{source, ingest_date: iso_timestamp, ...metadata}`
+- Upsert into Qdrant collection `caic` with metadata `{source, ingest_date: iso_timestamp, ...metadata}`
 - Return JSON: `{chunks_ingested, source, message}`
 
 **Wire `ingest.router` into `app.py`.**
 
-**Create `/home/gramps/bin/jc-ingest.sh` on jarvis (192.168.50.210)** — this is a shell script, not a Python file, and lives outside the repo. Write it to stdout/document it clearly so gramps can deploy it manually:
+**Create `/usr/local/bin/caic-ingest.sh` on worker (192.168.50.210)** — this is a shell script, not a Python file, and lives outside the repo. Write it to stdout/document it clearly so gramps can deploy it manually:
 
 ```bash
 #!/bin/bash
-# jc-ingest.sh — pipe terminal commands into jarvisChat RAG
+# caic-ingest.sh — pipe terminal commands into cAIc RAG
 # Add to ~/.bashrc: export PROMPT_COMMAND="jc_capture"
 # Function to call after significant commands
 
 JC_URL="http://192.168.50.210:8080/api/ingest"
-JC_TOKEN="${JARVISCHAT_COMPLETIONS_API_KEY}"
+JC_TOKEN="${CAIC_COMPLETIONS_API_KEY}"
 
 jc_capture() {
     local cmd
@@ -215,7 +215,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ## ~~TASK 8 — Roadmap K: RAG Corpus Management [DONE]~~
 
-Qdrant collection `jarvischat` currently grows without bound. Implement score-based eviction with hysteresis, pinned sources, operational stats, and a flush command.
+Qdrant collection `caic` currently grows without bound. Implement score-based eviction with hysteresis, pinned sources, operational stats, and a flush command.
 
 ### Config — add to `config.py`:
 
@@ -242,7 +242,7 @@ Lower score = evicted first. Tiebreak: `last_accessed` ASC (older wins).
 
 ```python
 async def get_collection_count() -> int
-    # GET /collections/jarvischat → return vectors_count
+    # GET /collections/caic → return vectors_count
 
 async def get_collection_stats() -> dict
     # Return {vector_count, max_vectors, high_water, low_water, percent_full, pinned_sources}
@@ -298,7 +298,7 @@ Call `maybe_evict()` after each upsert batch completes in:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/rag/stats` | Operational stats (see `get_rag_operational_stats()`) — admin required |
-| POST | `/api/rag/flush` | Delete ALL points from the Qdrant `jarvischat` collection. Returns `{deleted_count, collection: "jarvischat", status: "flushed"}`. Admin required. |
+| POST | `/api/rag/flush` | Delete ALL points from the Qdrant `caic` collection. Returns `{deleted_count, collection: "caic", status: "flushed"}`. Admin required. |
 
 ### In-memory eviction log:
 
@@ -325,18 +325,18 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## ~~TASK 9 — Roadmap N1: RabbitMQ Install and Service on Ultron (Infrastructure) [DONE]~~
+## ~~TASK 9 — Roadmap N1: RabbitMQ Install and Service on Coordinator (Infrastructure) [DONE]~~
 
-This task runs on ultron (this machine). Install RabbitMQ and verify it is operational.
+This task runs on coordinator (this machine). Install RabbitMQ and verify it is operational.
 
 Run the following steps:
 1. `apt-get update && apt-get install -y rabbitmq-server`
 2. `systemctl enable rabbitmq-server && systemctl start rabbitmq-server`
 3. `systemctl status rabbitmq-server` — verify active/running
 4. Enable the management plugin: `rabbitmq-plugins enable rabbitmq_management`
-5. Create a dedicated jC vhost: `rabbitmqctl add_vhost jarvischat`
-6. Create a dedicated user: `rabbitmqctl add_user jarvischat CHANGEME_PASSWORD` — generate a random 24-char alphanumeric password and record it
-7. Grant permissions: `rabbitmqctl set_permissions -p jarvischat jarvischat ".*" ".*" ".*"`
+5. Create a dedicated jC vhost: `rabbitmqctl add_vhost caic`
+6. Create a dedicated user: `rabbitmqctl add_user caic CHANGEME_PASSWORD` — generate a random 24-char alphanumeric password and record it
+7. Grant permissions: `rabbitmqctl set_permissions -p caic caic ".*" ".*" ".*"`
 8. Verify management UI is reachable: `curl -s -u guest:guest http://localhost:15672/api/overview | python3 -m json.tool`
 9. Delete default guest user: `rabbitmqctl delete_user guest`
 
@@ -344,7 +344,7 @@ Declare the two topic exchanges needed by jC:
 - Exchange name: `jc.admin`, type: `topic`, durable: true
 - Exchange name: `jc.system`, type: `topic`, durable: true
 
-Use `rabbitmqadmin` or `curl` against the management API to declare exchanges. Verify both exchanges appear in: `curl -s -u jarvischat:{password} http://localhost:15672/api/exchanges/jarvischat`
+Use `rabbitmqadmin` or `curl` against the management API to declare exchanges. Verify both exchanges appear in: `curl -s -u caic:{password} http://localhost:15672/api/exchanges/caic`
 
 Write the generated RabbitMQ password to `/home/gramps/.jc_amqp_secret` with mode 600. This will be read by jC as an env var source in subsequent tasks.
 
@@ -354,12 +354,12 @@ No pytest tests required for this infrastructure task.
 
 ## ~~TASK 10 — Roadmap N2: AMQP Connection Layer in jC [DONE]~~
 
-This task adds the core AMQP connection manager to jC. It must connect to RabbitMQ on ultron (localhost from jC's perspective since jC runs on ultron), handle reconnection, and provide a shared channel for all AMQP operations.
+This task adds the core AMQP connection manager to jC. It must connect to RabbitMQ on coordinator (localhost from jC's perspective since jC runs on coordinator), handle reconnection, and provide a shared channel for all AMQP operations.
 
 **Add to `requirements.txt`:** `aio-pika>=9.0.0`
 
 **Add to `config.py`:**
-- `AMQP_URL` — read from env `JARVISCHAT_AMQP_URL`, default `amqp://jarvischat:password@localhost:5672/jarvischat`. The actual password comes from `/home/gramps/.jc_amqp_secret` — read it at startup if the env var is not set.
+- `AMQP_URL` — read from env `CAIC_AMQP_URL`, default `amqp://caic:password@localhost:5672/caic`. The actual password comes from `/home/gramps/.jc_amqp_secret` — read it at startup if the env var is not set.
 - `AMQP_RECONNECT_DELAY` — seconds between reconnect attempts, default 5
 - `AMQP_EXCHANGE_ADMIN` — `jc.admin`
 - `AMQP_EXCHANGE_SYSTEM` — `jc.system`
@@ -423,7 +423,7 @@ Worker presence is assumed from registration onward. No periodic heartbeats — 
 **register** (worker → coordinator):
 ```json
 {
-  "node_name": "jarvis",
+  "node_name": "worker01",
   "node_type": "worker",
   "ip": "192.168.50.210",
   "capabilities": {
@@ -432,12 +432,12 @@ Worker presence is assumed from registration onward. No periodic heartbeats — 
   },
   "active_model": {
     "name": "llama3.1", "version": "latest", "quant": "Q4_K_M",
-    "path": "/home/jarvis/models/llama3.1-latest-Q4_K_M.gguf",
+    "path": "/var/lib/caic/models/llama3.1-latest-Q4_K_M.gguf",
     "port": 8081
   },
   "inventory": [
     {"name": "llama3.1", "version": "latest", "quant": "Q4_K_M",
-     "path": "/home/jarvis/models/llama3.1-latest-Q4_K_M.gguf", "port": 8081}
+     "path": "/var/lib/caic/models/llama3.1-latest-Q4_K_M.gguf", "port": 8081}
   ],
   "status": "active"
 }
@@ -446,7 +446,7 @@ Worker presence is assumed from registration onward. No periodic heartbeats — 
 **deregister** (worker → coordinator):
 ```json
 {
-  "node_name": "jarvis",
+  "node_name": "worker01",
   "reason": "shutdown",
   "timestamp": "2026-07-06T12:00:00Z"
 }
@@ -455,8 +455,8 @@ Worker presence is assumed from registration onward. No periodic heartbeats — 
 **ping** (coordinator → worker):
 ```json
 {
-  "from": "ultron",
-  "node_name": "jarvis",
+  "from": "coordinator",
+  "node_name": "worker01",
   "type": "ping",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
   "timestamp": "2026-07-06T12:00:00Z"
@@ -467,7 +467,7 @@ Worker must respond within 5 seconds or the coordinator considers it absent.
 **pong** (worker → coordinator):
 ```json
 {
-  "node_name": "jarvis",
+  "node_name": "worker01",
   "type": "pong",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
   "status": "active",
@@ -485,8 +485,8 @@ Correlation ID matches the ping so the coordinator can pair request and response
 Coordinator responds on `cluster.coordinator.response`:
 ```json
 {
-  "coordinator_node": "ultron",
-  "cluster_nodes": ["jarvis"],
+  "coordinator_node": "coordinator",
+  "cluster_nodes": ["worker01"],
   "timestamp": "2026-07-06T12:00:00Z"
 }
 ```
@@ -494,7 +494,7 @@ Coordinator responds on `cluster.coordinator.response`:
 **event** (worker → coordinator):
 ```json
 {
-  "node_name": "jarvis",
+  "node_name": "worker01",
   "severity": "info",
   "message": "llama-server started with model llama3.1:latest",
   "details": {"model": "llama3.1:latest", "port": 8081, "pid": 1234},
@@ -667,22 +667,22 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 12 — Roadmap N4: Worker Node Registration Publisher (Jarvis Side)
+## TASK 12 — Roadmap N4: Worker Node Registration Publisher (Worker Side)
 
-This task creates the worker node AMQP client that runs on jarvis (192.168.50.210). It is a standalone Python script — not part of the jC FastAPI app — that runs as a systemd service on jarvis.
+This task creates the worker node AMQP client that runs on worker (192.168.50.210). It is a standalone Python script — not part of the jC FastAPI app — that runs as a systemd service on worker.
 
 **Create `node_agent/agent.py`** in the repo (new directory).
 
 ### 12.1 Config & Inventory Discovery
 
-On start, reads `/etc/jc-node-agent.conf` (INI format):
+On start, reads `/etc/caic-node-agent.conf` (INI format):
 - `node_name` — hostname, default from `socket.gethostname()`
 - `node_ip` — LAN IP, default from socket
 - `node_type` — `"worker"` (fixed)
 - `capabilities` — comma-separated list, e.g. `llm,rag`
-- `amqp_url` — RabbitMQ URL on ultron, e.g. `amqp://jarvischat:password@192.168.50.108:5672/jarvischat`
+- `amqp_url` — RabbitMQ URL on coordinator, e.g. `amqp://caic:password@192.168.50.108:5672/caic`
 - `llama_port` — port llama-server/llama-rpc is listening on, default 8081
-- `models_dir` — path to GGUF model files, default `/home/gramps/models`
+- `models_dir` — path to GGUF model files, default `/var/lib/caic/models`
 - `active_model` — filename of currently active model (without path)
 
 Discovers inventory by globbing `models_dir` for `*.gguf` files and parsing name/version/quant from filename using regex pattern: `{name}-{version}-{quant}.gguf` where quant matches `Q[0-9]+_K_[A-Z]+` or similar standard suffixes.
@@ -692,7 +692,7 @@ Discovers inventory by globbing `models_dir` for `*.gguf` files and parsing name
 Publishes registration to `jc.admin`, routing key `node.{node_name}.register`:
 ```json
 {
-  "node_name": "jarvis",
+  "node_name": "worker01",
   "node_type": "worker",
   "ip": "192.168.50.210",
   "capabilities": ["llm"],
@@ -710,7 +710,7 @@ After admission: listens on `jc.admin`, routing key `node.{node_name}.ping`. On 
 
 ```json
 {
-  "node_name": "jarvis",
+  "node_name": "worker01",
   "type": "pong",
   "correlation_id": "<echoed from ping>",
   "status": "active",
@@ -727,7 +727,7 @@ No periodic heartbeats. Worker sits idle between pings — coordinator only ping
 Listens on `jc.admin`, routing key `node.{node_name}.cmd.swap_model`:
 - Payload: `{model_filename: str}`
 - Stops current llama-server: `systemctl stop llama-server`
-- Updates `/etc/jc-node-agent.conf` active_model field
+- Updates `/etc/caic-node-agent.conf` active_model field
 - Starts llama-server: `systemctl start llama-server` (assumes service reads active_model from conf or ExecStart is updated)
 - Waits for llama-server to be healthy: poll `http://localhost:{llama_port}/v1/models` every 2s, timeout 120s
 - Publishes to `jc.system`, routing key `node.{node_name}.model_ready`:
@@ -740,7 +740,7 @@ Listens on `jc.admin`, routing key `node.{node_name}.cmd.swap_model`:
 
 **Create `node_agent/requirements.txt`:** `aio-pika>=9.0.0`
 
-**Document `/etc/jc-node-agent.conf` format** in a comment block at the top of `agent.py`.
+**Document `/etc/caic-node-agent.conf` format** in a comment block at the top of `agent.py`.
 
 **Write `tests/test_node_agent.py`** covering:
 - Registration payload construction from config + model discovery — assert correct JSON shape
@@ -763,9 +763,9 @@ This task wires the cluster into jC's chat flow. When a query arrives at `/api/c
 
 **Prerequisites:** Tasks 9–12 complete. At least one worker node admitted to cluster.
 
-**Install Phi-4-mini on ultron (infrastructure step):**
-- Download `Phi-4-mini-Instruct-Q4_K_M.gguf` from HuggingFace using `hf download microsoft/Phi-4-mini-instruct --include "*.Q4_K_M.gguf" --local-dir /home/gramps/models`
-- Create `/etc/systemd/system/llama-server-triage.service` — same pattern as existing llama-server service but: port 8083, model path points to Phi-4-mini GGUF, no `--rpc` flag (runs entirely on ultron CPU/iGPU), description `Llama.cpp Server (Phi-4-mini — triage/routing)`
+**Install Phi-4-mini on coordinator (infrastructure step):**
+- Download `Phi-4-mini-Instruct-Q4_K_M.gguf` from HuggingFace using `hf download microsoft/Phi-4-mini-instruct --include "*.Q4_K_M.gguf" --local-dir /var/lib/jc/models`
+- Create `/etc/systemd/system/llama-server-triage.service` — same pattern as existing llama-server service but: port 8083, model path points to Phi-4-mini GGUF, no `--rpc` flag (runs entirely on coordinator CPU/iGPU), description `Llama.cpp Server (Phi-4-mini — triage/routing)`
 - `systemctl daemon-reload && systemctl enable llama-server-triage && systemctl start llama-server-triage`
 - Verify: `curl -s http://localhost:8083/v1/models`
 
@@ -820,7 +820,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ## TASK 14 — Roadmap N6: Model Swap Command Flow
 
-This task implements the ultron-side logic for requesting a model swap on a worker node when the ideal model is not currently active.
+This task implements the coordinator-side logic for requesting a model swap on a worker node when the ideal model is not currently active.
 
 **Add to `cluster.py`:**
 
@@ -925,10 +925,10 @@ Commit all changes introduced across Tasks 9–15 with message: `feat: Roadmap N
 
 ### B3 — Docker distribution (v1.0 gate)
 
-**Goal:** Ship jarvisChat as a `docker compose` stack so a single command stands up everything.
+**Goal:** Ship cAIc as a `docker compose` stack so a single command stands up everything.
 
 **Services to containerize:**
-- jarvisChat (FastAPI app + SQLite)
+- cAIc (FastAPI app + SQLite)
 - SearXNG
 - Qdrant
 - RabbitMQ
@@ -936,7 +936,7 @@ Commit all changes introduced across Tasks 9–15 with message: `feat: Roadmap N
 - Ollama (embeddings)
 
 **Also needed:**
-- `Dockerfile` for the jarvisChat app itself
+- `Dockerfile` for the cAIc app itself
 - `docker-compose.yml` with all services, volumes, networks, env vars
 - Setup wizard script (run on first boot) that:
   - Probes CPU vs GPU (reuses `hardware.py`)

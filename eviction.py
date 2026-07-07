@@ -1,5 +1,5 @@
 """
-JarvisChat — Score-based RAG vector eviction with hysteresis.
+cAIc — Score-based RAG vector eviction with hysteresis.
 """
 import asyncio
 import logging
@@ -14,7 +14,7 @@ from config import (
     RAG_ACCESS_WEIGHT, RAG_AGE_WEIGHT,
 )
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 eviction_lock = asyncio.Lock()
 EVICTION_LOG: list[dict] = []

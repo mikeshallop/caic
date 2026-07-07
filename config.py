@@ -1,5 +1,5 @@
 """
-JarvisChat - Central configuration.
+cAIc - Central configuration.
 All constants, environment variables, limits, and skill registry live here.
 """
 import os
@@ -7,23 +7,23 @@ import re
 import ipaddress
 import logging
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 VERSION = "v0.14.0"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://192.168.50.108:8081")
 SEARXNG_BASE = "http://localhost:8888"
 DEFAULT_MODEL = "llama3.1:latest"
-COMPLETIONS_API_KEY = os.environ.get("JARVISCHAT_COMPLETIONS_API_KEY", "jc-sk-" + os.urandom(24).hex())
+COMPLETIONS_API_KEY = os.environ.get("CAIC_COMPLETIONS_API_KEY", "caic-sk-" + os.urandom(24).hex())
 
 # --- AMQP ---
 AMQP_RECONNECT_DELAY = 5
 AMQP_EXCHANGE_ADMIN = "jc.admin"
 AMQP_EXCHANGE_SYSTEM = "jc.system"
-AMQP_SECRET_PATH = "/home/gramps/.jc_amqp_secret"
+AMQP_SECRET_PATH = "/home/gramps/.caic_amqp_secret"
 
 def get_amqp_url() -> str:
-    url = os.environ.get("JARVISCHAT_AMQP_URL")
+    url = os.environ.get("CAIC_AMQP_URL")
     if url:
         return url
     try:
@@ -31,22 +31,22 @@ def get_amqp_url() -> str:
             pw = f.read().strip()
     except (FileNotFoundError, OSError):
         pw = "password"
-    return f"amqp://jarvischat:{pw}@localhost:5672/jarvischat"
+    return f"amqp://caic:{pw}@localhost:5672/caic"
 
 # --- Auth ---
 SESSION_TIMEOUT_SECONDS = 90
 MAX_PIN_ATTEMPTS = 5
 PIN_LOCKOUT_SECONDS = 300
-ALLOW_DEFAULT_PIN = os.getenv("JARVISCHAT_ALLOW_DEFAULT_PIN", "false").lower() == "true"
+ALLOW_DEFAULT_PIN = os.getenv("CAIC_ALLOW_DEFAULT_PIN", "false").lower() == "true"
 TRUSTED_ORIGINS = {
     origin.strip().rstrip("/")
-    for origin in os.getenv("JARVISCHAT_TRUSTED_ORIGINS", "").split(",")
+    for origin in os.getenv("CAIC_TRUSTED_ORIGINS", "").split(",")
     if origin.strip()
 }
 DEFAULT_ALLOWED_CIDRS = "127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-ALLOWED_CIDRS_RAW = os.getenv("JARVISCHAT_ALLOWED_CIDRS", DEFAULT_ALLOWED_CIDRS)
+ALLOWED_CIDRS_RAW = os.getenv("CAIC_ALLOWED_CIDRS", DEFAULT_ALLOWED_CIDRS)
 TRUST_X_FORWARDED_FOR = (
-    os.getenv("JARVISCHAT_TRUST_X_FORWARDED_FOR", "false").lower() == "true"
+    os.getenv("CAIC_TRUST_X_FORWARDED_FOR", "false").lower() == "true"
 )
 
 # --- Rate limits ---
@@ -64,11 +64,11 @@ BODY_LIMIT_CHAT_BYTES = 128 * 1024
 BODY_LIMIT_PROFILE_BYTES = 256 * 1024
 
 # --- Upload ---
-UPLOAD_DIR = "/tmp/jarvischat_uploads"
+UPLOAD_DIR = "/tmp/caic_uploads"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 SUPPORTED_UPLOAD_TYPES = {"text/plain", "text/markdown", "application/pdf", "application/json", "text/x-python", "text/html", "image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp"}
 QDRANT_URL = "http://192.168.50.108:6333"
-RAG_COLLECTION = "jarvis_rag"
+RAG_COLLECTION = "caic_rag"
 UPLOAD_CONTEXT_EXPIRY_HOURS = 1
 BODY_LIMIT_UPLOAD_BYTES = MAX_UPLOAD_BYTES
 

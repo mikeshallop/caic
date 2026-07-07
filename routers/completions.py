@@ -20,7 +20,7 @@ from db import get_db
 from rag import build_system_prompt
 from routers.chat import parse_llama_stream_chunk
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 router = APIRouter()
 
 

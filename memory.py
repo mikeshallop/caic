@@ -1,5 +1,5 @@
 """
-JarvisChat - FTS5 memory system.
+cAIc - FTS5 memory system.
 CRUD, search, remember/forget command processing, topic detection.
 """
 import logging
@@ -10,7 +10,7 @@ from typing import Optional
 from db import get_db
 from config import MAX_MEMORY_FACT_CHARS
 
-log = logging.getLogger("jarvischat")
+log = logging.getLogger("caic")
 
 REMEMBER_PATTERNS = [
     (r"remember that (.+)", "explicit"),

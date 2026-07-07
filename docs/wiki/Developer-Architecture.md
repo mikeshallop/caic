@@ -1,10 +1,10 @@
 # Developer Architecture Guide
 
-This document explains how JarvisChat is structured, the external services it integrates with, and the key architectural changes made during development.
+This document explains how cAIc is structured, the external services it integrates with, and the key architectural changes made during development.
 
 ## 1. System Overview
 
-JarvisChat is a single-process FastAPI service with a Jinja2 frontend and SQLite persistence. It connects to an external llama-server for inference and optionally to SearXNG (web search), Qdrant (vector search), and RabbitMQ (AMQP cluster messaging).
+cAIc is a single-process FastAPI service with a Jinja2 frontend and SQLite persistence. It connects to an external llama-server for inference and optionally to SearXNG (web search), Qdrant (vector search), and RabbitMQ (AMQP cluster messaging).
 
 ### 1.1 Module Layout
 
@@ -29,11 +29,11 @@ Refactored from single-file (`app.py`) into modules under project root:
 
 | Service | Required | Port | Purpose |
 |---------|----------|------|---------|
-| llama-server (ultron) | Yes | 8081 | LLM inference (OpenAI-compat), RPC offload to jarvis:50052 |
+| llama-server (coordinator) | Yes | 8081 | LLM inference (OpenAI-compat), RPC offload to worker:50052 |
 | SearXNG | No | 8888 | Privacy-respecting web search |
-| Qdrant (ultron) | No | 6333 | Vector database for RAG |
-| Ollama (jarvis) | No | 11434 | Embeddings for RAG chunk vectors |
-| RabbitMQ (ultron) | No | 5672 | AMQP broker for cluster messaging |
+| Qdrant (coordinator) | No | 6333 | Vector database for RAG |
+| Ollama (worker) | No | 11434 | Embeddings for RAG chunk vectors |
+| RabbitMQ (coordinator) | No | 5672 | AMQP broker for cluster messaging |
 | rocm-smi | No | — | AMD GPU stats (host-level) |
 
 ### 1.3 Config Discovery
@@ -42,11 +42,11 @@ Key base URLs are configured via environment variables with sensible defaults:
 
 | Variable | Default | Service |
 |----------|---------|---------|
-| `LLAMA_SERVER_BASE` | `http://192.168.50.108:8081` | llama-server on ultron |
+| `LLAMA_SERVER_BASE` | `http://192.168.50.108:8081` | llama-server on coordinator |
 | `OLLAMA_BASE` | `http://localhost:11434` | Legacy — all inference goes through LLAMA_SERVER_BASE |
 | `SEARXNG_BASE` | `http://localhost:8888` | SearXNG |
-| `QDRANT_URL` | `http://192.168.50.108:6333` | Qdrant on ultron |
-| `JARVISCHAT_AMQP_URL` | `amqp://jarvischat:password@localhost:5672/jarvischat` | RabbitMQ |
+| `QDRANT_URL` | `http://192.168.50.108:6333` | Qdrant on coordinator |
+| `CAIC_AMQP_URL` | `amqp://caic:password@localhost:5672/caic` | RabbitMQ |
 
 ## 2. Request/Response Architecture
 
@@ -73,7 +73,7 @@ Key base URLs are configured via environment variables with sensible defaults:
 1. Bearer token auth (same key as completions API)
 2. Chunk text via shared `chunk_text()` helper (512-token chunks, 128-token overlap)
 3. Embed via Ollama `/api/embeddings`
-4. Upsert to Qdrant collection `jarvis_rag`
+4. Upsert to Qdrant collection `caic_rag`
 5. Trigger `maybe_evict()` if collection exceeds high-water mark
 
 ### 2.4 Upload Pipeline (`/api/upload`)
@@ -116,7 +116,7 @@ Design notes:
 
 - Admin PIN hashed with PBKDF2-HMAC-SHA256 + salt
 - Failed PIN attempts tracked per client IP (max 5, 300s lockout)
-- Default PIN allowed only if JARVISCHAT_ALLOW_DEFAULT_PIN=true
+- Default PIN allowed only if CAIC_ALLOW_DEFAULT_PIN=true
 
 ### 4.3 Browser and API Abuse Controls
 
@@ -141,8 +141,8 @@ Design notes:
 
 ### 5.1 Vector Search
 
-- Qdrant collection `jarvis_rag` on ultron:6333
-- Embeddings via Ollama on jarvis:11434 (`/api/embeddings`)
+- Qdrant collection `caic_rag` on coordinator:6333
+- Embeddings via Ollama on worker:11434 (`/api/embeddings`)
 - Shared `chunk_text(text, chunk_size=512, overlap=128)` helper in rag.py
 - Upload and ingest endpoints share the same chunk+embed+upsert pipeline
 
@@ -178,7 +178,7 @@ Eviction module at `eviction.py` (re-exported through `rag.py` for backward comp
 
 ### 6.1 Design Model: Broker-Mediated
 
-JarvisChat uses a **broker-mediated** cluster design. This is the preferred architecture and is reflected in all implementation decisions below.
+cAIc uses a **broker-mediated** cluster design. This is the preferred architecture and is reflected in all implementation decisions below.
 
 **How it works:**
 - A single RabbitMQ broker (or clustered set of brokers) acts as the central nervous system
@@ -208,7 +208,7 @@ Every physical machine in the cluster is classified by which services it runs. T
 | **RabbitMQ server** | Required — hosts the broker | Not required — connects as AMQP client only |
 | **RabbitMQ client (aio-pika)** | Required — publishes commands, consumes events | Required — consumes commands, publishes events |
 | **FastAPI / uvicorn** | Required | Not needed |
-| **SQLite** | Required — owns jarvischat.db | Not needed |
+| **SQLite** | Required — owns caic.db | Not needed |
 | **Qdrant** | Optional (recommended) — vector DB for RAG | Not needed |
 | **SearXNG** | Optional — web search | Not needed |
 | **llama-server** | Optional — can share its own GPU for inference | Required — this is why the worker exists |
@@ -220,7 +220,7 @@ Every physical machine in the cluster is classified by which services it runs. T
 ```
 Coordinator                          Worker(s)
 ┌────────────────────┐               ┌─────────────────────────┐
-│  jarvisChat        │               │  llama-server           │
+│  cAIc              │               │  llama-server           │
 │  (FastAPI + SQLite)│               │  (inference)            │
 │  RabbitMQ server   │◄──AMQP───────│  aio-pika (agent)       │
 │  SearXNG (opt)     │    persistent │  ROCm / CUDA (if GPU)   │
@@ -243,7 +243,7 @@ Every RabbitMQ server belongs to a cluster. Currently only the coordinator runs 
 
 Pending implementation (Tasks 10–15):
 - `amqp.py` — aio-pika connection manager with reconnect
-- Node agent on jarvis — registration, heartbeat, command consumer
+- Node agent on worker — registration, heartbeat, command consumer
 - `triage.py` — Phi-4-mini query classification (general/code/search/rag)
 - Dynamic model swap via llama-server RPC
 
