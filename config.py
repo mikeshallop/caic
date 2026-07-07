@@ -9,7 +9,7 @@ import logging
 
 log = logging.getLogger("jarvischat")
 
-VERSION = "v0.13.0"
+VERSION = "v0.14.0"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://192.168.50.108:8081")
 SEARXNG_BASE = "http://localhost:8888"

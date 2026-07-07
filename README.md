@@ -1,4 +1,4 @@
-# jarvisChat v0.13.0
+# jarvisChat v0.14.0
 
 You have a garage full of retired office PCs, a GPU that was mid-range when Obama was president, and a burning desire to chat with a language model without renting some billionaire's server farm. Congratulations — you've found your people.
 
@@ -10,11 +10,14 @@ At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
-## What's New in v0.13.0
+## What's New in v0.14.0
 
-### RabbitMQ / AMQP Cluster Nervous System (Roadmap N)
-- **Task 9** — RabbitMQ installed on ultron with `jc.admin` and `jc.system` topic exchanges, jarvischat vhost, dedicated user, management plugin enabled
-- **Task 10** — `amqp.py` connection manager with aio-pika: persistent connection, auto-reconnect, fire-and-forget publish, lazy secret loading from `/home/gramps/.jc_amqp_secret`
+### Cluster Protocol — `GET /api/cluster`, 9 AMQP Message Types (Roadmap N Task 11)
+- **`cluster.py`** — Node registry (`CLUSTER_NODES`), bounded event log (`CLUSTER_EVENTS`, max 1000), coordinator auto-promotion
+- **Ping/pong health** — No passive heartbeats; coordinator pings workers on-demand before routing work. 5s timeout → auto-deregister
+- **9 message types** — register, deregister, admitted, rejected, ping, pong (on `jc.admin`); event, coord_query, coord_response (on `jc.system`)
+- **`amqp.py` subscribe()** — Exclusive anonymous queues bound to routing keys; `_rebind_subscriptions()` recreates them on reconnect
+- **`routers/cluster.py`** — `GET /api/cluster` returns nodes, coordinator, event log
 
 ### RAG Corpus Management — `POST /api/rag/flush`, `GET /api/rag/stats` (v0.13.0)
 - **Score-based eviction** with hysteresis (80% high-water, 20% low-water) and pinned sources
@@ -62,8 +65,9 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
 ```
 /opt/jarvischat/
-├── amqp.py             # aio-pika AMQP connection manager
+├── amqp.py             # aio-pika AMQP connection manager + subscribe/rebind
 ├── app.py              # FastAPI app entry point
+├── cluster.py          # Cluster protocol: node registry, event log, ping/pong
 ├── config.py           # Constants, env vars, limits, skill registry
 ├── db.py               # SQLite schema, connection factory
 ├── auth.py             # PIN-based guest/admin sessions, auth routes
@@ -85,12 +89,13 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 │   ├── settings.py     # Runtime settings
 │   ├── skills.py       # Skills management
 │   ├── upload.py       # File attachment endpoints
-│   └── ingest.py       # Terminal RAG ingest
+│   ├── ingest.py       # Terminal RAG ingest
+│   └── cluster.py      # Cluster status endpoint
 ├── static/
 │   └── logo.png        # Logo image (optional)
 ├── templates/
 │   └── index.html      # Frontend
-└── tests/              # 135 pytest tests
+└── tests/              # 148 pytest tests
 ```
 
 ## Requirements
@@ -217,6 +222,12 @@ Memories are auto-categorized:
 | GET | `/api/memories/search?q=term` | Search memories |
 | GET | `/api/memories/stats` | Get counts by topic |
 
+### Cluster
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/cluster` | Cluster status (nodes, coordinator, event log) |
+
 ### RAG Management
 
 | Method | Endpoint | Description |
@@ -298,7 +309,7 @@ Settings are stored in the `settings` table and include:
 python3 -m pytest tests/ -v
 ```
 
-All 135 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
+All 148 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
 
 ## License
 
