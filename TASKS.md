@@ -671,47 +671,72 @@ Run full test suite. All existing tests must continue to pass.
 
 This task creates the worker node AMQP client that runs on jarvis (192.168.50.210). It is a standalone Python script — not part of the jC FastAPI app — that runs as a systemd service on jarvis.
 
-**Create `node_agent/agent.py`** in the repo (new directory):
+**Create `node_agent/agent.py`** in the repo (new directory).
 
-The agent:
-1. On start: reads local config from `/etc/jc-node-agent.conf` (INI format):
-   - `node_name` — hostname, default from `socket.gethostname()`
-   - `node_ip` — LAN IP, default from socket
-   - `amqp_url` — RabbitMQ URL on ultron, e.g. `amqp://jarvischat:password@192.168.50.108:5672/jarvischat`
-   - `llama_port` — port llama-server/llama-rpc is listening on, default 8081
-   - `models_dir` — path to GGUF model files, default `/home/gramps/models`
-   - `active_model` — filename of currently active model (without path)
+### 12.1 Config & Inventory Discovery
 
-2. Discovers inventory by globbing `models_dir` for `*.gguf` files and parsing name/version/quant from filename using regex pattern: `{name}-{version}-{quant}.gguf` where quant matches `Q[0-9]+_K_[A-Z]+` or similar standard suffixes.
+On start, reads `/etc/jc-node-agent.conf` (INI format):
+- `node_name` — hostname, default from `socket.gethostname()`
+- `node_ip` — LAN IP, default from socket
+- `node_type` — `"worker"` (fixed)
+- `capabilities` — comma-separated list, e.g. `llm,rag`
+- `amqp_url` — RabbitMQ URL on ultron, e.g. `amqp://jarvischat:password@192.168.50.108:5672/jarvischat`
+- `llama_port` — port llama-server/llama-rpc is listening on, default 8081
+- `models_dir` — path to GGUF model files, default `/home/gramps/models`
+- `active_model` — filename of currently active model (without path)
 
-3. Publishes registration request to `jc.admin` exchange, routing key `node.{node_name}.register`:
-   ```json
-   {
-     "node_name": "jarvis",
-     "ip": "192.168.50.210",
-     "active_model": {"name": "...", "version": "...", "quant": "...", "path": "...", "port": 8081},
-     "inventory": [...]
-   }
-   ```
+Discovers inventory by globbing `models_dir` for `*.gguf` files and parsing name/version/quant from filename using regex pattern: `{name}-{version}-{quant}.gguf` where quant matches `Q[0-9]+_K_[A-Z]+` or similar standard suffixes.
 
-4. Listens for response on `jc.admin`, routing key `node.{node_name}.admitted` or `node.{node_name}.rejected`. Logs result. If rejected, exits with error.
+### 12.2 Registration
 
-5. After admission: publishes heartbeat every 30 seconds to `jc.system`, routing key `node.{node_name}.heartbeat`:
-   ```json
-   {"node_name": "...", "ip": "...", "active_model": "...", "timestamp": "..."}
-   ```
+Publishes registration to `jc.admin`, routing key `node.{node_name}.register`:
+```json
+{
+  "node_name": "jarvis",
+  "node_type": "worker",
+  "ip": "192.168.50.210",
+  "capabilities": ["llm"],
+  "active_model": {"name": "...", "version": "...", "quant": "...", "path": "...", "port": 8081}
+}
+```
 
-6. Listens on `jc.admin`, routing key `node.{node_name}.cmd.swap_model`:
-   - Payload: `{model_filename: str}`
-   - Stops current llama-server: `systemctl stop llama-server`
-   - Updates `/etc/jc-node-agent.conf` active_model field
-   - Starts llama-server: `systemctl start llama-server` (assumes service reads active_model from conf or ExecStart is updated)
-   - Waits for llama-server to be healthy: poll `http://localhost:{llama_port}/v1/models` every 2s, timeout 120s
-   - Publishes to `jc.system`, routing key `node.{node_name}.model_ready`:
-     ```json
-     {"node_name": "...", "active_model": "...", "port": ..., "timestamp": "..."}
-     ```
-   - If startup fails within timeout: publishes `node.{node_name}.model_failed` with error detail
+### 12.3 Admission Response
+
+Listens on `node.{node_name}.admitted` and `node.{node_name}.rejected` (both `jc.admin`). Logs result. If rejected, exits with error.
+
+### 12.4 Ping Listener
+
+After admission: listens on `jc.admin`, routing key `node.{node_name}.ping`. On receipt, responds immediately (within 1 second) with a pong on `jc.admin`, routing key `node.{node_name}.pong`:
+
+```json
+{
+  "node_name": "jarvis",
+  "type": "pong",
+  "correlation_id": "<echoed from ping>",
+  "status": "active",
+  "active_model": {"name": "...", "version": "...", "quant": "...", "path": "...", "port": 8081},
+  "load": {"cpu_pct": 45, "ram_pct": 62, "vram_pct": 38},
+  "timestamp": "<utc>"
+}
+```
+
+No periodic heartbeats. Worker sits idle between pings — coordinator only pings when it needs to route work.
+
+### 12.5 Model Swap Command Handler
+
+Listens on `jc.admin`, routing key `node.{node_name}.cmd.swap_model`:
+- Payload: `{model_filename: str}`
+- Stops current llama-server: `systemctl stop llama-server`
+- Updates `/etc/jc-node-agent.conf` active_model field
+- Starts llama-server: `systemctl start llama-server` (assumes service reads active_model from conf or ExecStart is updated)
+- Waits for llama-server to be healthy: poll `http://localhost:{llama_port}/v1/models` every 2s, timeout 120s
+- Publishes to `jc.system`, routing key `node.{node_name}.model_ready`:
+  ```json
+  {"node_name": "...", "active_model": "...", "port": ..., "timestamp": "..."}
+  ```
+- If startup fails within timeout: publishes `node.{node_name}.model_failed` with error detail
+
+### 12.6 Files & Tests
 
 **Create `node_agent/requirements.txt`:** `aio-pika>=9.0.0`
 
@@ -721,7 +746,8 @@ The agent:
 - Registration payload construction from config + model discovery — assert correct JSON shape
 - Model swap command handler: success path — assert systemctl calls made, model_ready published
 - Model swap command handler: timeout path — assert model_failed published
-- Heartbeat: assert published every interval (mock asyncio.sleep)
+- Ping handler: on ping, publishes pong with correct correlation_id
+- Agent starts idle after admission, no heartbeat timer
 
 Mock all aio-pika, subprocess, and httpx calls.
 
