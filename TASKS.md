@@ -396,7 +396,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ## TASK 11 — Roadmap N3: Cluster Protocol & Registration Handler (Coordinator Side)
 
-jC on the coordinator must listen for seven message types across `jc.admin` and `jc.system`, maintain the cluster registry, and expose an application-level event log.
+jC on the coordinator must listen for nine message types across `jc.admin` and `jc.system`, maintain the cluster registry, and expose an application-level event log.
 
 ### 11.1 AMQP Protocol — Message Catalog
 
@@ -427,10 +427,13 @@ All payloads are JSON, published as persistent messages.
     "cpu_cores": 8, "ram_gb": 16
   },
   "active_model": {
-    "name": "llama3.1:latest", "quant": "Q4_K_M", "port": 8081
+    "name": "llama3.1", "version": "latest", "quant": "Q4_K_M",
+    "path": "/home/jarvis/models/llama3.1-latest-Q4_K_M.gguf",
+    "port": 8081
   },
   "inventory": [
-    {"name": "llama3.1:latest", "quant": "Q4_K_M", "port": 8081}
+    {"name": "llama3.1", "version": "latest", "quant": "Q4_K_M",
+     "path": "/home/jarvis/models/llama3.1-latest-Q4_K_M.gguf", "port": 8081}
   ],
   "status": "active"
 }
@@ -483,14 +486,13 @@ Coordinator responds on `cluster.coordinator.response`:
 ```json
 {
   "node_name": "jarvis",
-  "event_type": "model_loaded",
   "severity": "info",
   "message": "llama-server started with model llama3.1:latest",
   "details": {"model": "llama3.1:latest", "port": 8081, "pid": 1234},
   "timestamp": "2026-07-06T12:00:00Z"
 }
 ```
-Severity levels: `info`, `warn`, `error`, `critical`. Coordinator stores in in-memory event log.
+Severity levels: `info`, `warn`, `error`, `critical`. The coordinator assigns `category: "application"` based on the exchange (jc.system). No `event_type` field — the category is determined by the channel, not the payload.
 
 ### 11.3 Design — Status Transitions Drive the Event Log
 
@@ -542,11 +544,15 @@ The two exchanges are not an organizational convenience. They enforce a **data i
 **Add to `amqp.py`:**
 
 ```python
+_SUBSCRIPTIONS: list[tuple[str, str, Callable]]  # (exchange, routing_key, callback)
+
 async def subscribe(exchange, routing_key, callback) -> None
-    # Declare a queue, bind to exchange/routing_key, consume with callback
+    # Append to _SUBSCRIPTIONS list
+    # Declare a unique queue per subscription (name: f"jc.{exchange}.{sanitized_routing_key}")
+    # Bind queue to exchange/routing_key, consume with callback
 ```
 
-If `subscribe` is called before AMQP is connected, queue the subscription and apply it after `connect()` succeeds. The auto-reconnect path must re-bind all active subscriptions.
+Each subscription gets its own queue so multiple subscribers on different routing keys all receive messages. On reconnect: drain old consumers, iterate `_SUBSCRIPTIONS`, re-declare and re-bind each one. The `connect()` function must call `_rebind_subscriptions()` after exchanges are declared.
 
 **Create `cluster.py`** in the project root:
 
@@ -595,12 +601,14 @@ async def handle_deregistration(message) -> None
 
 async def handle_heartbeat(message) -> None
     # Parse: node_name, status, active_model, load, timestamp
+    # Handles BOTH passive heartbeats and on-demand hb_query responses — same handler
     # If node in CLUSTER_NODES: update last_seen, status, active_model
     # If node unknown: log warning, do NOT auto-admit
 
 async def handle_event(message) -> None
-    # Parse: node_name, event_type, severity, message, details, timestamp
-    # Append to CLUSTER_EVENTS (pop left if > 1000)
+    # Parse: node_name, severity, message, details, timestamp
+    # Assigns category="application" (incoming on jc.system)
+    # Append EventRecord to CLUSTER_EVENTS (pop left if > 1000)
 
 async def handle_coordinator_query(message) -> None
     # Respond on jc.system cluster.coordinator.response
