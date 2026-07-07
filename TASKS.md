@@ -394,9 +394,11 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 11 — Roadmap N3: Cluster Protocol & Registration Handler (Coordinator Side)
+## ~~TASK 11 — Roadmap N3: Cluster Protocol & Registration Handler (Coordinator Side) [DONE]~~
 
-jC on the coordinator must listen for eight message types across `jc.admin` and `jc.system`, maintain the cluster registry, and expose an application-level event log.
+**Status: Implemented and pushed (899988c).** `amqp.py` subscribe/rebind, `cluster.py` with CLUSTER_NODES/CLUSTER_EVENTS/CLUSTER_COORDINATOR and 6 handlers, `routers/cluster.py` (`GET /api/cluster`), 13 tests. No passive heartbeats — ping/pong on-demand before work routing. 148 tests pass.
+
+jC on the coordinator must listen for nine message types across `jc.admin` and `jc.system`, maintain the cluster registry, and expose an application-level event log.
 
 ### 11.1 AMQP Protocol — Message Catalog
 
@@ -408,12 +410,13 @@ All payloads are JSON, published as persistent messages.
 | Worker → Coordinator | `jc.admin` | `node.{name}.deregister` | deregister | Worker signals graceful departure |
 | Coordinator → Worker | `jc.admin` | `node.{name}.admitted` | admitted | Coordinator grants admission |
 | Coordinator → Worker | `jc.admin` | `node.{name}.rejected` | rejected | Coordinator denies admission (with reason) |
-| Any → Coordinator | `jc.system` | `node.{name}.heartbeat` | heartbeat | Periodic health report (~30s interval) |
-| Any → Coordinator | `jc.system` | `node.{name}.event` | event | Application-level syslog event |
+| Coordinator → Worker | `jc.admin` | `node.{name}.ping` | ping | Coordinator checks if worker is alive (sent before routing work) |
+| Worker → Coordinator | `jc.admin` | `node.{name}.pong` | pong | Worker confirms aliveness |
+| Worker → Coordinator | `jc.system` | `node.{name}.event` | event | Application-level syslog event |
 | Any → All | `jc.system` | `cluster.coordinator.query` | coord_query | Anyone asks "who is coordinator?" |
 | Coordinator → All | `jc.system` | `cluster.coordinator.response` | coord_response | Coordinator announces itself |
 
-Worker health is binary (present or absent), determined by heartbeat freshness. No on-demand health polling (`hb_query`) — the coordinator detects absence via `last_seen` staleness and publishes `deregister` on the worker's behalf.
+Worker presence is assumed from registration onward. No periodic heartbeats — a worker can sit idle for days without chatter. When the coordinator needs to route work to a worker, it pings first; if the worker doesn't pong within timeout, the coordinator deregisters it and moves to the next node.
 
 ### 11.2 Payload Schemas
 
@@ -449,16 +452,31 @@ Worker health is binary (present or absent), determined by heartbeat freshness. 
 }
 ```
 
-**heartbeat** (worker → coordinator):
+**ping** (coordinator → worker):
+```json
+{
+  "from": "ultron",
+  "node_name": "jarvis",
+  "type": "ping",
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-07-06T12:00:00Z"
+}
+```
+Worker must respond within 5 seconds or the coordinator considers it absent.
+
+**pong** (worker → coordinator):
 ```json
 {
   "node_name": "jarvis",
+  "type": "pong",
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
   "status": "active",
-  "active_model": {"name": "llama3.1:latest", "port": 8081},
+  "active_model": {"name": "llama3.1", "port": 8081},
   "load": {"cpu_pct": 45, "ram_pct": 62, "vram_pct": 38},
   "timestamp": "2026-07-06T12:00:00Z"
 }
 ```
+Correlation ID matches the ping so the coordinator can pair request and response.
 
 **coord_query** (any → `cluster.coordinator.query`):
 ```json
@@ -494,7 +512,7 @@ All admin-level events are *derived* from `register()` and `deregister()` as sid
 ```
 UNKNOWN ──register()──▶ active ──deregister()──▶ (removed)
                            │
-           90s no heartbeat│(coordinator publishes
+               ping timeout│(coordinator publishes
                            │ deregister on its behalf)
                            ▼
                       (removed)
@@ -590,12 +608,12 @@ async def handle_deregistration(message) -> None
     # _push_event("cluster", "info", node_name, f"departed — {reason}")
     # Remove node from CLUSTER_NODES, log it
 
-async def handle_heartbeat(message) -> None
-    # Parse: node_name, status, active_model, load, timestamp
+async def handle_pong(message) -> None
+    # Parse: node_name, correlation_id, status, active_model, load, timestamp
+    # Match correlation_id to outstanding ping
     # If node in CLUSTER_NODES: update last_seen, status, active_model
+    # Signal the waiting caller that the node is alive
     # If node unknown: log warning, do NOT auto-admit
-    # If last_seen is more than 90s stale: coordinator publishes
-    #   deregister on node's behalf (node considered absent)
 
 async def handle_event(message) -> None
     # Parse: node_name, severity, message, details, timestamp
@@ -617,7 +635,7 @@ def get_cluster_state() -> dict
 |----------|-------------|---------|
 | `jc.admin` | `node.*.register` | `handle_registration` |
 | `jc.admin` | `node.*.deregister` | `handle_deregistration` |
-| `jc.system` | `node.*.heartbeat` | `handle_heartbeat` |
+| `jc.admin` | `node.*.pong` | `handle_pong` |
 | `jc.system` | `node.*.event` | `handle_event` |
 | `jc.system` | `cluster.coordinator.query` | `handle_coordinator_query` |
 
@@ -639,8 +657,8 @@ Mock all aio-pika calls. Do not require live RabbitMQ.
 | 3 | Duplicate node name rejected | `rejected` message with reason=`duplicate_node_name`, `cluster` event logged |
 | 4 | Malformed payload rejected | `rejected` message with reason=`malformed_payload` |
 | 5 | Graceful deregistration | Node removed, `cluster` event logged. If coordinator: CLUSTER_COORDINATOR cleared |
-| 6 | Heartbeat updates last_seen | Known node's last_seen advances |
-| 7 | Heartbeat from unknown node | Warning logged, node NOT added |
+| 6 | Pong from known node | last_seen updated, load/status refreshed |
+| 7 | Pong from unknown node | Warning logged, node NOT added |
 | 8 | Event stored in log | Event appended to CLUSTER_EVENTS; at 1001 entries the oldest is popped |
 | 9 | Coordinator query produces response | Response published with coordinator name and node list |
 | 10 | GET /api/cluster shape | Response contains `nodes`, `coordinator`, `events` keys |
