@@ -26,6 +26,51 @@ log = logging.getLogger("jarvischat")
 _connection = None
 _channel = None
 _lock = asyncio.Lock()
+_subscriptions = []  # list of (exchange, routing_keys, handler_fn)
+
+
+async def subscribe(exchange: str, routing_keys: list[str], handler) -> None:
+    """Subscribe to routing keys on an exchange.
+
+    Creates an exclusive anonymous queue bound to the given routing keys.
+    Handler receives (exchange, routing_key, payload_dict).
+    On reconnect: _rebind_subscriptions recreates all subscriptions.
+    """
+    if not HAS_AIO_PIKA:
+        log.warning("aio-pika not installed — cannot subscribe")
+        return
+    ch = await get_channel()
+    if ch is None:
+        log.error("cannot subscribe — no AMQP channel")
+        return
+    try:
+        queue = await ch.declare_queue("", exclusive=True)
+        ex = await ch.get_exchange(exchange)
+        for rk in routing_keys:
+            await queue.bind(ex, rk)
+
+        async def _dispatch(msg: aio_pika.IncomingMessage):
+            async with msg.process():
+                try:
+                    payload = json.loads(msg.body.decode())
+                    await handler(exchange, msg.routing_key, payload)
+                except Exception:
+                    log.exception("AMQP handler error for %s %s", exchange, msg.routing_key)
+
+        await queue.consume(_dispatch)
+        _subscriptions.append((exchange, routing_keys, handler))
+    except Exception:
+        log.exception("AMQP subscribe failed for %s %s", exchange, routing_keys)
+
+
+async def _rebind_subscriptions() -> None:
+    """Re-create all subscriptions after reconnect."""
+    subs = list(_subscriptions)
+    _subscriptions.clear()
+    for exchange, routing_keys, handler in subs:
+        await subscribe(exchange, routing_keys, handler)
+    if subs:
+        log.info("AMQP subscriptions rebound")
 
 
 async def connect() -> None:
@@ -48,6 +93,7 @@ async def connect() -> None:
             await ch.declare_exchange(ex, ExchangeType.TOPIC, durable=True)
         _connection = conn
         _channel = ch
+        await _rebind_subscriptions()
         log.info("AMQP connected, exchanges declared")
 
 

@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from amqp import connect as amqp_connect, disconnect as amqp_disconnect
+from cluster import start_cluster_subscriptions
 from config import VERSION, RATE_WINDOW_SECONDS, UPLOAD_DIR, RAG_MAX_VECTORS, RAG_EVICTION_HIGH_WATER, RAG_EVICTION_LOW_WATER, RAG_EVICTION_BATCH
 from db import init_db
 from hardware import assess_hardware
@@ -39,6 +40,7 @@ import routers.upload as upload
 import routers.ingest as ingest
 import routers.hardware as hardware
 import routers.rag_admin as rag_admin
+import routers.cluster as cluster_router
 
 # --- Logging ---
 log = logging.getLogger("jarvischat")
@@ -59,6 +61,7 @@ async def lifespan(app: FastAPI):
     log.info(f"Memory system: {get_memory_count()} memories loaded")
     await assess_hardware()
     await amqp_connect()
+    await start_cluster_subscriptions()
 
     if RAG_MAX_VECTORS > 0:
         if RAG_EVICTION_HIGH_WATER <= RAG_EVICTION_LOW_WATER:
@@ -162,7 +165,7 @@ for router_module in [
     auth_router, conversations.router, memories.router, models.router,
     presets.router, profile.router, settings.router, skills.router,
     chat.router, search_route.router, completions.router, upload.router, ingest.router, hardware.router,
-    rag_admin.router,
+    rag_admin.router, cluster_router.router,
 ]:
     app.include_router(router_module)
 
