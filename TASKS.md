@@ -517,15 +517,14 @@ NONE ──register(node_type=coordinator)──▶ CLUSTER_COORDINATOR set
                                          CLUSTER_COORDINATOR cleared
 ```
 
-**Event categories — three broad buckets, no granular types:**
+**Event categories — two buckets, no granular types:**
 
 | Category | When | severity |
 |----------|------|----------|
-| `cluster` | Node registration, deregistration, admission, rejection, coordinator election/loss, node offline | `info` / `warn` |
-| `model` | Model swap requested, completed, failed | `info` / `error` |
+| `cluster` | Node lifecycle, coordinator changes, model swaps, node offline — everything on `jc.admin` | `info` / `warn` / `error` |
 | `application` | Worker syslog events (incoming on `jc.system` `node.*.event`) | `info` / `warn` / `error` / `critical` |
 
-Every `_push_event()` call uses one of these three categories. The `message` field carries the human-readable detail — no need for 15 event type strings. The reporting tool filters by category + severity.
+Every `_push_event()` call uses one of these two categories. The `message` field carries the human-readable detail — no need for event type strings. The reporting tool filters by category + severity.
 
 **Channel split:**
 
@@ -561,7 +560,7 @@ CLUSTER_COORDINATOR: str | None      # node_name of active coordinator
 #   registered_at, last_seen
 
 # EventRecord:
-#   category: str     ("cluster" | "model" | "application")
+#   category: str     ("cluster" | "application")
 #   severity: str     ("info" | "warn" | "error" | "critical")
 #   node_name: str
 #   message: str
