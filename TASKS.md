@@ -394,9 +394,105 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 11 — Roadmap N3: Worker Node Registration Handler (Ultron/jC Side)
+## TASK 11 — Roadmap N3: Cluster Protocol & Registration Handler (Coordinator Side)
 
-jC on ultron must listen on the `jc.admin` exchange for worker node registration requests and respond with admission or rejection.
+jC on the coordinator must listen for seven message types across `jc.admin` and `jc.system`, maintain the cluster registry, and expose an application-level event log.
+
+### 11.1 AMQP Protocol — Message Catalog
+
+All payloads are JSON, published as persistent messages.
+
+| Direction | Exchange | Routing Key | Message Type | Description |
+|-----------|----------|-------------|-------------|-------------|
+| Worker → Coordinator | `jc.admin` | `node.{name}.register` | register | Worker requests admission |
+| Worker → Coordinator | `jc.admin` | `node.{name}.deregister` | deregister | Worker signals graceful departure |
+| Coordinator → Worker | `jc.admin` | `node.{name}.admitted` | admitted | Coordinator grants admission |
+| Coordinator → Worker | `jc.admin` | `node.{name}.rejected` | rejected | Coordinator denies admission (with reason) |
+| Coordinator → Worker | `jc.admin` | `node.{name}.hb_query` | hb_query | Coordinator requests on-demand heartbeat |
+| Any → Coordinator | `jc.system` | `node.{name}.heartbeat` | heartbeat | Periodic or on-demand health report |
+| Any → Coordinator | `jc.system` | `node.{name}.event` | event | Application-level syslog event |
+| Any → All | `jc.system` | `cluster.coordinator.query` | coord_query | Anyone asks "who is coordinator?" |
+| Coordinator → All | `jc.system` | `cluster.coordinator.response` | coord_response | Coordinator announces itself |
+
+### 11.2 Payload Schemas
+
+**register** (worker → coordinator):
+```json
+{
+  "node_name": "jarvis",
+  "node_type": "worker",
+  "ip": "192.168.50.210",
+  "capabilities": {
+    "gpu": true, "gpu_type": "amd", "vram_mb": 8192,
+    "cpu_cores": 8, "ram_gb": 16
+  },
+  "active_model": {
+    "name": "llama3.1:latest", "quant": "Q4_K_M", "port": 8081
+  },
+  "inventory": [
+    {"name": "llama3.1:latest", "quant": "Q4_K_M", "port": 8081}
+  ],
+  "status": "active"
+}
+```
+
+**deregister** (worker → coordinator):
+```json
+{
+  "node_name": "jarvis",
+  "reason": "shutdown",
+  "timestamp": "2026-07-06T12:00:00Z"
+}
+```
+
+**hb_query** (coordinator → worker):
+```json
+{
+  "from": "ultron",
+  "type": "hb_query",
+  "timestamp": "2026-07-06T12:00:00Z"
+}
+```
+Worker responds by publishing a heartbeat on `jc.system` with routing key `node.{name}.heartbeat`.
+
+**heartbeat** (worker → coordinator):
+```json
+{
+  "node_name": "jarvis",
+  "status": "active",
+  "active_model": {"name": "llama3.1:latest", "port": 8081},
+  "load": {"cpu_pct": 45, "ram_pct": 62, "vram_pct": 38},
+  "timestamp": "2026-07-06T12:00:00Z"
+}
+```
+
+**coord_query** (any → `cluster.coordinator.query`):
+```json
+{"type": "coord_query", "timestamp": "2026-07-06T12:00:00Z"}
+```
+Coordinator responds on `cluster.coordinator.response`:
+```json
+{
+  "coordinator_node": "ultron",
+  "cluster_nodes": ["jarvis"],
+  "timestamp": "2026-07-06T12:00:00Z"
+}
+```
+
+**event** (worker → coordinator):
+```json
+{
+  "node_name": "jarvis",
+  "event_type": "model_loaded",
+  "severity": "info",
+  "message": "llama-server started with model llama3.1:latest",
+  "details": {"model": "llama3.1:latest", "port": 8081, "pid": 1234},
+  "timestamp": "2026-07-06T12:00:00Z"
+}
+```
+Severity levels: `info`, `warn`, `error`, `critical`. Coordinator stores in in-memory event log.
+
+### 11.3 Implementation
 
 **Add to `amqp.py`:**
 
@@ -405,67 +501,87 @@ async def subscribe(exchange, routing_key, callback) -> None
     # Declare a queue, bind to exchange/routing_key, consume with callback
 ```
 
+If `subscribe` is called before AMQP is connected, queue the subscription and apply it after `connect()` succeeds. The auto-reconnect path must re-bind all active subscriptions.
+
 **Create `cluster.py`** in the project root:
 
 ```python
-# In-memory cluster registry (survives only while jC is running)
-# Structure:
-# CLUSTER_NODES: dict[str, NodeRecord]
-#
-# NodeRecord fields:
-#   node_name: str
-#   ip: str
-#   active_model: ModelRecord
-#   inventory: list[ModelRecord]
-#   registered_at: str  (ISO timestamp)
-#   last_seen: str      (ISO timestamp)
-#
-# ModelRecord fields:
-#   name: str
-#   version: str
-#   quant: str
-#   path: str
-#   port: int           (llama-server port this model is served on)
+# In-memory cluster registry + event log
+# Survives only while jC is running (not persisted)
 
-async def handle_registration(message: aio_pika.IncomingMessage) -> None
-    # Parse JSON payload from message body
-    # Validate required fields: node_name, ip, active_model, inventory
-    # Reject if node_name already in CLUSTER_NODES with status="active":
-    #   publish to jc.admin routing_key=f"node.{node_name}.rejected"
-    #   payload: {node_name, reason: "duplicate_node_name", timestamp}
-    # Reject if payload malformed:
-    #   publish to jc.admin routing_key=f"node.{node_name}.rejected"
-    #   payload: {node_name, reason: "malformed_payload", timestamp}
-    # Otherwise admit:
-    #   add to CLUSTER_NODES
-    #   publish to jc.admin routing_key=f"node.{node_name}.admitted"
-    #   payload: {node_name, timestamp, amqp_url: AMQP_URL}
+CLUSTER_NODES: dict[str, NodeRecord]
+CLUSTER_EVENTS: deque[EventRecord]   # bounded at 1000 entries
+CLUSTER_COORDINATOR: str | None      # node_name of active coordinator
+
+# NodeRecord fields as above + {node_type, status, registered_at, last_seen}
+
+async def handle_registration(message) -> None
+    # Parse payload, validate required fields
+    # Reject if node_name duplicate + status="active"
+    # If CLUSTER_COORDINATOR is None AND node_type="coordinator":
+    #   set CLUSTER_COORDINATOR = node_name
+    #   publish cluster.coordinator.response on jc.system
+    # Otherwise admit normally
+    # Published admitted/rejected on jc.admin
 
 async def handle_deregistration(message) -> None
     # Remove node from CLUSTER_NODES, log it
+    # If this node was the coordinator, clear CLUSTER_COORDINATOR
+
+async def handle_heartbeat(message) -> None
+    # Update CLUSTER_NODES[node_name].last_seen
+    # If node was previously unknown, log warning but do NOT auto-admit
+
+async def handle_event(message) -> None
+    # Append EventRecord to CLUSTER_EVENTS (pop left if > 1000)
+
+async def handle_coordinator_query(message) -> None
+    # Respond on jc.system cluster.coordinator.response
+    # Payload: {coordinator_node, cluster_nodes, timestamp}
+
+async def handle_hb_query_response(message) -> None
+    # For now: log receipt. Future: trigger inference re-routing if node unresponsive.
 
 def get_cluster_state() -> dict
-    # Return serializable snapshot of CLUSTER_NODES
+    # Return serializable snapshot: nodes, coordinator, events (last 50)
+
+def get_cluster_events(severity: str | None = None, limit: int = 50) -> list
+    # Return events, optionally filtered by severity
 ```
 
-**Subscribe to registration messages in `app.py` lifespan** after AMQP connects:
-- `jc.admin` exchange, routing key `node.*.register` → `handle_registration`
-- `jc.admin` exchange, routing key `node.*.deregister` → `handle_deregistration`
+**Subscribe in `app.py` lifespan** after AMQP connects:
 
-**Add `GET /api/cluster`** to a new `routers/cluster.py`:
-- Returns `get_cluster_state()` as JSON
-- No auth required (read-only status endpoint)
+| Exchange | Routing Key | Handler |
+|----------|-------------|---------|
+| `jc.admin` | `node.*.register` | `handle_registration` |
+| `jc.admin` | `node.*.deregister` | `handle_deregistration` |
+| `jc.system` | `node.*.heartbeat` | `handle_heartbeat` |
+| `jc.system` | `node.*.event` | `handle_event` |
+| `jc.system` | `cluster.coordinator.query` | `handle_coordinator_query` |
 
-**Wire `cluster.router` into `app.py`.**
+### 11.4 API — `GET /api/cluster`
 
-**Write `tests/test_cluster.py`** covering:
-- Valid registration payload — assert node admitted, added to CLUSTER_NODES, admitted message published
-- Duplicate node name — assert rejected, reason=`duplicate_node_name`
-- Malformed payload (missing required field) — assert rejected, reason=`malformed_payload`
-- Deregistration — assert node removed from CLUSTER_NODES
-- `GET /api/cluster` — assert returns current node list
+New router `routers/cluster.py`:
+- `GET /api/cluster` — returns full cluster state: nodes list, active coordinator, last 50 events. No auth required.
+
+Wire `cluster.router` into `app.py`.
+
+### 11.5 Tests — `tests/test_cluster.py`
 
 Mock all aio-pika calls. Do not require live RabbitMQ.
+
+| Test | What it asserts |
+|------|-----------------|
+| Valid registration | Node admitted, CLUSTER_NODES updated, admitted message published |
+| Duplicate node name | Rejected with reason=`duplicate_node_name` |
+| Malformed payload | Rejected with reason=`malformed_payload` |
+| Deregistration | Node removed from CLUSTER_NODES |
+| Heartbeat updates last_seen | Known node's last_seen updated |
+| Heartbeat unknown node | Warnings logged, node not added |
+| Event stored in log | Event appended to CLUSTER_EVENTS, overflows at 1000 |
+| Coordinator query | Response published with coordinator and node list |
+| GET /api/cluster shape | Returns nodes, coordinator, events fields |
+| Coordinator auto-promotion | First coordinator to register becomes CLUSTER_COORDINATOR |
 
 Run full test suite. All existing tests must continue to pass.
 
