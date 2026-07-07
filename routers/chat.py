@@ -8,10 +8,11 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from config import DEFAULT_MODEL, LLAMA_SERVER_BASE
+from config import DEFAULT_MODEL
 from db import get_db, get_upload_context
 from memory import process_remember_command
 from rag import build_system_prompt
+from triage import get_inference_url as _get_inference_url
 from search import (calculate_perplexity, is_uncertain, is_refusal,
                     clean_hedging, format_search_results, format_direct_answer,
                     extract_search_query, query_searxng)
@@ -122,6 +123,7 @@ async def chat(request: Request):
         full_response = []
         all_logprobs = []
         tokens_per_sec = 0.0
+        inference_base = await _get_inference_url(user_message)
 
         if remember_response:
             yield f"data: {json.dumps({'token': remember_response + chr(10) + chr(10), 'conversation_id': conv_id})}\n\n"
@@ -129,7 +131,7 @@ async def chat(request: Request):
         async with httpx.AsyncClient() as client:
             try:
                 async with client.stream(
-                    "POST", f"{LLAMA_SERVER_BASE}/v1/chat/completions",
+                    "POST", f"{inference_base}/v1/chat/completions",
                     json=upstream_payload,
                     timeout=httpx.Timeout(300.0, connect=10.0),
                 ) as resp:
@@ -168,7 +170,7 @@ async def chat(request: Request):
 
                         augmented_response = []
                         async with client.stream(
-                            "POST", f"{LLAMA_SERVER_BASE}/v1/chat/completions",
+                            "POST", f"{inference_base}/v1/chat/completions",
                             json={"model": model, "messages": augmented_messages, "stream": True},
                             timeout=httpx.Timeout(300.0, connect=10.0),
                         ) as resp2:

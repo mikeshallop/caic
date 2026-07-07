@@ -9,7 +9,14 @@ import app
 import config
 import db
 import routers.chat
+import triage
 from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
+
+
+def _mock_triage_url(monkeypatch, url: str = config.LLAMA_SERVER_BASE):
+    async def fake_url(query: str) -> str:
+        return url
+    monkeypatch.setattr(routers.chat, "_get_inference_url", fake_url)
 
 
 def make_client(tmp_path: Path) -> TestClient:
@@ -53,6 +60,7 @@ def _stream_json_lines(events: list[dict]) -> list[str]:
 
 
 def test_chat_stream_emits_tokens_and_done(tmp_path: Path, monkeypatch):
+    _mock_triage_url(monkeypatch)
     with make_client(tmp_path) as client:
         sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()[
             "session_id"
@@ -88,6 +96,7 @@ def test_chat_stream_emits_tokens_and_done(tmp_path: Path, monkeypatch):
 
 
 def test_chat_auto_search_trigger_emits_search_events(tmp_path: Path, monkeypatch):
+    _mock_triage_url(monkeypatch)
     with make_client(tmp_path) as client:
         sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()[
             "session_id"
@@ -142,6 +151,7 @@ def test_chat_auto_search_trigger_emits_search_events(tmp_path: Path, monkeypatc
 
 
 def test_chat_with_upload_context_id_injects_document(tmp_path: Path, monkeypatch):
+    _mock_triage_url(monkeypatch)
     captured_payload = {}
 
     def stream_stub(self, method, url, json=None, timeout=None):
@@ -173,6 +183,7 @@ def test_chat_with_upload_context_id_injects_document(tmp_path: Path, monkeypatc
 
 
 def test_chat_with_expired_upload_context_id_silent(tmp_path: Path, monkeypatch):
+    _mock_triage_url(monkeypatch)
     captured_payload = {}
 
     def stream_stub(self, method, url, json=None, timeout=None):
@@ -205,6 +216,7 @@ def test_chat_with_expired_upload_context_id_silent(tmp_path: Path, monkeypatch)
 
 
 def test_memory_command_paths_remember_and_forget(tmp_path: Path, monkeypatch):
+    _mock_triage_url(monkeypatch)
     with make_client(tmp_path) as client:
         sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()[
             "session_id"

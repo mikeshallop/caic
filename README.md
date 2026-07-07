@@ -95,7 +95,11 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 │   └── logo.png        # Logo image (optional)
 ├── templates/
 │   └── index.html      # Frontend
-└── tests/              # 148 pytest tests
+├── node_agent/
+│   ├── agent.py        # Standalone worker agent (AMQP client)
+│   └── requirements.txt
+├── triage.py           # Query classification + cluster node selection
+└── tests/              # 168 pytest tests
 ```
 
 ## Requirements
@@ -309,7 +313,7 @@ Settings are stored in the `settings` table and include:
 python3 -m pytest tests/ -v
 ```
 
-All 148 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
+All 168 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
 
 ## License
 

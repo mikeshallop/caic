@@ -64,6 +64,7 @@ async def handle_registration(exchange: str, routing_key: str, payload: dict) ->
         "name": node_name,
         "type": node_type,
         "status": "active",
+        "ip": payload.get("ip"),
         "capabilities": payload.get("capabilities", []),
         "active_model": payload.get("active_model"),
         "load": payload.get("load"),

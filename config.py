@@ -9,7 +9,7 @@ import logging
 
 log = logging.getLogger("caic")
 
-VERSION = "v0.14.0"
+VERSION = "v0.15.0"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://192.168.50.108:8081")
 SEARXNG_BASE = "http://localhost:8888"
@@ -101,6 +101,11 @@ ALLOWED_SETTINGS_KEYS = {
     "memory_enabled",
     "skills_enabled",
 }
+
+# --- Triage / query routing ---
+TRIAGE_BASE = os.environ.get("CAIC_TRIAGE_BASE", "http://127.0.0.1:8083/v1")
+TRIAGE_TIMEOUT = 10
+FALLBACK_TO_DEFAULT = True
 
 # --- Perplexity ---
 PERPLEXITY_THRESHOLD = 15.0

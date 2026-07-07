@@ -667,7 +667,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 12 — Roadmap N4: Worker Node Registration Publisher (Worker Side)
+## ~~TASK 12 — Roadmap N4: Worker Node Registration Publisher (Worker Side) [DONE]~~
 
 This task creates the worker node AMQP client that runs on worker (192.168.50.210). It is a standalone Python script — not part of the jC FastAPI app — that runs as a systemd service on worker.
 
@@ -757,7 +757,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 13 — Roadmap N5: Query Routing via AMQP + Phi-4-mini Triage
+## ~~TASK 13 — Roadmap N5: Query Routing via AMQP + Phi-4-mini Triage [DONE]~~
 
 This task wires the cluster into jC's chat flow. When a query arrives at `/api/chat`, instead of always routing to the hardcoded `LLAMA_SERVER_BASE`, jC now routes to the best available cluster node based on query context.
 

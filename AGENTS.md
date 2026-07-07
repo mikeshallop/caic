@@ -28,6 +28,8 @@ Every router has a dedicated test file:
 | `test_profile.py` | `routers/profile.py` — get, update, default, length validation |
 | `test_search_route.py` | `routers/search_route.py` — explicit search flow, no results, errors |
 | `test_search_url_sanitization.py` | `search.py` URL sanitizer |
+| `test_node_agent.py` | `node_agent/agent.py` — registration, ping/pong, model swap |
+| `test_triage.py` | `triage.py` — classify_query, select_node, get_inference_url |
 | `test_settings_allowlist.py` | `routers/settings.py` — allowlisted key enforcement |
 | `test_skills_framework.py` | `routers/skills.py` — list, toggle, unknown skill, prompt injection |
 | `test_ip_allowlist.py` | IP allowlist helper + middleware |
@@ -55,6 +57,8 @@ Refactored from single-file (`app.py`) into modules under project root:
 | `search.py` | SearXNG integration, perplexity scoring, refusal detection |
 | `rag.py` | Qdrant vector search + system prompt assembly + chunk_text() helper |
 | `gpu.py` | AMD GPU stats via `rocm-smi` |
+| `triage.py` | Phi-4-mini-based query classification + cluster node selection |
+| `node_agent/` | Standalone worker agent — AMQP client for registration, ping/pong, model swap |
 | `routers/` | One module per endpoint group (chat, search, skills, completions, upload, ingest) |
 
 ### Entrypoint / API keys
@@ -66,7 +70,7 @@ Refactored from single-file (`app.py`) into modules under project root:
 
 ### Key flows
 
-1. **`/api/chat`** → `process_remember_command()` intercepts "remember that..." / "forget about..." first → optional `upload_context_id` fetches document text from SQLite → `build_system_prompt()` (profile + FTS5 memory + Qdrant RAG + preset + skills + uploaded doc) → stream from llama-server with `logprobs: true` → if perplexity > 15.0 OR `REFUSAL_PATTERNS` match, re-query with SearXNG results
+1. **`/api/chat`** → `process_remember_command()` intercepts "remember that..." / "forget about..." first → optional `upload_context_id` fetches document text from SQLite → `build_system_prompt()` (profile + FTS5 memory + Qdrant RAG + preset + skills + uploaded doc) → triage classifies query (general/code/search/rag) → `select_node()` picks best worker → stream from chosen node with `logprobs: true` → if perplexity > 15.0 OR `REFUSAL_PATTERNS` match, re-query with SearXNG results
 2. **`/api/search`** → bypasses perplexity/refusal, queries SearXNG directly → summarizes via llama-server
 3. **`/v1/chat/completions`** → OpenAI-compatible for Continue.dev/IDE integration; FIM requests proxied without persistence
 4. **`/api/upload`** → multipart file upload, PDF/text extraction, `mode=(context|ingest|both)`, stores SQLite context (1hr expiry) + Qdrant upsert
@@ -97,6 +101,7 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 | Service | Required | Port |
 |---------|----------|------|
 | llama-server (coordinator) | Yes | 8081 + RPC :50052 (worker GPU) |
+| Phi-4-mini (triage) | No | 8083 |
 | SearXNG | No | 8888 |
 | wttr.in | No | weather shortcut |
 | rocm-smi | No | AMD GPU stats |
