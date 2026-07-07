@@ -396,7 +396,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ## TASK 11 — Roadmap N3: Cluster Protocol & Registration Handler (Coordinator Side)
 
-jC on the coordinator must listen for nine message types across `jc.admin` and `jc.system`, maintain the cluster registry, and expose an application-level event log.
+jC on the coordinator must listen for eight message types across `jc.admin` and `jc.system`, maintain the cluster registry, and expose an application-level event log.
 
 ### 11.1 AMQP Protocol — Message Catalog
 
@@ -408,11 +408,12 @@ All payloads are JSON, published as persistent messages.
 | Worker → Coordinator | `jc.admin` | `node.{name}.deregister` | deregister | Worker signals graceful departure |
 | Coordinator → Worker | `jc.admin` | `node.{name}.admitted` | admitted | Coordinator grants admission |
 | Coordinator → Worker | `jc.admin` | `node.{name}.rejected` | rejected | Coordinator denies admission (with reason) |
-| Coordinator → Worker | `jc.admin` | `node.{name}.hb_query` | hb_query | Coordinator requests on-demand heartbeat |
-| Any → Coordinator | `jc.system` | `node.{name}.heartbeat` | heartbeat | Periodic or on-demand health report |
+| Any → Coordinator | `jc.system` | `node.{name}.heartbeat` | heartbeat | Periodic health report (~30s interval) |
 | Any → Coordinator | `jc.system` | `node.{name}.event` | event | Application-level syslog event |
 | Any → All | `jc.system` | `cluster.coordinator.query` | coord_query | Anyone asks "who is coordinator?" |
 | Coordinator → All | `jc.system` | `cluster.coordinator.response` | coord_response | Coordinator announces itself |
+
+Worker health is binary (present or absent), determined by heartbeat freshness. No on-demand health polling (`hb_query`) — the coordinator detects absence via `last_seen` staleness and publishes `deregister` on the worker's behalf.
 
 ### 11.2 Payload Schemas
 
@@ -447,16 +448,6 @@ All payloads are JSON, published as persistent messages.
   "timestamp": "2026-07-06T12:00:00Z"
 }
 ```
-
-**hb_query** (coordinator → worker):
-```json
-{
-  "from": "ultron",
-  "type": "hb_query",
-  "timestamp": "2026-07-06T12:00:00Z"
-}
-```
-Worker responds by publishing a heartbeat on `jc.system` with routing key `node.{name}.heartbeat`.
 
 **heartbeat** (worker → coordinator):
 ```json
@@ -503,7 +494,7 @@ All admin-level events are *derived* from `register()` and `deregister()` as sid
 ```
 UNKNOWN ──register()──▶ active ──deregister()──▶ (removed)
                            │
-                  hb timeout│(coordinator publishes
+           90s no heartbeat│(coordinator publishes
                            │ deregister on its behalf)
                            ▼
                       (removed)
@@ -601,9 +592,10 @@ async def handle_deregistration(message) -> None
 
 async def handle_heartbeat(message) -> None
     # Parse: node_name, status, active_model, load, timestamp
-    # Handles BOTH passive heartbeats and on-demand hb_query responses — same handler
     # If node in CLUSTER_NODES: update last_seen, status, active_model
     # If node unknown: log warning, do NOT auto-admit
+    # If last_seen is more than 90s stale: coordinator publishes
+    #   deregister on node's behalf (node considered absent)
 
 async def handle_event(message) -> None
     # Parse: node_name, severity, message, details, timestamp
