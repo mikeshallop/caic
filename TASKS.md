@@ -504,7 +504,7 @@ UNKNOWN ──register()──▶ active ──deregister()──▶ (removed)
                   hb timeout│(coordinator publishes
                            │ deregister on its behalf)
                            ▼
-                      (removed, event: node_offline)
+                      (removed)
 ```
 
 **Coordinator status lifecycle:**
@@ -517,19 +517,15 @@ NONE ──register(node_type=coordinator)──▶ CLUSTER_COORDINATOR set
                                          CLUSTER_COORDINATOR cleared
 ```
 
-**What each handler emits to CLUSTER_EVENTS:**
+**Event categories — three broad buckets, no granular types:**
 
-| Handler | Event Records Emitted (local) |
-|---------|------------------------------|
-| `handle_registration` — first coordinator | `{event_type: "coordinator_elected", severity: "info", node_name, timestamp}` |
-| `handle_registration` — node admitted | `{event_type: "node_admitted", severity: "info", node_name, node_type, timestamp}` |
-| `handle_registration` — node rejected | `{event_type: "node_rejected", severity: "warn", node_name, reason, timestamp}` |
-| `handle_deregistration` — coordinator lost | `{event_type: "coordinator_lost", severity: "warn", node_name, timestamp}` |
-| `handle_deregistration` — node departed | `{event_type: "node_departed", severity: "info", node_name, reason, timestamp}` |
-| Heartbeat timeout (new future handler, not AMQP) | `{event_type: "node_offline", severity: "error", node_name, reason: "heartbeat_timeout", timestamp}` |
-| `request_model_swap()` — Task 14 | `{event_type: "model_swap_started", severity: "info", node_name, from_model, to_model}` |
-| `handle_model_ready()` — Task 14 | `{event_type: "model_swap_completed", severity: "info", node_name, model}` |
-| `handle_model_failed()` — Task 14 | `{event_type: "model_swap_failed", severity: "error", node_name, model, error}` |
+| Category | When | severity |
+|----------|------|----------|
+| `cluster` | Node registration, deregistration, admission, rejection, coordinator election/loss, node offline | `info` / `warn` |
+| `model` | Model swap requested, completed, failed | `info` / `error` |
+| `application` | Worker syslog events (incoming on `jc.system` `node.*.event`) | `info` / `warn` / `error` / `critical` |
+
+Every `_push_event()` call uses one of these three categories. The `message` field carries the human-readable detail — no need for 15 event type strings. The reporting tool filters by category + severity.
 
 **Channel split:**
 
@@ -565,9 +561,14 @@ CLUSTER_COORDINATOR: str | None      # node_name of active coordinator
 #   registered_at, last_seen
 
 # EventRecord:
-#   event_type, severity, node_name, message, details: dict, timestamp
+#   category: str     ("cluster" | "model" | "application")
+#   severity: str     ("info" | "warn" | "error" | "critical")
+#   node_name: str
+#   message: str
+#   details: dict | None
+#   timestamp: str
 
-def _push_event(event_type, severity, node_name, message, details=None) -> None
+def _push_event(category, severity, node_name, message, details=None) -> None
     # Append EventRecord to CLUSTER_EVENTS, pop left if > 1000
 
 async def handle_registration(message) -> None
@@ -575,18 +576,18 @@ async def handle_registration(message) -> None
     # Reject if node_name duplicate and CLUSTER_NODES[node_name].status == "active"
     # If CLUSTER_COORDINATOR is None AND node_type == "coordinator":
     #   set CLUSTER_COORDINATOR = node_name
-    #   _push_event("coordinator_elected", "info", node_name, ...)
+    #   _push_event("cluster", "info", node_name, "elected coordinator")
     #   publish cluster.coordinator.response on jc.system {coordinator_node, cluster_nodes, timestamp}
     # Add node to CLUSTER_NODES with status="active"
-    # _push_event("node_admitted", "info", node_name, ...)
+    # _push_event("cluster", "info", node_name, f"admitted as {node_type}")
     # publish admitted on jc.admin node.{name}.admitted {node_name, timestamp, amqp_url}
 
 async def handle_deregistration(message) -> None
     # Parse payload (node_name, reason, timestamp)
     # If node_name == CLUSTER_COORDINATOR:
     #   clear CLUSTER_COORDINATOR
-    #   _push_event("coordinator_lost", "warn", node_name, reason, ...)
-    # _push_event("node_departed", "info", node_name, reason, ...)
+    #   _push_event("cluster", "warn", node_name, f"coordinator lost — {reason}")
+    # _push_event("cluster", "info", node_name, f"departed — {reason}")
     # Remove node from CLUSTER_NODES, log it
 
 async def handle_heartbeat(message) -> None
@@ -630,11 +631,11 @@ Mock all aio-pika calls. Do not require live RabbitMQ.
 
 | # | Test | What it asserts |
 |---|------|-----------------|
-| 1 | Valid worker registration | Node admitted, CLUSTER_NODES updated, `node_admitted` event logged, `admitted` message published |
-| 2 | First coordinator auto-promotion | CLUSTER_COORDINATOR set, `coordinator_elected` event logged, `coord_response` published |
-| 3 | Duplicate node name rejected | `rejected` message with reason=`duplicate_node_name`, `node_rejected` event logged |
+| 1 | Valid worker registration | Node admitted, CLUSTER_NODES updated, `cluster` event logged, `admitted` message published |
+| 2 | First coordinator auto-promotion | CLUSTER_COORDINATOR set, `cluster` event with "elected" message, `coord_response` published |
+| 3 | Duplicate node name rejected | `rejected` message with reason=`duplicate_node_name`, `cluster` event logged |
 | 4 | Malformed payload rejected | `rejected` message with reason=`malformed_payload` |
-| 5 | Graceful deregistration | Node removed, `node_departed` event logged. If coordinator: CLUSTER_COORDINATOR cleared, `coordinator_lost` event logged |
+| 5 | Graceful deregistration | Node removed, `cluster` event logged. If coordinator: CLUSTER_COORDINATOR cleared |
 | 6 | Heartbeat updates last_seen | Known node's last_seen advances |
 | 7 | Heartbeat from unknown node | Warning logged, node NOT added |
 | 8 | Event stored in log | Event appended to CLUSTER_EVENTS; at 1001 entries the oldest is popped |
