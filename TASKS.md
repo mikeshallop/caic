@@ -526,12 +526,16 @@ NONE ──register(node_type=coordinator)──▶ CLUSTER_COORDINATOR set
 
 Every `_push_event()` call uses one of these two categories. The `message` field carries the human-readable detail — no need for event type strings. The reporting tool filters by category + severity.
 
-**Channel split:**
+**Channel split — security rationale:**
 
-| Exchange | Event scope |
-|----------|-------------|
-| `jc.admin` | Cluster nervous system — `register`, `deregister`, `admitted`, `rejected`, `hb_query` |
-| `jc.system` | Application events — `heartbeat`, `event` (syslog), `coord_query`/`coord_response` |
+The two exchanges are not an organizational convenience. They enforce a **data isolation boundary**:
+
+| Exchange | Contains | Exposed to |
+|----------|----------|------------|
+| `jc.admin` | Node lifecycle, heartbeats, model swaps, coordinator changes | Operations / machine-room staff |
+| `jc.system` | Application events — inference queries, RAG context, user-facing data | Application-layer audit only |
+
+`jc.system` events can leak information about what users are doing and asking. The split ensures a sysadmin monitoring cluster health never accidentally consumes user-data-bearing events. The channels can be locked down independently — different AMQP credentials, separate queue permissions, different in-transit encryption policies if needed later.
 
 ### 11.4 Implementation
 
