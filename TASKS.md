@@ -492,7 +492,53 @@ Coordinator responds on `cluster.coordinator.response`:
 ```
 Severity levels: `info`, `warn`, `error`, `critical`. Coordinator stores in in-memory event log.
 
-### 11.3 Implementation
+### 11.3 Design — Status Transitions Drive the Event Log
+
+All admin-level events are *derived* from `register()` and `deregister()` as side effects. There are no separate message types for coordinator election, node staleness, quarantine, or release — those are status transitions that `register()`/`deregister()` emit into `CLUSTER_EVENTS` locally.
+
+**Node status lifecycle:**
+
+```
+UNKNOWN ──register()──▶ active ──deregister()──▶ (removed)
+                           │
+                  hb timeout│(coordinator publishes
+                           │ deregister on its behalf)
+                           ▼
+                      (removed, event: node_offline)
+```
+
+**Coordinator status lifecycle:**
+
+```
+NONE ──register(node_type=coordinator)──▶ CLUSTER_COORDINATOR set
+                                              │
+                                   deregister()│or timeout
+                                              ▼
+                                         CLUSTER_COORDINATOR cleared
+```
+
+**What each handler emits to CLUSTER_EVENTS:**
+
+| Handler | Event Records Emitted (local) |
+|---------|------------------------------|
+| `handle_registration` — first coordinator | `{event_type: "coordinator_elected", severity: "info", node_name, timestamp}` |
+| `handle_registration` — node admitted | `{event_type: "node_admitted", severity: "info", node_name, node_type, timestamp}` |
+| `handle_registration` — node rejected | `{event_type: "node_rejected", severity: "warn", node_name, reason, timestamp}` |
+| `handle_deregistration` — coordinator lost | `{event_type: "coordinator_lost", severity: "warn", node_name, timestamp}` |
+| `handle_deregistration` — node departed | `{event_type: "node_departed", severity: "info", node_name, reason, timestamp}` |
+| Heartbeat timeout (new future handler, not AMQP) | `{event_type: "node_offline", severity: "error", node_name, reason: "heartbeat_timeout", timestamp}` |
+| `request_model_swap()` — Task 14 | `{event_type: "model_swap_started", severity: "info", node_name, from_model, to_model}` |
+| `handle_model_ready()` — Task 14 | `{event_type: "model_swap_completed", severity: "info", node_name, model}` |
+| `handle_model_failed()` — Task 14 | `{event_type: "model_swap_failed", severity: "error", node_name, model, error}` |
+
+**Channel split:**
+
+| Exchange | Event scope |
+|----------|-------------|
+| `jc.admin` | Cluster nervous system — `register`, `deregister`, `admitted`, `rejected`, `hb_query` |
+| `jc.system` | Application events — `heartbeat`, `event` (syslog), `coord_query`/`coord_response` |
+
+### 11.4 Implementation
 
 **Add to `amqp.py`:**
 
@@ -513,40 +559,52 @@ CLUSTER_NODES: dict[str, NodeRecord]
 CLUSTER_EVENTS: deque[EventRecord]   # bounded at 1000 entries
 CLUSTER_COORDINATOR: str | None      # node_name of active coordinator
 
-# NodeRecord fields as above + {node_type, status, registered_at, last_seen}
+# NodeRecord fields:
+#   node_name, node_type, ip, status, active_model, inventory,
+#   capabilities: {gpu, gpu_type, vram_mb, cpu_cores, ram_gb}
+#   registered_at, last_seen
+
+# EventRecord:
+#   event_type, severity, node_name, message, details: dict, timestamp
+
+def _push_event(event_type, severity, node_name, message, details=None) -> None
+    # Append EventRecord to CLUSTER_EVENTS, pop left if > 1000
 
 async def handle_registration(message) -> None
-    # Parse payload, validate required fields
-    # Reject if node_name duplicate + status="active"
-    # If CLUSTER_COORDINATOR is None AND node_type="coordinator":
+    # Parse payload, validate required fields (node_name, node_type, ip, active_model, inventory)
+    # Reject if node_name duplicate and CLUSTER_NODES[node_name].status == "active"
+    # If CLUSTER_COORDINATOR is None AND node_type == "coordinator":
     #   set CLUSTER_COORDINATOR = node_name
-    #   publish cluster.coordinator.response on jc.system
-    # Otherwise admit normally
-    # Published admitted/rejected on jc.admin
+    #   _push_event("coordinator_elected", "info", node_name, ...)
+    #   publish cluster.coordinator.response on jc.system {coordinator_node, cluster_nodes, timestamp}
+    # Add node to CLUSTER_NODES with status="active"
+    # _push_event("node_admitted", "info", node_name, ...)
+    # publish admitted on jc.admin node.{name}.admitted {node_name, timestamp, amqp_url}
 
 async def handle_deregistration(message) -> None
+    # Parse payload (node_name, reason, timestamp)
+    # If node_name == CLUSTER_COORDINATOR:
+    #   clear CLUSTER_COORDINATOR
+    #   _push_event("coordinator_lost", "warn", node_name, reason, ...)
+    # _push_event("node_departed", "info", node_name, reason, ...)
     # Remove node from CLUSTER_NODES, log it
-    # If this node was the coordinator, clear CLUSTER_COORDINATOR
 
 async def handle_heartbeat(message) -> None
-    # Update CLUSTER_NODES[node_name].last_seen
-    # If node was previously unknown, log warning but do NOT auto-admit
+    # Parse: node_name, status, active_model, load, timestamp
+    # If node in CLUSTER_NODES: update last_seen, status, active_model
+    # If node unknown: log warning, do NOT auto-admit
 
 async def handle_event(message) -> None
-    # Append EventRecord to CLUSTER_EVENTS (pop left if > 1000)
+    # Parse: node_name, event_type, severity, message, details, timestamp
+    # Append to CLUSTER_EVENTS (pop left if > 1000)
 
 async def handle_coordinator_query(message) -> None
     # Respond on jc.system cluster.coordinator.response
-    # Payload: {coordinator_node, cluster_nodes, timestamp}
-
-async def handle_hb_query_response(message) -> None
-    # For now: log receipt. Future: trigger inference re-routing if node unresponsive.
+    # Payload: {coordinator_node, cluster_nodes: list(CLUSTER_NODES.keys()), timestamp}
 
 def get_cluster_state() -> dict
-    # Return serializable snapshot: nodes, coordinator, events (last 50)
-
-def get_cluster_events(severity: str | None = None, limit: int = 50) -> list
-    # Return events, optionally filtered by severity
+    # Return: {nodes: CLUSTER_NODES, coordinator: CLUSTER_COORDINATOR,
+    #          events: last 50 CLUSTER_EVENTS}
 ```
 
 **Subscribe in `app.py` lifespan** after AMQP connects:
@@ -559,29 +617,29 @@ def get_cluster_events(severity: str | None = None, limit: int = 50) -> list
 | `jc.system` | `node.*.event` | `handle_event` |
 | `jc.system` | `cluster.coordinator.query` | `handle_coordinator_query` |
 
-### 11.4 API — `GET /api/cluster`
+### 11.5 API — `GET /api/cluster`
 
 New router `routers/cluster.py`:
-- `GET /api/cluster` — returns full cluster state: nodes list, active coordinator, last 50 events. No auth required.
+- `GET /api/cluster` — returns full cluster state: `{nodes, coordinator, events}` (last 50 events). No auth required.
 
 Wire `cluster.router` into `app.py`.
 
-### 11.5 Tests — `tests/test_cluster.py`
+### 11.6 Tests — `tests/test_cluster.py`
 
 Mock all aio-pika calls. Do not require live RabbitMQ.
 
-| Test | What it asserts |
-|------|-----------------|
-| Valid registration | Node admitted, CLUSTER_NODES updated, admitted message published |
-| Duplicate node name | Rejected with reason=`duplicate_node_name` |
-| Malformed payload | Rejected with reason=`malformed_payload` |
-| Deregistration | Node removed from CLUSTER_NODES |
-| Heartbeat updates last_seen | Known node's last_seen updated |
-| Heartbeat unknown node | Warnings logged, node not added |
-| Event stored in log | Event appended to CLUSTER_EVENTS, overflows at 1000 |
-| Coordinator query | Response published with coordinator and node list |
-| GET /api/cluster shape | Returns nodes, coordinator, events fields |
-| Coordinator auto-promotion | First coordinator to register becomes CLUSTER_COORDINATOR |
+| # | Test | What it asserts |
+|---|------|-----------------|
+| 1 | Valid worker registration | Node admitted, CLUSTER_NODES updated, `node_admitted` event logged, `admitted` message published |
+| 2 | First coordinator auto-promotion | CLUSTER_COORDINATOR set, `coordinator_elected` event logged, `coord_response` published |
+| 3 | Duplicate node name rejected | `rejected` message with reason=`duplicate_node_name`, `node_rejected` event logged |
+| 4 | Malformed payload rejected | `rejected` message with reason=`malformed_payload` |
+| 5 | Graceful deregistration | Node removed, `node_departed` event logged. If coordinator: CLUSTER_COORDINATOR cleared, `coordinator_lost` event logged |
+| 6 | Heartbeat updates last_seen | Known node's last_seen advances |
+| 7 | Heartbeat from unknown node | Warning logged, node NOT added |
+| 8 | Event stored in log | Event appended to CLUSTER_EVENTS; at 1001 entries the oldest is popped |
+| 9 | Coordinator query produces response | Response published with coordinator name and node list |
+| 10 | GET /api/cluster shape | Response contains `nodes`, `coordinator`, `events` keys |
 
 Run full test suite. All existing tests must continue to pass.
 
