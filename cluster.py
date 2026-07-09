@@ -67,6 +67,7 @@ async def handle_registration(exchange: str, routing_key: str, payload: dict) ->
         "ip": payload.get("ip"),
         "capabilities": payload.get("capabilities", []),
         "active_model": payload.get("active_model"),
+        "inventory": payload.get("inventory", []),
         "load": payload.get("load"),
         "registered_at": now,
         "last_seen": now,
@@ -175,12 +176,68 @@ async def ping_node(node_name: str) -> bool:
         return False
 
 
+async def request_model_swap(node_name: str, model_filename: str) -> bool:
+    """Request a worker node to swap its active model."""
+    if node_name not in CLUSTER_NODES:
+        log.warning("request_model_swap: unknown node %s", node_name)
+        return False
+
+    CLUSTER_NODES[node_name]["status"] = "swapping"
+    _push_event("cluster", "info", node_name, f"Model swap requested: {model_filename}")
+
+    now = datetime.now(timezone.utc).isoformat() + "Z"
+    await publish(AMQP_EXCHANGE_ADMIN, f"node.{node_name}.cmd.swap_model", {
+        "model_filename": model_filename,
+        "requested_at": now,
+    })
+    return True
+
+
+async def handle_model_ready(exchange: str, routing_key: str, payload: dict) -> None:
+    node_name = payload.get("node_name", routing_key.split(".")[1] if "." in routing_key else "unknown")
+    model_filename = payload.get("active_model")
+    port = payload.get("port", 8081)
+
+    if node_name not in CLUSTER_NODES:
+        log.warning("handle_model_ready: unknown node %s", node_name)
+        return
+
+    inventory = CLUSTER_NODES[node_name].get("inventory") or []
+    model_info = None
+    for inv in inventory:
+        if inv.get("filename") == model_filename:
+            model_info = {**inv, "port": port}
+            break
+    if model_info is None:
+        model_info = {"filename": model_filename, "port": port}
+
+    now = datetime.now(timezone.utc).isoformat() + "Z"
+    CLUSTER_NODES[node_name]["active_model"] = model_info
+    CLUSTER_NODES[node_name]["status"] = "active"
+    CLUSTER_NODES[node_name]["last_seen"] = now
+    _push_event("cluster", "info", node_name, f"Model swap complete: {model_filename}")
+
+
+async def handle_model_failed(exchange: str, routing_key: str, payload: dict) -> None:
+    node_name = payload.get("node_name", routing_key.split(".")[1] if "." in routing_key else "unknown")
+    error = payload.get("error", "unknown error")
+
+    if node_name not in CLUSTER_NODES:
+        log.warning("handle_model_failed: unknown node %s", node_name)
+        return
+
+    CLUSTER_NODES[node_name]["status"] = "error"
+    _push_event("cluster", "error", node_name, f"Model swap failed: {error}")
+
+
 SUBSCRIBE_TABLE = [
     (AMQP_EXCHANGE_ADMIN, ["node.*.register"], handle_registration),
     (AMQP_EXCHANGE_ADMIN, ["node.*.deregister"], handle_deregistration),
     (AMQP_EXCHANGE_ADMIN, ["node.*.pong"], handle_pong),
     (AMQP_EXCHANGE_SYSTEM, ["node.*.event"], handle_event),
     (AMQP_EXCHANGE_SYSTEM, ["cluster.coordinator.query"], handle_coordinator_query),
+    (AMQP_EXCHANGE_SYSTEM, ["node.*.model_ready"], handle_model_ready),
+    (AMQP_EXCHANGE_SYSTEM, ["node.*.model_failed"], handle_model_failed),
 ]
 
 

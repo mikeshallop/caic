@@ -1,4 +1,5 @@
 """Tests for triage.py — query classification and node selection."""
+import asyncio
 import json
 
 import httpx
@@ -11,6 +12,13 @@ import triage
 def _reset():
     cluster.CLUSTER_NODES.clear()
     cluster.CLUSTER_COORDINATOR = None
+
+
+_published = []
+
+
+async def _fake_publish(exchange, routing_key, payload):
+    _published.append((exchange, routing_key, payload))
 
 
 class _MockPostResponse:
@@ -83,7 +91,7 @@ def test_select_node_code_returns_coder():
         "active_model": {"name": "llama3.1", "port": 8081},
     }
 
-    node = triage.select_node("code")
+    node = asyncio.run(triage.select_node("code"))
     assert node is not None
     assert node["name"] == "coder01"
 
@@ -97,7 +105,7 @@ def test_select_node_general_no_match_returns_none():
         "name": "coder01", "type": "worker", "status": "active",
         "active_model": {"name": "qwen2.5-coder-14b", "port": 8082},
     }
-    node = triage.select_node("general")
+    node = asyncio.run(triage.select_node("general"))
     assert node is None
 
 

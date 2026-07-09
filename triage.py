@@ -7,6 +7,11 @@ from config import TRIAGE_BASE, TRIAGE_TIMEOUT, LLAMA_SERVER_BASE
 
 log = logging.getLogger("caic")
 
+_IDEAL_MODEL_MAP = {
+    "code": {"name_contains": ["coder", "qwen"]},
+    "general": {"name_contains": ["mistral", "llama"]},
+}
+
 _CLASSIFICATION_PROMPT = """Classify the following user query into exactly one category. Respond with only the category name.
 
 Categories:
@@ -45,22 +50,36 @@ async def classify_query(query: str) -> str:
     return "general"
 
 
-def select_node(classification: str) -> dict | None:
+async def select_node(classification: str) -> dict | None:
     from cluster import CLUSTER_NODES
 
+    if classification in ("search", "rag"):
+        return None
+
+    ideal = _IDEAL_MODEL_MAP.get(classification, {})
+    ideal_contains = ideal.get("name_contains", [])
+
+    # First pass: find an active node with the right model already loaded
     for node in CLUSTER_NODES.values():
         if node.get("status") != "active":
             continue
         am = node.get("active_model") or {}
         name = (am.get("name") or "").lower()
-        if classification == "code":
-            if "coder" in name or "qwen" in name:
-                return node
-        elif classification == "general":
-            if "mistral" in name or "llama" in name:
-                return node
-        else:
-            return None
+        if any(ideal in name for ideal in ideal_contains):
+            return node
+
+    # Second pass: find an active node that can swap to the right model
+    for node in CLUSTER_NODES.values():
+        if node.get("status") != "active":
+            continue
+        inventory = node.get("inventory") or []
+        for inv in inventory:
+            inv_name = (inv.get("name") or "").lower()
+            if any(ideal in inv_name for ideal in ideal_contains):
+                from cluster import request_model_swap
+                await request_model_swap(node["name"], inv["filename"])
+                return None
+
     return None
 
 
@@ -70,7 +89,7 @@ async def get_inference_url(query: str) -> str:
     classification = await classify_query(query)
     if classification in ("search", "rag"):
         return LLAMA_SERVER_BASE
-    node = select_node(classification)
+    node = await select_node(classification)
     if node:
         am = node.get("active_model") or {}
         port = am.get("port", 8081)
