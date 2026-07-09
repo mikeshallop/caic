@@ -255,11 +255,20 @@ async def _fim_passthrough(body: dict) -> JSONResponse:
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(
-                f"{LLAMA_SERVER_BASE}/v1/completions",
+                f"{LLAMA_SERVER_BASE}/completion",
                 json=body,
                 timeout=httpx.Timeout(30.0, connect=5.0),
             )
-            return JSONResponse(content=resp.json(), status_code=resp.status_code)
+            data = resp.json()
+            wrapped = {
+                "choices": [{
+                    "text": data.get("content", ""),
+                    "index": 0,
+                    "finish_reason": data.get("stop", False),
+                }],
+                "usage": {},
+            }
+            return JSONResponse(content=wrapped, status_code=resp.status_code)
         except httpx.ConnectError:
             raise HTTPException(status_code=503, detail="Cannot connect to inference server")
         except Exception as e:
