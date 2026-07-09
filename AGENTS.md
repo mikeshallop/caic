@@ -28,6 +28,7 @@ Every router has a dedicated test file:
 | `test_profile.py` | `routers/profile.py` — get, update, default, length validation |
 | `test_search_route.py` | `routers/search_route.py` — explicit search flow, no results, errors |
 | `test_search_url_sanitization.py` | `search.py` URL sanitizer |
+| `test_model_swap.py` | `cluster.py` + `triage.py` — request_model_swap, handle_model_ready/failed, select_node swap triggering |
 | `test_node_agent.py` | `node_agent/agent.py` — registration, ping/pong, model swap |
 | `test_triage.py` | `triage.py` — classify_query, select_node, get_inference_url |
 | `test_settings_allowlist.py` | `routers/settings.py` — allowlisted key enforcement |
@@ -58,6 +59,8 @@ Refactored from single-file (`app.py`) into modules under project root:
 | `rag.py` | Qdrant vector search + system prompt assembly + chunk_text() helper |
 | `gpu.py` | AMD GPU stats via `rocm-smi` |
 | `triage.py` | Phi-4-mini-based query classification + cluster node selection |
+| `cluster.py` | Cluster node registry, event log, coordinator election, ping/pong, model swap handlers |
+| `amqp.py` | AMQP connection manager — connect, disconnect, publish, subscribe, auto-reconnect |
 | `node_agent/` | Standalone worker agent — AMQP client for registration, ping/pong, model swap |
 | `routers/` | One module per endpoint group (chat, search, skills, completions, upload, ingest) |
 
