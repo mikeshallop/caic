@@ -822,6 +822,50 @@ Run full test suite. All existing tests must continue to pass.
 
 **Status: Implemented and pushed (`9d1fd44`).** `request_model_swap()`, `handle_model_ready()`, `handle_model_failed()` in `cluster.py`, async `select_node()` with swap triggering in `triage.py`, `tests/test_model_swap.py` (9 tests). 177 tests pass.
 
+This task implements the coordinator-side logic for requesting a model swap on a worker node when the ideal model is not currently active.
+
+**Add to `cluster.py`:**
+
+```python
+async def request_model_swap(node_name: str, model_filename: str) -> bool
+    # Publishes to jc.admin exchange, routing key node.{node_name}.cmd.swap_model
+    # Payload: {model_filename, requested_at: iso_timestamp}
+    # Sets node status to "swapping" in CLUSTER_NODES
+    # Returns True if message published successfully
+
+async def handle_model_ready(message) -> None
+    # Handles node.{node_name}.model_ready from jc.system
+    # Updates CLUSTER_NODES[node_name].active_model to the new model
+    # Sets node status back to "active"
+    # Logs swap completion with timing
+
+async def handle_model_failed(message) -> None
+    # Handles node.{node_name}.model_failed from jc.system
+    # Sets node status to "error" in CLUSTER_NODES
+    # Logs failure with detail from message payload
+```
+
+**Subscribe in `app.py` lifespan:**
+- `jc.system` exchange, routing key `node.*.model_ready` → `handle_model_ready`
+- `jc.system` exchange, routing key `node.*.model_failed` → `handle_model_failed`
+
+**Update `triage.py` `select_node()`:**
+- If the best-matching node exists but its active_model does not match the ideal model for the classification, AND the node status is "active" (not already swapping):
+  - Call `request_model_swap(node_name, ideal_model_filename)`
+  - Return None (triggers fallback) — the swap happens async, next query will find the right model active
+- If node status is "swapping": return None (fallback, swap in progress)
+
+**Update `GET /api/cluster`** to include node status in response.
+
+**Write `tests/test_model_swap.py`** covering:
+- `request_model_swap()` — assert swap command published, node status set to "swapping"
+- `handle_model_ready()` — assert active_model updated, status set to "active"
+- `handle_model_failed()` — assert status set to "error"
+- `select_node()` with mismatched active model — assert swap requested, None returned
+- `select_node()` with node status "swapping" — assert None returned without publishing another swap
+
+Run full test suite. All existing tests must continue to pass.
+
 ---
 
 ## TASK 15 — Roadmap N7: Cluster Status UI
