@@ -249,6 +249,7 @@ async def _blocking_chat(payload: dict, model: str, conv_id: str, request: Reque
 
 
 @router.post("/v1/fim/completions")
+@router.post("/fim/completions")
 async def fim_completions(request: Request):
     _check_api_key(request)
     try:
