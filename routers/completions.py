@@ -248,6 +248,78 @@ async def _blocking_chat(payload: dict, model: str, conv_id: str, request: Reque
     return JSONResponse(content=_build_openai_response(assistant_msg, model, conv_id))
 
 
+@router.post("/v1/fim/completions")
+async def fim_completions(request: Request):
+    _check_api_key(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    prefix = body.get("prompt", "")
+    suffix = body.get("suffix", "")
+    stream = body.get("stream", True)
+    max_tokens = body.get("max_tokens", 128)
+
+    fim_prompt = f"<|fim_prefix|>{prefix}<|fim_suffix|>{suffix}<|fim_middle|>"
+
+    upstream = {
+        "prompt": fim_prompt,
+        "n_predict": max_tokens,
+        "temperature": body.get("temperature", 0),
+        "stop": body.get("stop", []),
+        "stream": True,
+        "cache_prompt": False,
+    }
+
+    async def _stream_fim():
+        async with httpx.AsyncClient() as client:
+            try:
+                async with client.stream(
+                    "POST", f"{LLAMA_SERVER_BASE}/completion",
+                    json=upstream,
+                    timeout=httpx.Timeout(30.0, connect=5.0),
+                ) as resp:
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data: "):
+                            continue
+                        try:
+                            d = json.loads(line[6:])
+                            content = d.get("content", "")
+                            if content:
+                                chunk = {
+                                    "choices": [{"delta": {"content": content}, "index": 0}]
+                                }
+                                yield f"data: {json.dumps(chunk)}\n\n"
+                            if d.get("stop"):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+                yield "data: [DONE]\n\n"
+            except httpx.ConnectError:
+                yield f"data: {json.dumps({'error': 'Cannot connect to inference server'})}\n\n"
+
+    if stream:
+        return StreamingResponse(_stream_fim(), media_type="text/event-stream")
+
+    # Non-streaming: accumulate and return
+    full = []
+    async for chunk in _stream_fim():
+        if chunk.startswith("data: [DONE]"):
+            break
+        try:
+            d = json.loads(chunk[6:])
+            content = d.get("choices", [{}])[0].get("delta", {}).get("content", "")
+            if content:
+                full.append(content)
+        except (json.JSONDecodeError, IndexError):
+            pass
+    return JSONResponse(content={
+        "choices": [{"text": "".join(full), "index": 0, "finish_reason": "stop"}],
+        "usage": {},
+    })
+
+
 async def _fim_passthrough(body: dict) -> JSONResponse:
     """
     Proxy FIM requests directly to llama-server without pipeline injection.
