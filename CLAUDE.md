@@ -56,6 +56,9 @@ FTS5 virtual table (`memories`) in SQLite. `search_memories()` uses BM25 ranking
 
 - `LLAMA_SERVER_BASE` — `http://192.168.50.108:8081` (coordinator llama-server, RPC offloads to worker GPU)
 - `SEARXNG_BASE` — `http://localhost:8888`
+- `QDRANT_URL` — `http://192.168.50.108:6333` (Qdrant on coordinator)
+- `TRIAGE_BASE` — `http://127.0.0.1:8083/v1` (Phi-4-mini)
+- `AMQP_URL` — `amqp://caic:{pw}@localhost:5672/caic` (RabbitMQ, pw read from `~/.caic_amqp_secret`)
 - `PERPLEXITY_THRESHOLD` — `15.0`
 - `EMBED_URL` — `http://192.168.50.210:11434/api/embeddings` (Ollama on worker)
 - `VERSION` — current version string
@@ -65,7 +68,9 @@ FTS5 virtual table (`memories`) in SQLite. `search_memories()` uses BM25 ranking
 | Service | Required | Port |
 |---------|----------|------|
 | **llama-server** (coordinator) | Yes | 8081 + RPC :50052 (worker GPU) |
+| **Phi-4-mini** (triage) | No | 8083 |
 | **SearXNG** | No | 8888 |
+| **RabbitMQ** (coordinator) | No | 5672 — AMQP broker |
 | **wttr.in** | No | weather shortcut |
 | **rocm-smi** | No | AMD GPU stats |
 | **Qdrant** (coordinator) | No | 6333 — RAG vector search |

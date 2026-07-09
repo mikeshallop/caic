@@ -1,4 +1,4 @@
-# cAIc v0.14.0
+# cAIc v0.17.0
 
 You have a garage full of retired office PCs, a GPU that was mid-range when Obama was president, and a burning desire to chat with a language model without renting some billionaire's server farm. Congratulations — you've found your people.
 
@@ -10,7 +10,19 @@ At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
-## What's New in v0.14.0
+## What's New in v0.17.0
+
+### Dynamic Model Swap — `request_model_swap()`, `select_node()` async (Roadmap N Task 14)
+- **`cluster.py`** — `request_model_swap()` publishes `cmd.swap_model` to `jc.admin`; `handle_model_ready()` and `handle_model_failed()` consume `model_ready`/`model_failed` on `jc.system`
+- **`select_node()` async** — Queries worker `inventory` for ideal model; triggers swap if model not active, returns `None` for fallback during swap
+- **`SUBSCRIBE_TABLE`** — 7 AMQP routing key bindings in cluster.py
+
+### Cluster Status UI — Heartbeat + Live Status Panel (Roadmap N Task 15)
+- **`handle_heartbeat()`** — Consumes `node.*.heartbeat` on `jc.system` to update `last_seen` per node
+- **UI cluster panel** — sidebar polls `GET /api/cluster` every 15s; green=active, yellow=swapping, red=error/offline
+- **Version bumped to v0.17.0** — All 179 tests pass
+
+### What's New in v0.14.0
 
 ### Cluster Protocol — `GET /api/cluster`, 9 AMQP Message Types (Roadmap N Task 11)
 - **`cluster.py`** — Node registry (`CLUSTER_NODES`), bounded event log (`CLUSTER_EVENTS`, max 1000), coordinator auto-promotion
@@ -67,30 +79,32 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 /opt/caic/
 ├── amqp.py             # aio-pika AMQP connection manager + subscribe/rebind
 ├── app.py              # FastAPI app entry point
+├── auth.py             # PIN-based guest/admin sessions, auth routes
 ├── cluster.py          # Cluster protocol: node registry, event log, ping/pong
 ├── config.py           # Constants, env vars, limits, skill registry
 ├── db.py               # SQLite schema, connection factory
-├── auth.py             # PIN-based guest/admin sessions, auth routes
 ├── eviction.py         # Score-based RAG eviction engine
-├── security.py         # Rate limiting, origin checks, IP allowlist, audit
-├── memory.py           # FTS5 memory CRUD, remember/forget commands
-├── search.py           # SearXNG integration, perplexity, refusal detection
-├── rag.py              # Qdrant vector search + system prompt assembly
 ├── gpu.py              # AMD GPU stats via rocm-smi
+├── hardware.py         # Hardware self-assessment (CPU, RAM, VRAM)
+├── memory.py           # FTS5 memory CRUD, remember/forget commands
+├── rag.py              # Qdrant vector search + system prompt assembly
+├── search.py           # SearXNG integration, perplexity, refusal detection
+├── security.py         # Rate limiting, origin checks, IP allowlist, audit
+├── triage.py           # Query classification + cluster node selection
 ├── routers/
 │   ├── chat.py         # /api/chat streaming endpoint
-│   ├── search_route.py # /api/search explicit search endpoint
+│   ├── cluster.py      # Cluster status endpoint
 │   ├── completions.py  # /v1/chat/completions OpenAI-compat endpoint
 │   ├── conversations.py# Conversation CRUD
+│   ├── ingest.py       # Terminal RAG ingest
 │   ├── memories.py     # Memory CRUD API
 │   ├── models.py       # Model listing, system stats
 │   ├── presets.py      # System prompt presets
 │   ├── profile.py      # User profile
+│   ├── search_route.py # /api/search explicit search endpoint
 │   ├── settings.py     # Runtime settings
 │   ├── skills.py       # Skills management
-│   ├── upload.py       # File attachment endpoints
-│   ├── ingest.py       # Terminal RAG ingest
-│   └── cluster.py      # Cluster status endpoint
+│   └── upload.py       # File attachment endpoints
 ├── static/
 │   └── logo.png        # Logo image (optional)
 ├── templates/
@@ -98,8 +112,7 @@ Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 ├── node_agent/
 │   ├── agent.py        # Standalone worker agent (AMQP client)
 │   └── requirements.txt
-├── triage.py           # Query classification + cluster node selection
-└── tests/              # 168 pytest tests
+└── tests/              # 179 pytest tests
 ```
 
 ## Requirements
@@ -313,7 +326,7 @@ Settings are stored in the `settings` table and include:
 python3 -m pytest tests/ -v
 ```
 
-All 168 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
+All 179 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
 
 ## License
 

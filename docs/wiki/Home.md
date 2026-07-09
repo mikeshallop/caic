@@ -1,6 +1,6 @@
-# JarvisChat Developer Wiki
+# cAIc Developer Wiki
 
-This wiki is the developer-facing architecture and process reference for JarvisChat.
+This wiki is the developer-facing architecture and process reference for cAIc.
 
 ## Audience
 
@@ -14,7 +14,7 @@ This wiki is the developer-facing architecture and process reference for JarvisC
 
 ## Scope and Support Model
 
-JarvisChat is designed for local and trusted-LAN operation.
+cAIc is designed for local and trusted-LAN operation.
 
 The code may technically function against external or commercial endpoints, but this deployment mode is not a supported target in this project.
 

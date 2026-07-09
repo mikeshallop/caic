@@ -59,6 +59,7 @@ Refactored from single-file (`app.py`) into modules under project root:
 | `memory.py` | FTS5 memory CRUD, remember/forget command parsing |
 | `search.py` | SearXNG integration, perplexity scoring, refusal detection |
 | `rag.py` | Qdrant vector search + system prompt assembly + chunk_text() helper |
+| `eviction.py` | Score-based RAG eviction engine |
 | `gpu.py` | AMD GPU stats via `rocm-smi` |
 | `triage.py` | Phi-4-mini-based query classification + cluster node selection |
 | `cluster.py` | Cluster node registry, event log, coordinator election, ping/pong, model swap handlers |
@@ -108,9 +109,11 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 | llama-server (coordinator) | Yes | 8081 + RPC :50052 (worker GPU) |
 | Phi-4-mini (triage) | No | 8083 |
 | SearXNG | No | 8888 |
+| RabbitMQ (coordinator) | No | 5672 — AMQP broker |
 | wttr.in | No | weather shortcut |
 | rocm-smi | No | AMD GPU stats |
 | Qdrant | No | 6333 (coordinator) — RAG vector search |
+| Ollama (worker) | No | 11434 — embeddings only |
 
 ### Config quirks
 

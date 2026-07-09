@@ -346,7 +346,7 @@ Declare the two topic exchanges needed by jC:
 
 Use `rabbitmqadmin` or `curl` against the management API to declare exchanges. Verify both exchanges appear in: `curl -s -u caic:{password} http://localhost:15672/api/exchanges/caic`
 
-Write the generated RabbitMQ password to `/home/gramps/.jc_amqp_secret` with mode 600. This will be read by jC as an env var source in subsequent tasks.
+Write the generated RabbitMQ password to `/home/gramps/.caic_amqp_secret` with mode 600. This will be read by cAIc as an env var source in subsequent tasks.
 
 No pytest tests required for this infrastructure task.
 
@@ -359,7 +359,7 @@ This task adds the core AMQP connection manager to jC. It must connect to Rabbit
 **Add to `requirements.txt`:** `aio-pika>=9.0.0`
 
 **Add to `config.py`:**
-- `AMQP_URL` — read from env `CAIC_AMQP_URL`, default `amqp://caic:password@localhost:5672/caic`. The actual password comes from `/home/gramps/.jc_amqp_secret` — read it at startup if the env var is not set.
+- `AMQP_URL` — read from env `CAIC_AMQP_URL`, default `amqp://caic:password@localhost:5672/caic`. The actual password comes from `/home/gramps/.caic_amqp_secret` — read it at startup if the env var is not set.
 - `AMQP_RECONNECT_DELAY` — seconds between reconnect attempts, default 5
 - `AMQP_EXCHANGE_ADMIN` — `jc.admin`
 - `AMQP_EXCHANGE_SYSTEM` — `jc.system`
@@ -764,7 +764,7 @@ This task wires the cluster into jC's chat flow. When a query arrives at `/api/c
 **Prerequisites:** Tasks 9–12 complete. At least one worker node admitted to cluster.
 
 **Install Phi-4-mini on coordinator (infrastructure step):**
-- Download `Phi-4-mini-Instruct-Q4_K_M.gguf` from HuggingFace using `hf download microsoft/Phi-4-mini-instruct --include "*.Q4_K_M.gguf" --local-dir /var/lib/jc/models`
+- Download `Phi-4-mini-Instruct-Q4_K_M.gguf` from HuggingFace using `hf download microsoft/Phi-4-mini-instruct --include "*.Q4_K_M.gguf" --local-dir /var/lib/caic/models`
 - Create `/etc/systemd/system/llama-server-triage.service` — same pattern as existing llama-server service but: port 8083, model path points to Phi-4-mini GGUF, no `--rpc` flag (runs entirely on coordinator CPU/iGPU), description `Llama.cpp Server (Phi-4-mini — triage/routing)`
 - `systemctl daemon-reload && systemctl enable llama-server-triage && systemctl start llama-server-triage`
 - Verify: `curl -s http://localhost:8083/v1/models`

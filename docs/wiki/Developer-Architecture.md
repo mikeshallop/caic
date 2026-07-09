@@ -22,7 +22,10 @@ Refactored from single-file (`app.py`) into modules under project root:
 | `rag.py` | Qdrant vector search, system prompt assembly, chunk_text() helper, collection stats |
 | `eviction.py` | Score-based RAG eviction engine (extracted from rag.py) |
 | `gpu.py` | AMD GPU stats via rocm-smi |
-| `amqp.py` | (WIP) aio-pika connection manager for RabbitMQ |
+| `hardware.py` | Hardware self-assessment — CPU, RAM, VRAM, service health probes |
+| `amqp.py` | aio-pika connection manager for RabbitMQ (connect, disconnect, publish, subscribe, auto-reconnect) |
+| `cluster.py` | Cluster node registry, event log, coordinator election, ping/pong, model swap handlers |
+| `triage.py` | Phi-4-mini query classification + `select_node()` for cluster routing |
 | `routers/` | One module per endpoint group |
 
 ### 1.2 External Services
@@ -184,13 +187,13 @@ cAIc uses a **broker-mediated** cluster design. This is the preferred architectu
 - A single RabbitMQ broker (or clustered set of brokers) acts as the central nervous system
 - **Coordinator nodes** run the FastAPI app, host the HTTP API/UI, and publish commands to the broker
 - **Worker nodes** connect as AMQP *clients only* — they consume commands and publish status events, but run no broker software themselves
-- Communication is asynchronous and persistent: each node opens a TCP connection on startup and keeps it alive. The AMQP-0-9-1 heartbeat detects silent failures within ~60s.
+- Communication is asynchronous and persistent: each node opens a TCP connection on startup and keeps it alive. The coordinator probes worker health via on-demand AMQP ping/pong messages (5s timeout) rather than relying on the AMQP-0-9-1 transport-level heartbeat.
 
 **Why broker-mediated:**
 - Workers are heterogeneous (different GPUs, different models, ARM vs x86) — no assumption of uniform software
 - Workers are lightweight — a Raspberry Pi with a USB AI accelerator can participate without running a broker
 - The coordinator delegates work via messages, not by SSH'ing into workers or requiring shared filesystems
-- Failure is isolated: a crashed worker drops off the heartbeat list; the coordinator reassigns its work
+- Failure is isolated: a crashed worker stops responding to ping; the coordinator auto-deregisters it and reassigns its work
 
 **What it is NOT:**
 - Not a service mesh — workers do not run identical software stacks
@@ -219,17 +222,18 @@ Every physical machine in the cluster is classified by which services it runs. T
 
 ```
 Coordinator                          Worker(s)
-┌────────────────────┐               ┌─────────────────────────┐
-│  cAIc              │               │  llama-server           │
-│  (FastAPI + SQLite)│               │  (inference)            │
-│  RabbitMQ server   │◄──AMQP───────│  aio-pika (agent)       │
-│  SearXNG (opt)     │    persistent │  ROCm / CUDA (if GPU)   │
-│  Qdrant (opt)      │    TCP        │                         │
-│  Ollama (opt)      │    conn       │  No broker              │
-│  llama-server(opt) │               │  No jC                  │
-└────────────────────┘               │  No DB                  │
-                                     │  No search/vector       │
-                                     └─────────────────────────┘
+┌────────────────────┐               ┌──────────────────────────┐
+│  cAIc              │               │  llama-server            │
+│  (FastAPI + SQLite)│               │  (inference)             │
+│  RabbitMQ server   │◄──AMQP───────│  aio-pika (agent)        │
+│  SearXNG (opt)     │    persistent │  ROCm / CUDA (if GPU)    │
+│  Qdrant (opt)      │    TCP        │  Ollama (embeddings,opt) │
+│  llama-server(opt) │    conn       │                          │
+└────────────────────┘               │  No broker               │
+                                     │  No cAIc                 │
+                                     │  No DB                   │
+                                     │  No search/vector        │
+                                     └──────────────────────────┘
 ```
 
 ### 6.4 RabbitMQ Topology
@@ -238,14 +242,10 @@ Every RabbitMQ server belongs to a cluster. Currently only the coordinator runs 
 
 | Exchange | Type | Purpose |
 |----------|------|---------|
-| `jc.admin` | topic | Commands: swap model, shutdown, heartbeat request |
-| `jc.system` | topic | Events: model_ready, model_failed, heartbeat, registration |
+| `jc.admin` | topic | Lifecycle commands: register, deregister, ping, pong, admitted, rejected; model commands: cmd.swap_model |
+| `jc.system` | topic | Events: model_ready, model_failed, node.*.heartbeat, event; coordinator queries: coord_query, coord_response |
 
-Pending implementation (Tasks 10–15):
-- `amqp.py` — aio-pika connection manager with reconnect
-- Node agent on worker — registration, heartbeat, command consumer
-- `triage.py` — Phi-4-mini query classification (general/code/search/rag)
-- Dynamic model swap via llama-server RPC
+All exchanges, queues, and bindings are declared by `amqp.py` at startup. Worker runs `node_agent/agent.py` which connects as an AMQP client, registers, responds to ping, and handles model swap commands.
 
 ## 7. SSE Protocol
 
@@ -265,28 +265,33 @@ All streaming endpoints yield `data: {json}\n\n`:
 - No live external services required
 - Test factories reset `SESSIONS`, `PIN_ATTEMPTS`, `RATE_EVENTS` globals per test
 
-### 8.2 Test Coverage Areas (132 tests)
+### 8.2 Test Coverage Areas (179 tests)
 
 | Test file | Coverage |
 |-----------|----------|
 | test_auth_capabilities.py | Guest/admin sessions, origin blocking, logout |
 | test_chat_streaming_and_memory_paths.py | Streaming, auto-search, remember/forget, upload context injection |
+| test_cluster.py | Registration, deregistration, pong, events, coordinator query |
+| test_cluster_heartbeat.py | Heartbeat handler, known/unknown node |
 | test_completions.py | API key auth, FIM, streaming, blocking, errors |
 | test_conversations.py | Full CRUD, guest admin, attachment_count |
 | test_ingest.py | Bearer auth, chunk/embed/upsert, validation |
+| test_ip_allowlist.py | IP allowlist helper + middleware |
 | test_memories.py | Edit, search, stats |
+| test_model_swap.py | request_model_swap, handle_model_ready/failed, select_node swap triggering |
 | test_models_router.py | Models list, ps, show, stats, search/status |
+| test_node_agent.py | Node agent registration, ping/pong, model swap |
 | test_presets.py | Full CRUD, default preset protection |
 | test_profile.py | Get, update, default, length validation |
 | test_rag_management.py | Collection stats, eviction algorithm (pinned/grace/scoring/batch), maybe_evict hysteresis, operational stats, flush, concurrency lock |
+| test_rate_and_payload_guardrails.py | Rate limits + payload size |
 | test_search_route.py | Explicit search flow, no results, errors |
 | test_search_url_sanitization.py | URL sanitizer |
 | test_settings_allowlist.py | Allowlisted key enforcement |
 | test_skills_framework.py | List, toggle, unknown skill, prompt injection |
-| test_ip_allowlist.py | IP allowlist helper + middleware |
-| test_rate_and_payload_guardrails.py | Rate limits + payload size |
-| test_error_envelopes.py | Global exception handler + stream errors |
+| test_triage.py | classify_query, select_node, get_inference_url |
 | test_upload.py | Upload, delete, link, by-conversation, attachment_count |
+| test_error_envelopes.py | Global exception handler + stream errors |
 
 ### 8.3 DoD Process
 

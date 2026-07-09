@@ -31,7 +31,7 @@
 └─────────────────────────────────────────────────────────┘
 ```
 
-> **This compose stack defines the coordinator.** A coordinator runs jC, the broker, and optional infrastructure services. Workers (headless inference nodes) do not use Docker — they install just llama-server + a Python node agent. See §12 for the worker deployment model.
+> **This compose stack defines the coordinator.** A coordinator runs cAIc, the broker, and optional infrastructure services. Workers (headless inference nodes) do not use Docker — they install just llama-server + a Python node agent. See §9 for the worker deployment model.
 
 ### Service roles
 
@@ -691,7 +691,7 @@ chmod +x llama-server
 # Install node agent deps
 pip install aio-pika httpx
 
-# Create node agent script (from repo: tools/node_agent.py)
+# Create node agent script (from repo: node_agent/agent.py)
 # Configure COORDINATOR_AMQP_URL in environment
 ```
 
