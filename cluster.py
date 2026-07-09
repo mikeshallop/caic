@@ -218,6 +218,15 @@ async def handle_model_ready(exchange: str, routing_key: str, payload: dict) -> 
     _push_event("cluster", "info", node_name, f"Model swap complete: {model_filename}")
 
 
+async def handle_heartbeat(exchange: str, routing_key: str, payload: dict) -> None:
+    node_name = payload.get("node_name", routing_key.split(".")[1] if "." in routing_key else "unknown")
+    if node_name not in CLUSTER_NODES:
+        log.warning("heartbeat from unknown node %s — ignore, full registration required", node_name)
+        return
+    now = datetime.now(timezone.utc).isoformat() + "Z"
+    CLUSTER_NODES[node_name]["last_seen"] = now
+
+
 async def handle_model_failed(exchange: str, routing_key: str, payload: dict) -> None:
     node_name = payload.get("node_name", routing_key.split(".")[1] if "." in routing_key else "unknown")
     error = payload.get("error", "unknown error")
@@ -236,6 +245,7 @@ SUBSCRIBE_TABLE = [
     (AMQP_EXCHANGE_ADMIN, ["node.*.pong"], handle_pong),
     (AMQP_EXCHANGE_SYSTEM, ["node.*.event"], handle_event),
     (AMQP_EXCHANGE_SYSTEM, ["cluster.coordinator.query"], handle_coordinator_query),
+    (AMQP_EXCHANGE_SYSTEM, ["node.*.heartbeat"], handle_heartbeat),
     (AMQP_EXCHANGE_SYSTEM, ["node.*.model_ready"], handle_model_ready),
     (AMQP_EXCHANGE_SYSTEM, ["node.*.model_failed"], handle_model_failed),
 ]

@@ -28,6 +28,8 @@ Every router has a dedicated test file:
 | `test_profile.py` | `routers/profile.py` — get, update, default, length validation |
 | `test_search_route.py` | `routers/search_route.py` — explicit search flow, no results, errors |
 | `test_search_url_sanitization.py` | `search.py` URL sanitizer |
+| `test_cluster.py` | `cluster.py` — registration, deregistration, pong, events, coordinator query |
+| `test_cluster_heartbeat.py` | `cluster.py` — heartbeat handler, known/unknown node |
 | `test_model_swap.py` | `cluster.py` + `triage.py` — request_model_swap, handle_model_ready/failed, select_node swap triggering |
 | `test_node_agent.py` | `node_agent/agent.py` — registration, ping/pong, model swap |
 | `test_triage.py` | `triage.py` — classify_query, select_node, get_inference_url |

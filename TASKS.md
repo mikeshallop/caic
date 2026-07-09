@@ -868,7 +868,7 @@ Run full test suite. All existing tests must continue to pass.
 
 ---
 
-## TASK 15 — Roadmap N7: Cluster Status UI
+## ~~TASK 15 — Roadmap N7: Cluster Status UI [DONE]~~
 
 Surface cluster awareness in the jC frontend (`templates/index.html`).
 
@@ -899,7 +899,7 @@ Surface cluster awareness in the jC frontend (`templates/index.html`).
 
 Run full test suite. All 26+ existing tests must continue to pass.
 
-Commit all changes introduced across Tasks 9–15 with message: `feat: Roadmap N — AMQP cluster nervous system complete`
+~~Commit all changes introduced across Tasks 9–15 with message: `feat: Roadmap N — AMQP cluster nervous system complete`~~
 
 ---
 

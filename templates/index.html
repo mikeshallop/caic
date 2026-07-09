@@ -59,6 +59,15 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
 .sidebar-footer .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .stats-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.cluster-panel { font-size: 11px; font-family: var(--font-mono); }
+.cluster-node-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+.cluster-node-name { color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cluster-node-model { color: var(--text-muted); font-size: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cluster-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.cluster-dot.active { background: var(--success); }
+.cluster-dot.swapping { background: var(--warning); animation: pulse 1s infinite; }
+.cluster-dot.error { background: var(--danger); }
+.cluster-dot.offline { background: var(--danger); }
 .stat-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .stat-label { width: 36px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
 .stat-bar { flex: 1; height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden; }
@@ -290,6 +299,8 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         <div class="status-row" id="ollamaStatus"><span class="status-dot offline"></span> checking...</div>
         <div class="status-row" id="searchStatus"><span class="status-dot offline"></span> search: checking...</div>
         <div class="status-row" id="memoryStatus"><span class="status-dot"></span> memory: -- entries</div>
+        <div class="status-row" id="clusterStatus"><span class="status-dot"></span> cluster: --</div>
+        <div class="cluster-panel" id="clusterPanel" style="display:none; margin-top:6px;"></div>
         <div class="stats-panel" id="statsPanel">
             <div class="stat-row"><span class="stat-label">CPU</span><div class="stat-bar"><div class="stat-fill" id="cpuFill"></div></div><span class="stat-value" id="cpuValue">--%</span></div>
             <div class="stat-row"><span class="stat-label">MEM</span><div class="stat-bar"><div class="stat-fill" id="memFill"></div></div><span class="stat-value" id="memValue">--%</span></div>
@@ -654,9 +665,11 @@ async function initializeMainApp() {
     await loadMemoryStats();
     checkOllamaStatus();
     checkSearchStatus();
+    updateClusterStatus();
     updateSystemStats();
     setInterval(checkOllamaStatus, 30000);
     setInterval(checkSearchStatus, 60000);
+    setInterval(updateClusterStatus, 15000);
     setInterval(updateSystemStats, 2000);
     document.getElementById('userInput').addEventListener('input', updateTokenThermometer);
     updateTokenThermometer();
@@ -727,6 +740,37 @@ async function checkSearchStatus() {
         document.getElementById('searchStatus').innerHTML = data.available ? '<span class="status-dot"></span> search: ready' : '<span class="status-dot warning"></span> search: unavailable';
     } catch(e) {
         document.getElementById('searchStatus').innerHTML = '<span class="status-dot offline"></span> search: error';
+    }
+}
+
+async function updateClusterStatus() {
+    try {
+        const resp = await authFetch('/api/cluster');
+        const data = await resp.json();
+        const statusEl = document.getElementById('clusterStatus');
+        const panel = document.getElementById('clusterPanel');
+        const count = data.node_count || 0;
+        statusEl.innerHTML = `<span class="status-dot${count === 0 ? ' offline' : ''}"></span> cluster: ${count} node${count !== 1 ? 's' : ''}`;
+        if (count === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+        panel.style.display = 'block';
+        const now = Date.now();
+        let html = '';
+        for (const [name, node] of Object.entries(data.nodes)) {
+            const lastSeen = node.last_seen ? new Date(node.last_seen).getTime() : 0;
+            const ageSec = (now - lastSeen) / 1000;
+            let dotClass = 'active';
+            if (node.status === 'swapping') dotClass = 'swapping';
+            else if (node.status === 'error') dotClass = 'error';
+            else if (ageSec > 60) dotClass = 'offline';
+            const modelName = node.active_model ? (node.active_model.name || 'unknown') : 'idle';
+            html += `<div class="cluster-node-row"><span class="cluster-dot ${dotClass}"></span><span class="cluster-node-name">${escapeHtml(name)}</span><span class="cluster-node-model">${escapeHtml(modelName)}</span></div>`;
+        }
+        panel.innerHTML = html;
+    } catch(e) {
+        document.getElementById('clusterStatus').innerHTML = '<span class="status-dot offline"></span> cluster: error';
     }
 }
 
