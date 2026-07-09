@@ -86,6 +86,7 @@ def _build_openai_response(content: str, model: str, conv_id: str) -> dict:
 
 
 @router.post("/v1/chat/completions")
+@router.post("/v1/completions")
 async def chat_completions(request: Request):
     _check_api_key(request)
 
