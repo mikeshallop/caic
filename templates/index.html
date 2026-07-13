@@ -1604,8 +1604,8 @@ function updateTopbarTokens(pct) {
 updateTopbarTokens(0);
 userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px'; });
 userInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); return; }
-    if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); sendSearch(); return; }
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) { e.preventDefault(); sendMessage(); return; }
+    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendSearch(); return; }
     if (e.key === 'ArrowUp') {
         e.preventDefault();
         if (messageHistory.length === 0) return;
