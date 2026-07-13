@@ -706,6 +706,7 @@ async function deleteMemory(rowid) {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this memory?')) return;
     try { await authFetch(`/api/memories/${rowid}`, { method: 'DELETE' }); } catch(e) { return; }
+    showToast('Memory deleted');
     await loadMemoryStats();
 }
 
@@ -857,6 +858,7 @@ async function saveProfile() {
     try { await authFetch('/api/profile', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: content }) }); } catch(e) { return; }
     cachedProfile = content;
     updateTokenCount();
+    showToast('Profile saved');
     const btn = document.getElementById('saveProfileBtn');
     btn.textContent = 'Saved!';
     setTimeout(() => btn.textContent = 'Save Profile', 1500);
@@ -870,7 +872,8 @@ async function resetProfile() {
         const data = await resp.json();
         document.getElementById('profileEditor').value = data.content;
         await saveProfile();
-    } catch(e) {}
+        showToast('Profile reset');
+    } catch(e) { showToast('Profile reset failed'); }
 }
 
 function toggleProfile() { if (currentRole !== 'admin') { requireAdminNotice(); return; } profileEnabled = !profileEnabled; updateProfileUI(); saveSettings(); }
@@ -1027,6 +1030,7 @@ async function addPreset() {
     const p = prompt('System prompt text:');
     if (!p) return;
     try { await authFetch('/api/presets', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) }); } catch(e) { return; }
+    showToast('Preset added');
     await loadPresets();
 }
 
@@ -1039,6 +1043,7 @@ async function editPreset(id) {
     const p = prompt('System prompt:', preset.prompt);
     if (p === null) return;
     try { await authFetch(`/api/presets/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) }); } catch(e) { return; }
+    showToast('Preset saved');
     await loadPresets();
 }
 
@@ -1046,6 +1051,7 @@ async function deletePreset(id) {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this preset?')) return;
     try { await authFetch(`/api/presets/${id}`, { method: 'DELETE' }); } catch(e) { return; }
+    showToast('Preset deleted');
     await loadPresets();
 }
 
@@ -1097,6 +1103,7 @@ async function deleteConversation(convId) {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this conversation?')) return;
     try { await authFetch(`/api/conversations/${convId}`, { method: 'DELETE' }); } catch(e) { return; }
+    showToast('Conversation deleted');
     if (currentConvId === convId) { currentConvId = null; showWelcome(); }
     await loadConversations();
 }
@@ -1105,6 +1112,7 @@ async function deleteAllConversations() {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete ALL conversations? This cannot be undone.')) return;
     try { await authFetch('/api/conversations', { method: 'DELETE' }); } catch(e) { return; }
+    showToast('All conversations deleted');
     currentConvId = null;
     conversationHistory = [];
     showWelcome();
@@ -1116,6 +1124,7 @@ function newChat() {
     conversationHistory = [];
     showWelcome();
     document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+    showToast('New conversation');
 }
 
 function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
@@ -1246,6 +1255,7 @@ function clearFileSelection() {
     preview.classList.remove('visible');
     const thumb = document.getElementById('filePreviewThumb');
     thumb.src = '';
+    showToast('File removed');
 }
 function showGallery(convId) {
     document.getElementById('galleryOverlay').classList.add('visible');
@@ -1289,8 +1299,9 @@ async function deleteGalleryItem(contextId) {
         if (resp.ok) {
             await loadGallery(currentConvId);
             await loadConversations();
+            showToast('Attachment deleted');
         }
-    } catch(e) {}
+    } catch(e) { showToast('Delete failed'); }
 }
 async function sendMessage() {
     resetScrollLock();
@@ -1547,17 +1558,21 @@ function addMessageToolbar(msgDiv) {
         upBtn.innerHTML = '👍';
         upBtn.title = 'Rate up';
         upBtn.onclick = () => {
+            const was = rating.value;
             rating.value = rating.value === 1 ? 0 : 1;
             upBtn.classList.toggle('active', rating.value === 1);
             dnBtn.classList.toggle('active', false);
+            showToast(rating.value === 1 ? 'Rated up' : 'Rating removed');
         };
         const dnBtn = document.createElement('button');
         dnBtn.innerHTML = '👎';
         dnBtn.title = 'Rate down';
         dnBtn.onclick = () => {
+            const was = rating.value;
             rating.value = rating.value === -1 ? 0 : -1;
             dnBtn.classList.toggle('active', rating.value === -1);
             upBtn.classList.toggle('active', false);
+            showToast(rating.value === -1 ? 'Rated down' : 'Rating removed');
         };
         toolbar.append(upBtn, dnBtn);
     }
