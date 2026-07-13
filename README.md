@@ -32,7 +32,7 @@ This also means a worker with a slow GPU can still contribute meaningfully — i
 
 At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
 
-Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md) — includes [FAQ](docs/wiki/FAQ.md), [Installation Guide](docs/wiki/Installation.md), and [full architecture docs](docs/wiki/Developer-Architecture.md)
+Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — includes [FAQ](https://llgit.llamachile.tube/gramps/cAIc/wiki/FAQ), [Installation Guide](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation), and [full architecture docs](https://llgit.llamachile.tube/gramps/cAIc/wiki/Developer-Architecture)
 
 ## What's New in v0.18.0
 
