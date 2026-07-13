@@ -131,3 +131,31 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - `{search_results: N}` — N results (no raw_results payload)
 - `{done: true, perplexity, tokens_per_sec, searched?}` — terminal
 - `{error: "...", error_key: "..."}` — error with incident key
+
+## Work State
+
+### Completed this session
+- **Scroll-position fighting** — `scrollToTop()` now respects `_userScrolledAway` flag (100px threshold), skips auto-scroll when user is reading older content. `resetScrollLock()` called on new messages.
+- **401 error cascade** — `SESSION_TIMEOUT_SECONDS` bumped 90→3600 (1 hour). All 10 unprotected `authFetch` calls wrapped in try/catch.
+- **Token counter** — removed localStorage persistence; resets to 0 on page refresh.
+- **Ctrl+Enter for web search** — Shift+Enter now inserts newline (universal convention), Ctrl+Enter triggers search.
+- **Search button styling** — `search-btn` now matches `send-btn` font/font-size/weight. Label: "web 🔍".
+- **User message toolbar** — copy/print/save toolbar added to user messages (was assistant-only).
+
+### Active
+- (none)
+
+### Blocked
+- (none)
+
+### Upcoming (backlog)
+- B4 — RAG Corpus Management UI
+- B5 — default model auto-pull on first start
+- B6 — waterfall direction toggle
+- B7 — Apple Silicon worker support (gpu.py Metal, hardware.py Darwin)
+
+### Key config values (current)
+- `VERSION = "v0.18.0"` in `config.py`
+- `SESSION_TIMEOUT_SECONDS = 3600`
+- `DEFAULT_MODEL = "qwen2.5-7b-instruct"`
+- `LLAMA_SERVER_BASE = "http://192.168.50.108:8081"`
