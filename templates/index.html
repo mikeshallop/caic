@@ -202,9 +202,6 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .input-row textarea { flex:1; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-body); font-size:14px; padding:12px 14px; border-radius:var(--radius); resize:none; min-height:44px; max-height:200px; line-height:1.5; }
 .input-row textarea:focus { outline:none; border-color:var(--accent-dim); }
 .input-row textarea::placeholder { color:var(--text-muted); }
-.input-status { display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:4px 6px; font-size:9px; font-family:var(--font-mono); color:var(--text-muted); line-height:1; }
-.isdot { display:flex; align-items:center; gap:3px; }
-.isdot .status-dot { width:4px; height:4px; }
 .paperclip-btn { padding:12px 12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-secondary); font-size:18px; cursor:pointer; transition:all 0.2s; line-height:1; }
 .paperclip-btn:hover { background:var(--bg-hover); color:var(--accent); border-color:var(--accent-dim); }
 .send-btn { padding:12px 20px; background:var(--accent-dim); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
@@ -410,12 +407,6 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="file-preview-clear" onclick="clearFileSelection()" title="Remove file">&times;</button>
         </div>
         <div class="input-row">
-            <div class="input-status">
-                <span class="isdot" id="ollamaDot" title="LLM"><span class="status-dot offline"></span><span class="islab">llm</span></span>
-                <span class="isdot" id="searchDot" title="Search"><span class="status-dot offline"></span><span class="islab">srch</span></span>
-                <span class="isdot" id="memoryDot" title="Memory"><span class="status-dot"></span><span class="islab">mem</span></span>
-                <span class="isdot" id="clusterDot" title="Cluster"><span class="status-dot"></span><span class="islab">clst</span></span>
-            </div>
             <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.pdf,.json,.py,.html,.png,.jpg,.jpeg,.gif,.svg,.webp" onchange="onFileSelected(event)">
             <button class="paperclip-btn" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
             <textarea id="userInput" placeholder="Type a message... (Shift+Enter for new line)" rows="1" autofocus></textarea>
