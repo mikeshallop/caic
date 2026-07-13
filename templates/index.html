@@ -1133,6 +1133,7 @@ async function sendSearch() {
     setStreamingState(true);
     const ttrStart = performance.now();
     let ttr = 0;
+    let tokenCount = 0;
     try {
         abortController = new AbortController();
         const resp = await authFetch('/api/search', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ conversation_id: currentConvId, query, model }), signal: abortController.signal });
@@ -1154,7 +1155,7 @@ async function sendSearch() {
                     if (data.error) { textEl.textContent = 'Error: ' + data.error; setStreamingState(false); return; }
                     if (data.conversation_id && !currentConvId) { currentConvId = data.conversation_id; await loadConversations(); }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results, summarizing...</div>'; }
-                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToTop(); }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToTop(); }
                     if (data.raw_results) {
                         let rawHtml = '<details class="raw-results"><summary>🔍 View raw search results (' + data.raw_results.length + ')</summary><ul>';
                         data.raw_results.forEach(r => { 
@@ -1178,6 +1179,13 @@ async function sendSearch() {
                             if (ttr > 0) {
                                 const ttrSec = ttr / 1000;
                                 roleLabel.innerHTML += `<span class="ttr-badge search">ttr: ${ttrSec.toFixed(1)}s</span>`;
+                            }
+                            if (tokenCount > 0) {
+                                const pt = data.prompt_tokens || 0;
+                                const totalTokens = pt + tokenCount;
+                                const ctxLen = data.context_length || 4096;
+                                const usedPct = Math.round((totalTokens / ctxLen) * 100);
+                                roleLabel.innerHTML += `<span class="tok-badge">tok: ${totalTokens}/${ctxLen} ${usedPct}%</span>`;
                             }
                         }
                         conversationHistory.push({ role: 'assistant', content: fullText });
@@ -1362,8 +1370,7 @@ async function sendMessage() {
                         }
                         if (tokenCount > 0 && roleLabel) {
                             const pt = data.prompt_tokens || 0;
-                            const ct = data.completion_tokens || 0;
-                            const totalTokens = pt + ct;
+                            const totalTokens = pt + tokenCount;
                             const ctxLen = data.context_length || 4096;
                             const usedPct = Math.round((totalTokens / ctxLen) * 100);
                             roleLabel.innerHTML += `<span class="tok-badge">tok: ${totalTokens}/${ctxLen} ${usedPct}%</span>`;
