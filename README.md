@@ -1,16 +1,18 @@
-# cAIc v0.17.0
+# cAIc v0.17.2
 
-You have a garage full of retired office PCs, a GPU that was mid-range when Obama was president, and a burning desire to chat with a language model without renting some billionaire's server farm. Congratulations — you've found your people.
+Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
-cAIc is a chat UI that grew limbs. It started as a single-file Python script because OpenWebUI wouldn't install on Debian 13, and somewhere along the way it learned to file paperwork (file attachments), write things down (RAG ingest), boss around other computers (AMQP clustering), and check its own pulse (hardware self-assessment). It now does all the things you didn't ask for, plus a few you might actually use.
+cAIc is a cluster orchestration layer that fuses mismatched GPUs, CPUs, and machines into a single inference surface. It doesn't care that your worker runs AMD and your coordinator runs NVIDIA. It doesn't care that one machine has 8 GB VRAM and another has 16 GB. The cluster protocol (AMQP) discovers available hardware, triage routes queries to the right node, and swaps models between workers on demand. You get one chat interface; behind it, a pool of heterogeneous compute that behaves like a single AI server.
 
-Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. Distributes inference across mismatched hardware via llama.cpp RPC.
+You might also be doing this with retired office PCs and GPUs from the Obama era. That works too. But the core problem cAIc solves isn't budget reuse — it's making non-homogeneous hardware cooperate.
+
+Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. Distributes inference across mismatched hardware via llama.cpp RPC with AMQP-mediated cluster coordination.
 
 At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
-## What's New in v0.17.0
+## What's New in v0.17.2
 
 ### Dynamic Model Swap — `request_model_swap()`, `select_node()` async (Roadmap N Task 14)
 - **`cluster.py`** — `request_model_swap()` publishes `cmd.swap_model` to `jc.admin`; `handle_model_ready()` and `handle_model_failed()` consume `model_ready`/`model_failed` on `jc.system`
