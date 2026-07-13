@@ -84,6 +84,10 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .topbar-center { display:flex; align-items:center; gap:12px; font-size:10px; font-family:var(--font-mono); color:var(--text-muted); }
 .tc-item { white-space:nowrap; }
 .tc-label { color:var(--text-muted); text-transform:uppercase; margin-right:2px; }
+.tc-val { transition:color 0.3s; }
+.tc-val.green { color:var(--success); }
+.tc-val.orange { color:var(--warning); }
+.tc-val.red { color:var(--danger); }
 .topbar-right { display:flex; align-items:center; gap:6px; }
 .hamburger { background:transparent; border:1px solid var(--border); color:var(--text-secondary); width:30px; height:30px; border-radius:var(--radius); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; }
 .hamburger:hover { background:var(--bg-hover); border-color:var(--accent-dim); color:var(--accent); }
@@ -198,9 +202,10 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .input-row textarea { flex:1; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-body); font-size:14px; padding:12px 14px; border-radius:var(--radius); resize:none; min-height:44px; max-height:200px; line-height:1.5; }
 .input-row textarea:focus { outline:none; border-color:var(--accent-dim); }
 .input-row textarea::placeholder { color:var(--text-muted); }
-.input-status { display:flex; align-items:center; gap:4px; padding:0 4px; height:44px; }
-.isdot { display:flex; align-items:center; }
+.input-status { display:flex; align-items:center; gap:4px; padding:0 4px; height:44px; font-size:9px; font-family:var(--font-mono); color:var(--text-muted); }
+.isdot { display:flex; align-items:center; gap:2px; }
 .isdot .status-dot { width:5px; height:5px; }
+.islab { line-height:1; }
 .paperclip-btn { padding:12px 12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-secondary); font-size:18px; cursor:pointer; transition:all 0.2s; line-height:1; }
 .paperclip-btn:hover { background:var(--bg-hover); color:var(--accent); border-color:var(--accent-dim); }
 .send-btn { padding:12px 20px; background:var(--accent-dim); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
@@ -290,7 +295,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 
 <aside class="drawer" id="convDrawer">
     <div class="drawer-header">
-        <span class="drawer-title">🦙 cAIc <span class="version">{{ version }}</span></span>
+        <span class="drawer-title">cAIc <span class="version">{{ version }}</span></span>
         <div class="drawer-actions">
             <button class="drawer-btn" onclick="newChat()" title="New chat">+</button>
             <button class="drawer-btn" onclick="openSettings()" title="Settings">&#9881;</button>
@@ -378,13 +383,13 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     <div class="topbar">
         <div class="topbar-left">
             <button class="hamburger" id="hamburgerBtn" onclick="toggleDrawer()" title="Conversations">&#9776;</button>
-            <span class="topbar-brand">cAIc <span class="version">v{{ version }}</span></span>
+            <span class="topbar-brand">cAIc <span class="version">{{ version }}</span></span>
         </div>
         <div class="topbar-center">
-            <span class="tc-item"><span class="tc-label">CPU</span> <span id="cpuValue">--%</span></span>
-            <span class="tc-item"><span class="tc-label">MEM</span> <span id="memValue">--%</span></span>
-            <span class="tc-item"><span class="tc-label">GPU</span> <span id="gpuValue">--%</span></span>
-            <span class="tc-item"><span class="tc-label">VRAM</span> <span id="vramValue">--%</span></span>
+            <span class="tc-item"><span class="tc-label">CPU</span> <span id="cpuValue" class="tc-val">--%</span></span>
+            <span class="tc-item"><span class="tc-label">MEM</span> <span id="memValue" class="tc-val">--%</span></span>
+            <span class="tc-item"><span class="tc-label">GPU</span> <span id="gpuValue" class="tc-val">--%</span></span>
+            <span class="tc-item"><span class="tc-label">VRAM</span> <span id="vramValue" class="tc-val">--%</span></span>
         </div>
         <div class="topbar-right">
             <button class="badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">MEM</button>
@@ -407,10 +412,10 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         </div>
         <div class="input-row">
             <div class="input-status">
-                <span class="isdot" id="ollamaDot" title="LLM"><span class="status-dot offline"></span></span>
-                <span class="isdot" id="searchDot" title="Search"><span class="status-dot offline"></span></span>
-                <span class="isdot" id="memoryDot" title="Memory"><span class="status-dot"></span></span>
-                <span class="isdot" id="clusterDot" title="Cluster"><span class="status-dot"></span></span>
+                <span class="isdot" id="ollamaDot" title="LLM"><span class="status-dot offline"></span><span class="islab">llm</span></span>
+                <span class="isdot" id="searchDot" title="Search"><span class="status-dot offline"></span><span class="islab">srch</span></span>
+                <span class="isdot" id="memoryDot" title="Memory"><span class="status-dot"></span><span class="islab">mem</span></span>
+                <span class="isdot" id="clusterDot" title="Cluster"><span class="status-dot"></span><span class="islab">clst</span></span>
             </div>
             <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.pdf,.json,.py,.html,.png,.jpg,.jpeg,.gif,.svg,.webp" onchange="onFileSelected(event)">
             <button class="paperclip-btn" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
@@ -708,11 +713,16 @@ async function updateSystemStats() {
     try {
         const resp = await authFetch('/api/stats');
         const data = await resp.json();
+        const colorClass = v => v >= 95 ? 'red' : v >= 80 ? 'orange' : 'green';
         document.getElementById('cpuValue').textContent = data.cpu_percent + '%';
+        document.getElementById('cpuValue').className = 'tc-val ' + colorClass(data.cpu_percent);
         document.getElementById('memValue').textContent = data.memory_percent + '%';
+        document.getElementById('memValue').className = 'tc-val ' + colorClass(data.memory_percent);
         if (data.gpu_available) {
             document.getElementById('gpuValue').textContent = data.gpu_percent + '%';
+            document.getElementById('gpuValue').className = 'tc-val ' + colorClass(data.gpu_percent);
             document.getElementById('vramValue').textContent = data.vram_percent + '%';
+            document.getElementById('vramValue').className = 'tc-val ' + colorClass(data.vram_percent);
         }
     } catch(e) {}
 }
