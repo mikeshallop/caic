@@ -1199,7 +1199,7 @@ async function sendSearch() {
                         addCopyButtons(assistantDiv);
                         addMessageToolbar(assistantDiv);
                         setStreamingState(false);
-                        cumulativeTokens += tokenCount; localStorage.setItem('caicCumulativeTokens', cumulativeTokens.toString()); sessionTokens += tokenCount; updateTopbarTokens(usedPct);
+                        cumulativeTokens += tokenCount; sessionTokens += tokenCount; updateTopbarTokens(usedPct);
                         await loadConversations();
                     }
                 } catch(e) { console.log('Parse error:', e); }
@@ -1389,7 +1389,7 @@ async function sendMessage() {
                         addCopyButtons(assistantDiv);
                         addMessageToolbar(assistantDiv);
                         setStreamingState(false);
-                        cumulativeTokens += tokenCount; localStorage.setItem('caicCumulativeTokens', cumulativeTokens.toString()); sessionTokens += tokenCount; updateTopbarTokens(usedPct);
+                        cumulativeTokens += tokenCount; sessionTokens += tokenCount; updateTopbarTokens(usedPct);
                         if (data.rag_update_suggestion && data.rag_update_suggestion.conflicts) {
                             showFactConflictBanner(data.rag_update_suggestion.conflicts, data.conversation_id);
                         }
@@ -1586,7 +1586,7 @@ const userInput = document.getElementById('userInput');
 const messageHistory = [];
 let historyIndex = -1;
 let historyDraft = '';
-let cumulativeTokens = parseInt(localStorage.getItem('caicCumulativeTokens') || '0', 10);
+let cumulativeTokens = 0;
 let sessionTokens = 0;
 let lastContextPct = 0;
 
