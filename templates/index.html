@@ -175,6 +175,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .copy-btn:hover { color:var(--text-primary); }
 .typing-indicator { display:inline-flex; gap:4px; padding:4px 0; }
 .typing-indicator span { width:6px; height:6px; background:var(--accent-dim); border-radius:50%; animation:blink 1.4s infinite; }
+.typing-indicator.stopped span { background:var(--text-muted); animation:none; opacity:0.4; }
 .typing-indicator span:nth-child(2) { animation-delay:0.2s; }
 .typing-indicator span:nth-child(3) { animation-delay:0.4s; }
 @keyframes blink { 0%,80%,100%{opacity:0.3} 40%{opacity:1} }
@@ -1203,7 +1204,7 @@ async function sendSearch() {
             }
         }
     } catch (e) {
-        if (e.name === 'AbortError') textEl.innerHTML += '<br><em style="color:var(--text-muted)">[stopped]</em>';
+        if (e.name === 'AbortError') textEl.innerHTML = '<div class="typing-indicator stopped"><span></span><span></span><span></span></div><em style="color:var(--text-muted)">[stopped]</em>';
         else textEl.textContent = 'Error: ' + e.message;
         setStreamingState(false);
     }
@@ -1396,7 +1397,7 @@ async function sendMessage() {
             }
         }
     } catch (e) {
-        if (e.name === 'AbortError') textEl.innerHTML += '<br><em style="color:var(--text-muted)">[stopped]</em>';
+        if (e.name === 'AbortError') textEl.innerHTML = '<div class="typing-indicator stopped"><span></span><span></span><span></span></div><em style="color:var(--text-muted)">[stopped]</em>';
         else textEl.textContent = 'Error: ' + e.message;
         setStreamingState(false);
     }
