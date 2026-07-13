@@ -84,10 +84,8 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .topbar-right { display:flex; align-items:center; gap:6px; }
 .hamburger { background:transparent; border:1px solid var(--border); color:var(--text-secondary); width:30px; height:30px; border-radius:var(--radius); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; }
 .hamburger:hover { background:var(--bg-hover); border-color:var(--accent-dim); color:var(--accent); }
-.topbar-brand { font-family:var(--font-body); font-size:14px; color:var(--text-primary); white-space:nowrap; letter-spacing:0.5px; }
+.topbar-brand { font-family:var(--font-body); font-size:14px; color:#e0e8ff; white-space:nowrap; letter-spacing:0.5px; }
 .topbar-brand .version { color:var(--text-muted); font-size:11px; }
-.llama-icon { font-size:14px; }
-.llama-icon.flip { display:inline-block; transform:scaleX(-1); }
 .badge { font-size:10px; padding:3px 10px; border-radius:10px; font-family:var(--font-body); cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-muted); transition:all 0.15s; letter-spacing:0.5px; }
 .badge.on { border-color:rgba(0,255,102,0.3); color:var(--success); background:rgba(0,255,102,0.08); }
 .badge.off { border-color:rgba(255,51,85,0.3); color:var(--danger); background:rgba(255,51,85,0.08); }
@@ -146,6 +144,8 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .welcome-screen { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); text-align:center; gap:12px; }
 .welcome-screen .logo { font-family:var(--font-mono); font-size:48px; color:var(--accent-dim); opacity:0.5; }
 .welcome-screen p { font-size:14px; max-width:420px; line-height:1.6; }
+.ws-hint { font-size:12px; color:var(--text-muted); display:block; margin-top:8px; }
+.ws-hint code { background:var(--bg-tertiary); padding:1px 5px; border-radius:3px; font-family:var(--font-mono); font-size:11px; }
 .message { display:flex; gap:12px; max-width:900px; width:100%; margin:0 auto; animation:fadeIn 0.2s ease; }
 @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 .message .avatar { width:32px; height:32px; min-width:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:13px; font-weight:600; margin-top:2px; }
@@ -190,22 +190,16 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .msg-toolbar .toolbar-label { font-size:10px; font-family:var(--font-mono); color:var(--text-muted); margin-right:4px; }
 
 .input-area { padding:16px 20px; border-top:1px solid var(--border); background:var(--bg-secondary); }
-.input-row-top { max-width:900px; margin:0 auto 8px; display:flex; gap:8px; align-items:center; }
-.input-row-top select { background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-secondary); font-family:var(--font-mono); font-size:11px; padding:4px 8px; border-radius:var(--radius); cursor:pointer; }
-.input-row-top .preset-label { font-size:11px; color:var(--text-muted); font-family:var(--font-mono); }
-.input-wrapper { max-width:900px; margin:0 auto; display:flex; gap:10px; align-items:flex-end; }
-.input-wrapper textarea { flex:1; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-body); font-size:14px; padding:12px 14px; border-radius:var(--radius); resize:none; min-height:44px; max-height:200px; line-height:1.5; }
-.input-wrapper textarea:focus { outline:none; border-color:var(--accent-dim); }
-.input-wrapper textarea::placeholder { color:var(--text-muted); }
+.input-row { max-width:900px; margin:0 auto; display:flex; gap:10px; align-items:flex-end; }
+.input-row textarea { flex:1; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-body); font-size:14px; padding:12px 14px; border-radius:var(--radius); resize:none; min-height:44px; max-height:200px; line-height:1.5; }
+.input-row textarea:focus { outline:none; border-color:var(--accent-dim); }
+.input-row textarea::placeholder { color:var(--text-muted); }
+.paperclip-btn { padding:12px 12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-secondary); font-size:18px; cursor:pointer; transition:all 0.2s; line-height:1; }
+.paperclip-btn:hover { background:var(--bg-hover); color:var(--accent); border-color:var(--accent-dim); }
 .send-btn { padding:12px 20px; background:var(--accent-dim); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
 .send-btn:hover { background:var(--accent); }
 .stop-btn { padding:12px 20px; background:var(--danger); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; }
 .stop-btn:hover { background:var(--danger-hover); }
-.search-btn { padding:12px 14px; background:var(--warning); border:none; border-radius:var(--radius); color:#fff; font-size:16px; cursor:pointer; transition:background 0.2s; }
-.search-btn:hover { background:#e67e22; }
-.search-btn:disabled { background:var(--text-muted); cursor:not-allowed; }
-.paperclip-btn { padding:12px 12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-secondary); font-size:18px; cursor:pointer; transition:all 0.2s; line-height:1; }
-.paperclip-btn:hover { background:var(--bg-hover); color:var(--accent); border-color:var(--accent-dim); }
 .file-preview { max-width:900px; margin:0 auto 8px; display:none; align-items:center; gap:10px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; }
 .file-preview.visible { display:flex; }
 .file-preview-thumb { width:48px; height:48px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
@@ -250,7 +244,6 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .raw-results small { color:var(--text-muted); display:block; margin-top:2px; }
 
 @media (max-width:768px) {
-    .sidebar { display:none; }
     .topbar { padding:10px 14px; }
     .chat-container { padding:12px; }
     .input-area { padding:10px 12px; }
@@ -381,7 +374,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     <div class="topbar">
         <div class="topbar-left">
             <button class="hamburger" id="hamburgerBtn" onclick="toggleDrawer()" title="Conversations">&#9776;</button>
-            <span class="topbar-brand"><span class="llama-icon">&#129435;</span> cAIc <span class="version">v{{ version }}</span> <span class="llama-icon flip">&#129435;</span></span>
+            <span class="topbar-brand">cAIc <span class="version">v{{ version }}</span></span>
         </div>
         <div class="topbar-right">
             <button class="badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">MEM</button>
@@ -404,9 +397,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         </div>
         <div class="input-row">
             <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.pdf,.json,.py,.html,.png,.jpg,.jpeg,.gif,.svg,.webp" onchange="onFileSelected(event)">
-            <button class="input-btn paperclip" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
-            <select id="presetSelect" class="preset-select"><option value="">preset: none</option></select>
-            <button class="input-btn search" id="searchBtn" onclick="sendSearch()" title="Search the web">&#128269;</button>
+            <button class="paperclip-btn" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
             <textarea id="userInput" placeholder="Type a message... (Shift+Enter for new line)" rows="1" autofocus></textarea>
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
         </div>
@@ -451,6 +442,13 @@ let currentRole = 'guest';
 
 const SESSION_KEY = 'jc_session_id';
 
+function toggleDrawer() {
+    const drawer = document.getElementById('convDrawer');
+    const overlay = document.getElementById('drawerOverlay');
+    const isOpen = drawer.classList.toggle('open');
+    overlay.classList.toggle('visible', isOpen);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') unlockWithPin(); });
     await bootstrapAuth();
@@ -475,25 +473,18 @@ function hideAuthScreen() {
     document.getElementById('authScreen').style.display = 'none';
 }
 
-function showMainScreen() {
-    document.getElementById('appShell').style.display = 'flex';
-}
+function showMainScreen() {}
 
 function applyRoleUI() {
     // Guest mode keeps chat available while hiding controls that mutate system state.
     const isAdmin = currentRole === 'admin';
     const authBtn = document.getElementById('authActionBtn');
-    const settingsBtn = document.querySelector('.settings-btn');
-    const deleteAllBtn = document.querySelector('.delete-all-btn');
     const memoryBadge = document.getElementById('memoryBadge');
     const searchBadge = document.getElementById('searchBadge');
     const profileBadge = document.getElementById('profileBadge');
 
     authBtn.textContent = isAdmin ? 'LOGOUT' : 'ADMIN';
     authBtn.title = isAdmin ? 'Logout admin mode' : 'Unlock admin mode';
-
-    settingsBtn.style.display = isAdmin ? 'inline-block' : 'none';
-    deleteAllBtn.style.display = isAdmin ? 'inline-block' : 'none';
     memoryBadge.style.display = isAdmin ? 'inline-block' : 'none';
     searchBadge.style.display = isAdmin ? 'inline-block' : 'none';
     profileBadge.style.display = isAdmin ? 'inline-block' : 'none';
@@ -865,24 +856,24 @@ function toggleMemory() { if (currentRole !== 'admin') { requireAdminNotice(); r
 function updateProfileUI() {
     const badge = document.getElementById('profileBadge');
     const toggle = document.getElementById('profileToggle');
-    badge.className = 'profile-badge ' + (profileEnabled ? 'on' : 'off');
-    badge.textContent = profileEnabled ? 'PROFILE ON' : 'PROFILE OFF';
+    badge.className = 'badge ' + (profileEnabled ? 'on' : 'off');
+    badge.textContent = profileEnabled ? 'PROFILE' : 'PROFILE OFF';
     if (toggle) toggle.className = 'toggle-switch' + (profileEnabled ? ' on' : '');
 }
 
 function updateSearchUI() {
     const badge = document.getElementById('searchBadge');
     const toggle = document.getElementById('searchToggle');
-    badge.className = 'search-badge ' + (searchEnabled ? 'on' : 'off');
-    badge.innerHTML = searchEnabled ? '🔍 SEARCH ON' : '🔍 SEARCH OFF';
+    badge.className = 'badge ' + (searchEnabled ? 'on' : 'off');
+    badge.innerHTML = searchEnabled ? 'SEARCH' : 'SEARCH OFF';
     if (toggle) toggle.className = 'toggle-switch' + (searchEnabled ? ' on' : '');
 }
 
 function updateMemoryUI() {
     const badge = document.getElementById('memoryBadge');
     const toggle = document.getElementById('memoryToggle');
-    badge.className = 'memory-badge ' + (memoryEnabled ? 'on' : 'off');
-    badge.innerHTML = memoryEnabled ? '🧠 MEM ON' : '🧠 MEM OFF';
+    badge.className = 'badge ' + (memoryEnabled ? 'on' : 'off');
+    badge.innerHTML = memoryEnabled ? 'MEM' : 'MEM OFF';
     if (toggle) toggle.className = 'toggle-switch' + (memoryEnabled ? ' on' : '');
 }
 
@@ -1003,18 +994,7 @@ function renderPresetList() {
     });
 }
 
-function renderPresetSelect() {
-    const select = document.getElementById('presetSelect');
-    const current = select.value;
-    select.innerHTML = '<option value="">None (profile only)</option>';
-    presets.forEach(p => select.add(new Option(p.name, p.id)));
-    if (current) {
-        select.value = current;
-    } else {
-        const ga = presets.find(p => p.name === 'General Assistant');
-        if (ga) select.value = ga.id;
-    }
-}
+function renderPresetSelect() {}
 
 async function addPreset() {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
@@ -1045,12 +1025,7 @@ async function deletePreset(id) {
     await loadPresets();
 }
 
-function getSelectedPresetPrompt() {
-    const id = document.getElementById('presetSelect').value;
-    if (!id) return '';
-    const p = presets.find(x => x.id === id);
-    return p ? p.prompt : '';
-}
+function getSelectedPresetPrompt() { return ''; }
 
 function openSettings() {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
@@ -1121,7 +1096,7 @@ function newChat() {
 
 function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 function showWelcome() {
-    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="logo">⚡</div><p>cAIc — your local coding companion.<br>Profile + Memory context injected automatically.<br>Web search kicks in when the model is uncertain.<br>Use 🔍 to force a web search.<br>Say "remember that..." to teach me things.</p></div>';
+    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><div class="logo">⚡</div><p>cAIc — conversational AI for your homelab cluster<br>Profile &amp; memory injected automatically &bull; Web search on uncertainty<br>Use <strong>🔍</strong> to force search &bull; Say <em>"remember that..."</em> to teach me<br><span class="ws-hint">For code completion &amp; FIM, connect your IDE to <code>/v1/chat/completions</code> with API key</span></p></div>';
 }
 
 async function sendSearch() {
@@ -1287,7 +1262,6 @@ async function sendMessage() {
     const message = input.value.trim();
     if (!message || isStreaming) return;
     const model = currentModel;
-    const presetPrompt = getSelectedPresetPrompt();
     const welcome = document.getElementById('welcomeScreen');
     if (welcome) welcome.remove();
     appendMessage('user', message, true);
@@ -1330,7 +1304,7 @@ async function sendMessage() {
             clearFileSelection();
             await loadConversations();
         }
-        const chatBody = { conversation_id: currentConvId, message, model, system_prompt: presetPrompt };
+        const chatBody = { conversation_id: currentConvId, message, model };
         if (uploadContextId) chatBody.upload_context_id = uploadContextId;
         const resp = await authFetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(chatBody), signal: abortController.signal });
         const reader = resp.body.getReader();
@@ -1401,17 +1375,14 @@ async function sendMessage() {
 function setStreamingState(streaming) {
     isStreaming = streaming;
     const sendBtn = document.getElementById('sendBtn');
-    const searchBtn = document.getElementById('searchBtn');
     if (streaming) { 
         sendBtn.textContent = 'STOP'; 
         sendBtn.className = 'stop-btn'; 
         sendBtn.onclick = () => { if (abortController) abortController.abort(); setStreamingState(false); }; 
-        searchBtn.disabled = true;
     } else { 
         sendBtn.textContent = 'SEND'; 
         sendBtn.className = 'send-btn'; 
         sendBtn.onclick = sendMessage; 
-        searchBtn.disabled = false;
     }
 }
 
