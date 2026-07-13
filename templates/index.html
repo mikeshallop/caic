@@ -1340,6 +1340,7 @@ async function sendMessage() {
     let searchTriggered = false;
     const ttrStart = performance.now();
     let ttr = 0;
+    let tokenCount = 0;
     try {
         abortController = new AbortController();
         let uploadContextId = null;
@@ -1393,18 +1394,18 @@ async function sendMessage() {
                     }
                     if (data.searching) { textEl.innerHTML = fullText ? renderMarkdown(fullText) + '<div class="search-indicator"><div class="spinner"></div>Searching...</div>' : '<div class="search-indicator"><div class="spinner"></div>Searching...</div>'; searchTriggered = true; }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results...</div>'; fullText = ''; firstToken = true; }
-                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
                         if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
                         if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; roleLabel.innerHTML += `<span class="perplexity-badge ${ppl >= 15 ? 'high' : ppl >= 8 ? 'medium' : 'low'}">ppl: ${ppl.toFixed(1)}</span>`; }
-                        if (typeof data.tokens === 'number' && data.tokens > 0 && roleLabel) roleLabel.innerHTML += `<span class="tok-badge">tok: ${data.tokens}</span>`;
                         if (typeof data.tokens_per_sec === 'number' && data.tokens_per_sec > 0 && roleLabel) roleLabel.innerHTML += `<span class="tps-badge">${data.tokens_per_sec.toFixed(1)} t/s</span>`;
                         if (roleLabel && ttr > 0) {
                             const ttrSec = ttr / 1000;
                             const ttrClass = data.searched ? 'search' : (ttrSec <= 2 ? 'low' : ttrSec < 11 ? 'medium' : 'high');
                             roleLabel.innerHTML += `<span class="ttr-badge ${ttrClass}">ttr: ${ttrSec.toFixed(1)}s</span>`;
                         }
+                        if (tokenCount > 0 && roleLabel) roleLabel.innerHTML += `<span class="tok-badge">tok: ${tokenCount}</span>`;
                         conversationHistory.push({ role: 'assistant', content: fullText });
                         updateTokenThermometer();
                         addCopyButtons(assistantDiv);
