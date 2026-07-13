@@ -117,6 +117,7 @@ async def query_searxng(query: str, max_results: int = 5) -> list:
                 f"{SEARXNG_BASE}/search",
                 params={"q": query, "format": "json", "categories": "general"},
                 timeout=10.0,
+                follow_redirects=True,
             )
             if resp.status_code == 200:
                 data = resp.json()
