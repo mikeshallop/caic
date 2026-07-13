@@ -159,6 +159,7 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - B7 — Apple Silicon worker support (gpu.py Metal, hardware.py Darwin)
 - B8 — **Encryption & PHI readiness** — spec out encryption at rest (SQLCipher for caic.db, Qdrant payload encryption) and in-transit (TLS for inference, AMQP, RAG). Per-user auth, audit logging, log sanitizer, data lifecycle. Document the "personal LAN HIPAA gap."
   - **Preferred approach: Private Chat mode** — a toggle that skips DB persistence, memory/RAG injection, and content logging entirely. Zero stored data = zero data to protect. Simpler, more robust, less code to audit than full encryption. Design this as the primary PHI path before reaching for crypto.
+  - **In-transit still needs TLS** — Private Chat eliminates at-rest risk, but AMQP (RabbitMQ) and inference (llama-server) traffic between coordinator and workers is still plaintext on the wire. TLS termination on each node is the lightweight fix (self-signed CA, nginx sidecar or RabbitMQ TLS).
 
 ### Key config values (current)
 - `VERSION = "v0.18.0"` in `config.py`
