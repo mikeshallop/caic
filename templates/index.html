@@ -79,9 +79,9 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .cluster-dot.offline { background:var(--danger); }
 
 .main { flex:1; display:flex; flex-direction:column; height:100vh; min-width:0; position:relative; }
-.main::before, .main::after { content:''; position:absolute; top:0; bottom:0; width:22px; z-index:1; pointer-events:none; background-image:radial-gradient(circle at 11px 14px, rgba(0,0,0,0.12) 2px, transparent 2px),radial-gradient(circle at 11px 14px, var(--bg-primary) 4px, var(--bg-secondary) 4.5px); background-size:22px 28px; background-repeat:repeat-y; border:1px solid var(--border); background-color:var(--bg-secondary); }
-.main::before { left:0; border-left:none; border-radius:0 4px 4px 0; box-shadow:2px 0 4px rgba(0,0,0,0.06); }
-.main::after { right:0; border-right:none; border-radius:4px 0 0 4px; box-shadow:-2px 0 4px rgba(0,0,0,0.06); }
+.main::before, .main::after { content:''; position:absolute; top:0; bottom:0; width:24px; z-index:1; pointer-events:none; background-image:radial-gradient(circle at 12px 14px, rgba(0,0,0,0.25) 2px, transparent 2px),radial-gradient(circle at 12px 14px, var(--bg-primary) 5px, var(--bg-tertiary) 5.5px); background-size:24px 28px; background-repeat:repeat-y; border:1px solid var(--border); background-color:var(--bg-tertiary); }
+.main::before { left:0; border-left:none; border-radius:0 4px 4px 0; }
+.main::after { right:0; border-right:none; border-radius:4px 0 0 4px; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:8px 28px; border-bottom:1px solid var(--border); background:var(--bg-secondary); flex-shrink:0; gap:12px; }
 .topbar-left { display:flex; align-items:center; gap:10px; min-width:0; }
 .topbar-center { display:flex; align-items:center; gap:12px; font-size:12px; font-family:var(--font-mono); color:var(--text-muted); }

@@ -9,7 +9,7 @@ import logging
 
 log = logging.getLogger("caic")
 
-VERSION = "v0.17.25"
+VERSION = "v0.17.26"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://192.168.50.108:8081")
 SEARXNG_BASE = "http://localhost:8888"
