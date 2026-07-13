@@ -139,8 +139,12 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - **401 error cascade** — `SESSION_TIMEOUT_SECONDS` bumped 90→3600 (1 hour). All 10 unprotected `authFetch` calls wrapped in try/catch.
 - **Token counter** — removed localStorage persistence; resets to 0 on page refresh.
 - **Ctrl+Enter for web search** — Shift+Enter now inserts newline (universal convention), Ctrl+Enter triggers search.
-- **Search button styling** — `search-btn` now matches `send-btn` font/font-size/weight. Label: "web 🔍".
-- **User message toolbar** — copy/print/save toolbar added to user messages (was assistant-only).
+- **Search button styling** — WEB button matches SEND: same font/size/weight, orange bg with dark navy text (`var(--bg-tertiary)`). Input placeholder updated.
+- **Toast notifications** — `showToast()` helper, every action icon now fires a slide-out notification (copy, save, delete, rate, etc.). Print is the exception (dialog handles it).
+- **Clipboard reliability** — `execCopy()` helper for HTTP fallback (navigator.clipboard fails on plain HTTP). All three copy paths (user inline, toolbar, code blocks) now work on jarvis:8080.
+- **User copy icon** — single 📋 inline at end of user query text (not a full toolbar). Uses `data-content` attr to avoid HTML injection in onclick.
+- **Rating thumbs removed** — 👍👎 cut (no backend, no persistence, privacy concern).
+- **Keybinding fix** — Shift+Enter = newline, Ctrl+Enter = search (universal conventions).
 
 ### Active
 - (none)
@@ -153,6 +157,7 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - B5 — default model auto-pull on first start
 - B6 — waterfall direction toggle
 - B7 — Apple Silicon worker support (gpu.py Metal, hardware.py Darwin)
+- B8 — **Encryption & PHI readiness** — spec out encryption at rest (SQLCipher for caic.db, Qdrant payload encryption) and in-transit (TLS for inference, AMQP, RAG). Per-user auth, audit logging, log sanitizer, data lifecycle. Document the "personal LAN HIPAA gap." No implementation yet — capture design decisions.
 
 ### Key config values (current)
 - `VERSION = "v0.18.0"` in `config.py`
