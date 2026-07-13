@@ -1078,7 +1078,7 @@ async function loadConversation(convId) {
         container.innerHTML = '';
         conversationHistory = [];
         data.messages.forEach(msg => { appendMessage(msg.role, msg.content, false); conversationHistory.push({ role: msg.role, content: msg.content }); });
-        scrollToBottom();
+        scrollToTop();
         await loadConversations();
     } catch(e) {}
 }
@@ -1151,7 +1151,7 @@ async function sendSearch() {
                     if (data.error) { textEl.textContent = 'Error: ' + data.error; setStreamingState(false); return; }
                     if (data.conversation_id && !currentConvId) { currentConvId = data.conversation_id; await loadConversations(); }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results, summarizing...</div>'; }
-                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; } fullText += data.token; textEl.innerHTML = renderMarkdown(fullText); scrollToTop(); }
                     if (data.raw_results) {
                         let rawHtml = '<details class="raw-results"><summary>🔍 View raw search results (' + data.raw_results.length + ')</summary><ul>';
                         data.raw_results.forEach(r => { 
@@ -1346,7 +1346,7 @@ async function sendMessage() {
                     }
                     if (data.searching) { textEl.innerHTML = fullText ? renderMarkdown(fullText) + '<div class="search-indicator"><div class="spinner"></div>Searching...</div>' : '<div class="search-indicator"><div class="spinner"></div>Searching...</div>'; searchTriggered = true; }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results...</div>'; fullText = ''; firstToken = true; }
-                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToBottom(); }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToTop(); }
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
                         if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
@@ -1409,9 +1409,9 @@ function appendMessage(role, content, animate, isSearch = false) {
     div.className = 'message ' + role + (isSearch && role === 'assistant' ? ' search-result' : '');
     if (!animate) div.style.animation = 'none';
     div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}</div><div class="text">${content ? renderMarkdown(content) : ''}</div>${role === 'assistant' ? '<div class="msg-toolbar"></div>' : ''}</div>`;
-    container.appendChild(div);
+    container.prepend(div);
     if (content && role === 'assistant') { addCopyButtons(div); addMessageToolbar(div); }
-    scrollToBottom();
+    scrollToTop();
     return div;
 }
 
@@ -1520,6 +1520,7 @@ function addMessageToolbar(msgDiv) {
 
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 function scrollToBottom() { const c = document.getElementById('chatContainer'); c.scrollTop = c.scrollHeight; }
+function scrollToTop() { const c = document.getElementById('chatContainer'); c.scrollTop = 0; }
 function fallbackCopy(text, btn) {
     const ta = document.createElement('textarea');
     ta.value = text;
