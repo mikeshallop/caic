@@ -180,10 +180,10 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 @keyframes spin { to{transform:rotate(360deg)} }
 .search-badge-inline { display:inline-block; padding:2px 8px; background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); border-radius:10px; color:var(--warning); font-family:var(--font-mono); font-size:10px; margin-left:8px; }
 .memory-badge-inline { display:inline-block; padding:2px 8px; background:rgba(155,89,182,0.15); border:1px solid rgba(155,89,182,0.3); border-radius:10px; color:#9b59b6; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
-.perplexity-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
-.perplexity-badge.low { background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); color:var(--success); }
-.perplexity-badge.medium { background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); color:var(--warning); }
-.perplexity-badge.high { background:rgba(231,76,60,0.15); border:1px solid rgba(231,76,60,0.3); color:var(--danger); }
+.conf-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
+.conf-badge.high { background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); color:var(--success); }
+.conf-badge.medium { background:rgba(243,156,18,0.15); border:1px solid rgba(243,156,18,0.3); color:var(--warning); }
+.conf-badge.low { background:rgba(231,76,60,0.15); border:1px solid rgba(231,76,60,0.3); color:var(--danger); }
 
 .ttr-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; }
 .ttr-badge.low { background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); color:var(--success); }
@@ -389,6 +389,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <span class="tc-item"><span class="tc-label">MEM</span> <span id="memValue" class="tc-val">--%</span></span>
             <span class="tc-item"><span class="tc-label">GPU</span> <span id="gpuValue" class="tc-val">--%</span></span>
             <span class="tc-item"><span class="tc-label">VRAM</span> <span id="vramValue" class="tc-val">--%</span></span>
+            <span class="tc-item"><span class="tc-label">TOK</span> <span id="tokValue" class="tc-val green">0</span></span>
         </div>
         <div class="topbar-right">
             <button class="badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">MEM</button>
@@ -1192,6 +1193,7 @@ async function sendSearch() {
                         addCopyButtons(assistantDiv);
                         addMessageToolbar(assistantDiv);
                         setStreamingState(false);
+                        cumulativeTokens += tokenCount; localStorage.setItem('caicCumulativeTokens', cumulativeTokens.toString()); updateCumulativeTokens();
                         await loadConversations();
                     }
                 } catch(e) { console.log('Parse error:', e); }
@@ -1361,7 +1363,7 @@ async function sendMessage() {
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
                         if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
-                        if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; roleLabel.innerHTML += `<span class="perplexity-badge ${ppl >= 15 ? 'high' : ppl >= 8 ? 'medium' : 'low'}">ppl: ${ppl.toFixed(1)}</span>`; }
+                        if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; const conf = Math.round((1 / ppl) * 100); const cls = conf >= 80 ? 'high' : conf >= 20 ? 'medium' : 'low'; roleLabel.innerHTML += `<span class="conf-badge ${cls}">${conf}%</span>`; }
                         if (typeof data.tokens_per_sec === 'number' && data.tokens_per_sec > 0 && roleLabel) roleLabel.innerHTML += `<span class="tps-badge">${data.tokens_per_sec.toFixed(1)} t/s</span>`;
                         if (roleLabel && ttr > 0) {
                             const ttrSec = ttr / 1000;
@@ -1379,6 +1381,7 @@ async function sendMessage() {
                         addCopyButtons(assistantDiv);
                         addMessageToolbar(assistantDiv);
                         setStreamingState(false);
+                        cumulativeTokens += tokenCount; localStorage.setItem('caicCumulativeTokens', cumulativeTokens.toString()); updateCumulativeTokens();
                         if (data.rag_update_suggestion && data.rag_update_suggestion.conflicts) {
                             showFactConflictBanner(data.rag_update_suggestion.conflicts, data.conversation_id);
                         }
@@ -1564,6 +1567,16 @@ const userInput = document.getElementById('userInput');
 const messageHistory = [];
 let historyIndex = -1;
 let historyDraft = '';
+let cumulativeTokens = parseInt(localStorage.getItem('caicCumulativeTokens') || '0', 10);
+
+function updateCumulativeTokens() {
+    const el = document.getElementById('tokValue');
+    if (el) {
+        el.textContent = cumulativeTokens.toLocaleString();
+        el.className = 'tc-val green';
+    }
+}
+updateCumulativeTokens();
 userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px'; });
 userInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); return; }
