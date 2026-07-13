@@ -10,6 +10,14 @@ cAIc is a cluster orchestration layer that fuses mismatched GPUs, CPUs, and mach
 
 You might also be doing this with retired office PCs and GPUs from the Obama era. That works too. But the core problem cAIc solves isn't budget reuse — it's making non-homogeneous hardware cooperate.
 
+### Paired Programming
+
+Every line of code in this repository was written by an AI (Claude, via opencode). But AI does not architect, design, test, deploy, or decide what to build — that requires experience, judgement, and the discipline to say "no" to feature creep.
+
+**Gramps** (BS Computer Science, Oklahoma State, coding since 1981) performed that role — designing the architecture, managing the development process, writing and maintaining the test suite, operating the deployment pipeline, and directing every feature decision across dozens of sessions spanning months. Without that human steering, this would be yet another AI-generated repo that compiles but doesn't solve a real problem. With it, cAIc ships as a functional, tested, deployed system that runs 24/7 on real hardware serving real users.
+
+This is paired programming, elevated: the AI handles the mechanical work of code generation; the human brings decades of systems-level experience, architectural judgment, and the maturity to ship something that lasts.
+
 ### Architecture: CPU Coordinator + GPU Workers
 
 cAIc splits the workload across two machine roles:
