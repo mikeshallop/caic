@@ -1,4 +1,6 @@
-# cAIc v0.17.26
+![cAIc banner](static/readme-banner.png)
+
+# cAIc v0.18.0
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
@@ -23,6 +25,31 @@ Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. Distributes inference 
 At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
+
+## What's New in v0.18.0
+
+### Wiki — Installation Guide, Screenshots Gallery, Full Documentation
+- **New Installation & Configuration page** — bare-metal walkthrough, cluster setup, config reference, security checklist, 12 troubleshooting topics. Everything a new user needs to get cAIc running.
+- **Screenshots gallery** — clickable image gallery on the wiki Screenshots page
+- **Wiki fully populated** — 5 pages linked from Home, renders at root URL
+- **B5 added to backlog** — auto-download of default GGUF model on first start
+
+### UX Polish — Waterfall Layout, Barcode Stripes, Confidence Badges
+- **Waterfall display** — newest messages at top via `prepend()`, scroll to top
+- **Barcode alternating pairs** — each Q&A wrapped in `.msg-pair` with alternating tint + left border accent
+- **Confidence % badge** (`1/ppl * 100`) replaces raw perplexity, color-coded green/orange/red
+- **Cumulative token counter (TOK)** in topbar center, persisted in `localStorage`
+- **TOK reformatted** to `# / %` — `#` is all-time tokens, `%` is last response's context-window percentage, color-coded
+- **Dot-matrix sprocket strips** on left/right edges of `.main` (24px strips, punch-hole pattern)
+- **Paper grain background** on chat container
+- **Timestamps on user messages** (`HH:MM`), later upgraded to `MON dd, YYYY HH:MM:SS.ss` centisecond precision
+- **Shift+Enter** triggers web search
+- **Typing indicator greys out** on abort
+- **Token count badge** on search responses using client-side `tokenCount`
+- **Removed status dots** from input area (no functional purpose)
+- **Removed thumbs** from toolbar, restored only on non-search AI responses
+
+### Version bumped to v0.18.0
 
 ## What's New in v0.17.26
 
