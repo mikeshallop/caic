@@ -1447,7 +1447,7 @@ function appendMessage(role, content, animate, isSearch = false, afterEl = null)
     const ms = now.getMilliseconds();
     const timeStr = months[now.getMonth()] + ' ' + String(now.getDate()).padStart(2,'0') + ', ' + now.getFullYear() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0') + '.' + String(Math.floor(ms / 10)).padStart(2,'0');
     const textHtml = content ? renderMarkdown(content) : '';
-    const copyIcon = role === 'user' && content ? `<span class="user-copy-btn" data-content="${escapeHtml(content).replace(/"/g,'&quot;')}" onclick="var el=this;event.stopPropagation();var t=el.getAttribute('data-content');if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){el.textContent='✓';setTimeout(function(){el.innerHTML='📋'},1500);showToast('Copied')}).catch(function(){fallbackCopy(t,null);showToast('Copied')})}else{fallbackCopy(t,null);showToast('Copied')}">📋</span>` : '';
+    const copyIcon = role === 'user' && content ? `<span class="user-copy-btn" data-content="${escapeHtml(content).replace(/"/g,'&quot;')}" onclick="var el=this;event.stopPropagation();var t=el.getAttribute('data-content');function d(){el.textContent='✓';setTimeout(function(){el.innerHTML='📋'},1500);showToast('Copied')}if(navigator.clipboard){navigator.clipboard.writeText(t).then(d).catch(function(){execCopy(t);d()})}else{execCopy(t);d()}">📋</span>` : '';
     div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}${role === 'user' ? ' <span class="msg-time">' + timeStr + '</span>' : ''}</div><div class="text">${textHtml}${copyIcon}</div>${role === 'assistant' ? '<div class="msg-toolbar"></div>' : ''}</div>`;
     if (role === 'user') {
         const pair = document.createElement('div');
@@ -1521,9 +1521,10 @@ function addMessageToolbar(msgDiv) {
     copyBtn.title = 'Copy response';
     copyBtn.onclick = () => {
         const t = getText();
+        const done = () => { copyBtn.textContent = '✓'; setTimeout(() => copyBtn.innerHTML = '📋', 1500); showToast('Copied'); };
         if (navigator.clipboard) {
-            navigator.clipboard.writeText(t).then(() => { copyBtn.textContent = '✓'; setTimeout(() => copyBtn.innerHTML = '📋', 1500); showToast('Copied'); }).catch(() => { fallbackCopy(t, copyBtn); showToast('Copied'); });
-        } else { fallbackCopy(t, copyBtn); showToast('Copied'); }
+            navigator.clipboard.writeText(t).then(done).catch(() => { execCopy(t); done(); });
+        } else { execCopy(t); done(); }
     };
 
     const printBtn = document.createElement('button');
@@ -1591,6 +1592,16 @@ function scrollToTop() {
     if (c) c.scrollTop = 0;
 }
 function resetScrollLock() { _userScrolledAway = false; }
+function execCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+}
 function showToast(msg) {
     const el = document.createElement('div');
     el.className = 'toast-error';
