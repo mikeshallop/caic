@@ -157,7 +157,8 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - B5 — default model auto-pull on first start
 - B6 — waterfall direction toggle
 - B7 — Apple Silicon worker support (gpu.py Metal, hardware.py Darwin)
-- B8 — **Encryption & PHI readiness** — spec out encryption at rest (SQLCipher for caic.db, Qdrant payload encryption) and in-transit (TLS for inference, AMQP, RAG). Per-user auth, audit logging, log sanitizer, data lifecycle. Document the "personal LAN HIPAA gap." No implementation yet — capture design decisions.
+- B8 — **Encryption & PHI readiness** — spec out encryption at rest (SQLCipher for caic.db, Qdrant payload encryption) and in-transit (TLS for inference, AMQP, RAG). Per-user auth, audit logging, log sanitizer, data lifecycle. Document the "personal LAN HIPAA gap."
+  - **Preferred approach: Private Chat mode** — a toggle that skips DB persistence, memory/RAG injection, and content logging entirely. Zero stored data = zero data to protect. Simpler, more robust, less code to audit than full encryption. Design this as the primary PHI path before reaching for crypto.
 
 ### Key config values (current)
 - `VERSION = "v0.18.0"` in `config.py`
