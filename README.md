@@ -1,4 +1,4 @@
-# cAIc v0.17.2
+# cAIc v0.17.26
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
@@ -24,7 +24,7 @@ At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU
 
 Developer wiki: [docs/wiki/Home.md](docs/wiki/Home.md)
 
-## What's New in v0.17.2
+## What's New in v0.17.26
 
 ### Dynamic Model Swap — `request_model_swap()`, `select_node()` async (Roadmap N Task 14)
 - **`cluster.py`** — `request_model_swap()` publishes `cmd.swap_model` to `jc.admin`; `handle_model_ready()` and `handle_model_failed()` consume `model_ready`/`model_failed` on `jc.system`
