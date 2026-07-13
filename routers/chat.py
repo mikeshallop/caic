@@ -46,6 +46,7 @@ def parse_llama_stream_chunk(line: str) -> tuple:
             if finish == "stop":
                 usage = chunk.get("usage", {})
                 stats["tokens_per_sec"] = usage.get("tokens_per_second", 0.0)
+                stats["completion_tokens"] = usage.get("completion_tokens", 0)
             return token, finish == "stop", stats, logprobs_list
         if "message" in chunk and "content" in chunk["message"]:
             token = chunk["message"]["content"]
@@ -55,6 +56,7 @@ def parse_llama_stream_chunk(line: str) -> tuple:
                 eval_count = chunk.get("eval_count", 0)
                 eval_duration = chunk.get("eval_duration", 0)
                 stats["tokens_per_sec"] = (eval_count / (eval_duration / 1e9)) if eval_duration > 0 else 0
+                stats["completion_tokens"] = eval_count
             return token, done, stats, []
     except json.JSONDecodeError:
         pass
@@ -123,6 +125,7 @@ async def chat(request: Request):
         full_response = []
         all_logprobs = []
         tokens_per_sec = 0.0
+        completion_tokens = 0
         inference_base = await _get_inference_url(user_message)
 
         if remember_response:
@@ -145,6 +148,7 @@ async def chat(request: Request):
                                 yield f"data: {json.dumps({'token': token, 'conversation_id': conv_id})}\n\n"
                             if done:
                                 tokens_per_sec = stats.get("tokens_per_sec", 0.0)
+                                completion_tokens = stats.get("completion_tokens", 0)
 
                 assistant_msg = "".join(full_response)
                 perplexity = calculate_perplexity(all_logprobs) if all_logprobs else 0.0
@@ -199,7 +203,7 @@ async def chat(request: Request):
                         db2.commit()
                         db2.close()
 
-                        yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'searched': True, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1)})}\n\n"
+                        yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'searched': True, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'tokens': completion_tokens})}\n\n"
                         return
 
                 saved_msg = assistant_msg
@@ -212,7 +216,7 @@ async def chat(request: Request):
                 db2.commit()
                 db2.close()
 
-                yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1)})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'tokens': completion_tokens})}\n\n"
 
             except httpx.RemoteProtocolError:
                 pass

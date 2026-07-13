@@ -173,6 +173,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .ttr-badge.high { background:rgba(231,76,60,0.15); border:1px solid rgba(231,76,60,0.3); color:var(--danger); }
 .ttr-badge.search { background:rgba(230,126,34,0.15); border:1px solid rgba(230,126,34,0.3); color:#e67e22; }
 .tps-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; background:rgba(72,181,224,0.15); border:1px solid rgba(72,181,224,0.3); color:var(--accent); }
+.tok-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-family:var(--font-mono); font-size:10px; margin-left:8px; background:rgba(52,152,219,0.15); border:1px solid rgba(52,152,219,0.3); color:#3498db; }
 
 .msg-toolbar { display:flex; gap:2px; margin-top:8px; opacity:0; transition:opacity 0.15s; align-items:center; }
 .message .content:hover .msg-toolbar { opacity:1; }
@@ -1326,6 +1327,9 @@ async function sendMessage() {
     if (welcome) welcome.remove();
     appendMessage('user', message, true);
     conversationHistory.push({ role: 'user', content: message });
+    messageHistory.push(message);
+    if (messageHistory.length > 100) messageHistory.shift();
+    historyIndex = -1;
     input.value = '';
     input.style.height = 'auto';
     updateTokenThermometer();
@@ -1394,6 +1398,7 @@ async function sendMessage() {
                         const roleLabel = assistantDiv.querySelector('.role-label');
                         if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
                         if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; roleLabel.innerHTML += `<span class="perplexity-badge ${ppl >= 15 ? 'high' : ppl >= 8 ? 'medium' : 'low'}">ppl: ${ppl.toFixed(1)}</span>`; }
+                        if (typeof data.tokens === 'number' && data.tokens > 0 && roleLabel) roleLabel.innerHTML += `<span class="tok-badge">tok: ${data.tokens}</span>`;
                         if (typeof data.tokens_per_sec === 'number' && data.tokens_per_sec > 0 && roleLabel) roleLabel.innerHTML += `<span class="tps-badge">${data.tokens_per_sec.toFixed(1)} t/s</span>`;
                         if (roleLabel && ttr > 0) {
                             const ttrSec = ttr / 1000;
@@ -1567,8 +1572,34 @@ function fallbackCopy(text, btn) {
 }
 
 const userInput = document.getElementById('userInput');
+const messageHistory = [];
+let historyIndex = -1;
+let historyDraft = '';
 userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px'; });
-userInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+userInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); return; }
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (messageHistory.length === 0) return;
+        if (historyIndex === -1) historyDraft = userInput.value;
+        if (historyIndex < messageHistory.length - 1) {
+            historyIndex++;
+            userInput.value = messageHistory[messageHistory.length - 1 - historyIndex];
+        }
+        userInput.selectionStart = userInput.selectionEnd = userInput.value.length;
+        userInput.dispatchEvent(new Event('input'));
+        return;
+    }
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIndex === -1) return;
+        historyIndex--;
+        userInput.value = historyIndex === -1 ? historyDraft : messageHistory[messageHistory.length - 1 - historyIndex];
+        userInput.selectionStart = userInput.selectionEnd = userInput.value.length;
+        userInput.dispatchEvent(new Event('input'));
+        return;
+    }
+});
 const toastStyle = document.createElement('style');
 toastStyle.textContent = '.toast-error { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--danger); color:#fff; padding:12px 24px; border-radius:var(--radius); font-family:var(--font-body); font-size:14px; z-index:9999; animation:fadeIn 0.2s; } @keyframes fadeIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }';
 document.head.appendChild(toastStyle);
