@@ -2,6 +2,8 @@
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
+The industry consensus — llama.cpp RPC, vLLM, TensorFlow distributed — all assume a homogeneous cluster: same GPU vendor, same VRAM, same driver stack, reachable over a fast fabric. This assumption works for data centers that buy 64 identical H100s at a time. It does not work for the person who has a gaming PC with an NVIDIA card in the living room, an AMD-powered home server in the closet, and an old MacBook on the desk. That person has more aggregate compute than any single consumer machine, but no software stack can make it cooperate.
+
 cAIc is a cluster orchestration layer that fuses mismatched GPUs, CPUs, and machines into a single inference surface. It doesn't care that your worker runs AMD and your coordinator runs NVIDIA. It doesn't care that one machine has 8 GB VRAM and another has 16 GB. The cluster protocol (AMQP) discovers available hardware, triage routes queries to the right node, and swaps models between workers on demand. You get one chat interface; behind it, a pool of heterogeneous compute that behaves like a single AI server.
 
 You might also be doing this with retired office PCs and GPUs from the Obama era. That works too. But the core problem cAIc solves isn't budget reuse — it's making non-homogeneous hardware cooperate.
