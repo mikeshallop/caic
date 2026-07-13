@@ -20,7 +20,15 @@ cAIc splits the workload across two machine roles:
 
 This split keeps the UI responsive during inference (the coordinator isn't blocked by GPU compute) and lets workers focus VRAM entirely on model weights rather than browser sessions or API orchestration.
 
-Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. Distributes inference across mismatched hardware via llama.cpp RPC with AMQP-mediated cluster coordination.
+Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. AMQP-mediated cluster coordination with an OpenAI-compatible inference endpoint.
+
+#### Query-routing vs. layer-splitting — why it matters
+
+Most distributed inference tools (llama.cpp RPC, vLLM with tensor parallelism, exo) split a *single model* across multiple GPUs. The first GPU runs layers 0–15, the second runs 16–31, and so on. This works well in a homogeneous cluster where every GPU is identical, but in a heterogeneous setup the slowest card sets the pace — every forward pass waits for the straggler. Communication overhead between GPUs (NCCL, RPC) adds latency too.
+
+cAIc takes a different approach: **query-routing**. Each worker runs a complete model on its own GPU. When a query comes in, triage classifies it and routes the *whole request* to the worker best suited for it — code questions go to the worker with a coder model, general chat goes to the instruct model. No layer sharing, no lockstep, no straggler problem. The tradeoff is that no single query can use combined VRAM across multiple GPUs, but the throughput and responsiveness of the cluster as a whole isn't dragged down by the weakest link.
+
+This also means a worker with a slow GPU can still contribute meaningfully — it handles less latency-sensitive queries or batch background work, while the fast GPU handles interactive chat.
 
 At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
 
