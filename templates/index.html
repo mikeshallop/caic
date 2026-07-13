@@ -1405,7 +1405,14 @@ async function sendMessage() {
                             const ttrClass = data.searched ? 'search' : (ttrSec <= 2 ? 'low' : ttrSec < 11 ? 'medium' : 'high');
                             roleLabel.innerHTML += `<span class="ttr-badge ${ttrClass}">ttr: ${ttrSec.toFixed(1)}s</span>`;
                         }
-                        if (tokenCount > 0 && roleLabel) roleLabel.innerHTML += `<span class="tok-badge">tok: ${tokenCount}</span>`;
+                        if (tokenCount > 0 && roleLabel) {
+                            const pt = data.prompt_tokens || 0;
+                            const ct = data.completion_tokens || 0;
+                            const totalTokens = pt + ct;
+                            const ctxLen = data.context_length || 4096;
+                            const usedPct = Math.round((totalTokens / ctxLen) * 100);
+                            roleLabel.innerHTML += `<span class="tok-badge">tok: ${totalTokens}/${ctxLen} ${usedPct}%</span>`;
+                        }
                         conversationHistory.push({ role: 'assistant', content: fullText });
                         updateTokenThermometer();
                         addCopyButtons(assistantDiv);

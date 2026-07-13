@@ -16,7 +16,7 @@ from search import (calculate_perplexity, is_uncertain, is_refusal,
                     clean_hedging, format_search_results, format_direct_answer,
                     extract_search_query, query_searxng)
 from security import read_json_body, log_incident, BODY_LIMIT_CHAT_BYTES
-from config import MAX_CHAT_MESSAGE_CHARS
+from config import MAX_CHAT_MESSAGE_CHARS, MODEL_CONTEXT_LENGTH
 
 log = logging.getLogger("caic")
 router = APIRouter()
@@ -46,6 +46,7 @@ def parse_llama_stream_chunk(line: str) -> tuple:
                 usage = chunk.get("usage", {})
                 stats["tokens_per_sec"] = usage.get("tokens_per_second", 0.0)
                 stats["completion_tokens"] = usage.get("completion_tokens", 0)
+                stats["prompt_tokens"] = usage.get("prompt_tokens", 0)
             return token, finish == "stop", stats, logprobs_list
         if "message" in chunk and "content" in chunk["message"]:
             token = chunk["message"]["content"]
@@ -125,6 +126,7 @@ async def chat(request: Request):
         all_logprobs = []
         tokens_per_sec = 0.0
         completion_tokens = 0
+        prompt_tokens = 0
 
         if remember_response:
             yield f"data: {json.dumps({'token': remember_response + chr(10) + chr(10), 'conversation_id': conv_id})}\n\n"
@@ -132,7 +134,7 @@ async def chat(request: Request):
         async with httpx.AsyncClient() as client:
             try:
                 async with client.stream(
-                    "POST", f"{inference_base}/v1/chat/completions",
+                    "POST", f"{LLAMA_SERVER_BASE}/v1/chat/completions",
                     json=upstream_payload,
                     timeout=httpx.Timeout(300.0, connect=10.0),
                 ) as resp:
@@ -147,6 +149,7 @@ async def chat(request: Request):
                             if done:
                                 tokens_per_sec = stats.get("tokens_per_sec", 0.0)
                                 completion_tokens = stats.get("completion_tokens", 0)
+                                prompt_tokens = stats.get("prompt_tokens", 0)
 
                 assistant_msg = "".join(full_response)
                 perplexity = calculate_perplexity(all_logprobs) if all_logprobs else 0.0
@@ -172,7 +175,7 @@ async def chat(request: Request):
 
                         augmented_response = []
                         async with client.stream(
-                            "POST", f"{inference_base}/v1/chat/completions",
+                            "POST", f"{LLAMA_SERVER_BASE}/v1/chat/completions",
                             json={"model": model, "messages": augmented_messages, "stream": True},
                             timeout=httpx.Timeout(300.0, connect=10.0),
                         ) as resp2:
@@ -201,7 +204,7 @@ async def chat(request: Request):
                         db2.commit()
                         db2.close()
 
-                        yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'searched': True, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'tokens': completion_tokens})}\n\n"
+                        yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'searched': True, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'prompt_tokens': prompt_tokens, 'completion_tokens': completion_tokens, 'context_length': MODEL_CONTEXT_LENGTH})}\n\n"
                         return
 
                 saved_msg = assistant_msg
@@ -214,7 +217,7 @@ async def chat(request: Request):
                 db2.commit()
                 db2.close()
 
-                yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'tokens': completion_tokens})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'prompt_tokens': prompt_tokens, 'completion_tokens': completion_tokens, 'context_length': MODEL_CONTEXT_LENGTH})}\n\n"
 
             except httpx.RemoteProtocolError:
                 pass

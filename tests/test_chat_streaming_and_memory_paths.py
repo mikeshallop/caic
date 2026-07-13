@@ -14,9 +14,7 @@ from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
 
 
 def _mock_triage_url(monkeypatch, url: str = config.LLAMA_SERVER_BASE):
-    async def fake_url(query: str) -> str:
-        return url
-    monkeypatch.setattr(routers.chat, "_get_inference_url", fake_url)
+    monkeypatch.setattr(config, "LLAMA_SERVER_BASE", url)
 
 
 def make_client(tmp_path: Path) -> TestClient:
