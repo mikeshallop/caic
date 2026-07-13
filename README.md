@@ -6,6 +6,16 @@ cAIc is a cluster orchestration layer that fuses mismatched GPUs, CPUs, and mach
 
 You might also be doing this with retired office PCs and GPUs from the Obama era. That works too. But the core problem cAIc solves isn't budget reuse — it's making non-homogeneous hardware cooperate.
 
+### Architecture: CPU Coordinator + GPU Workers
+
+cAIc splits the workload across two machine roles:
+
+**Coordinator** (ultron — Ryzen 7 7840HS, no discrete GPU) runs the FastAPI app, RAG vector search (Qdrant), text embedding (Ollama on CPU), query triage (Phi-4-mini), web search (SearXNG), message broker (RabbitMQ), and all SQLite-backed services — memory, profiles, conversations, settings. Every CPU-bound task stays here.
+
+**Workers** (jarvis — RX 6600 XT 12 GB / corsair — RTX 5070 Ti 16 GB) run only llama-server for GPU inference. The coordinator never touches a model; workers never touch the database. Workers register via AMQP, receive ping/pong health checks, and accept model-swap commands when triage determines a different model is needed for the current query.
+
+This split keeps the UI responsive during inference (the coordinator isn't blocked by GPU compute) and lets workers focus VRAM entirely on model weights rather than browser sessions or API orchestration.
+
 Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. Distributes inference across mismatched hardware via llama.cpp RPC with AMQP-mediated cluster coordination.
 
 At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
