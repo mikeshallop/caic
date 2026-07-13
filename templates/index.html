@@ -81,6 +81,9 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .main { flex:1; display:flex; flex-direction:column; height:100vh; min-width:0; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; border-bottom:1px solid var(--border); background:var(--bg-secondary); flex-shrink:0; gap:12px; }
 .topbar-left { display:flex; align-items:center; gap:10px; min-width:0; }
+.topbar-center { display:flex; align-items:center; gap:12px; font-size:10px; font-family:var(--font-mono); color:var(--text-muted); }
+.tc-item { white-space:nowrap; }
+.tc-label { color:var(--text-muted); text-transform:uppercase; margin-right:2px; }
 .topbar-right { display:flex; align-items:center; gap:6px; }
 .hamburger { background:transparent; border:1px solid var(--border); color:var(--text-secondary); width:30px; height:30px; border-radius:var(--radius); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; }
 .hamburger:hover { background:var(--bg-hover); border-color:var(--accent-dim); color:var(--accent); }
@@ -195,6 +198,9 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .input-row textarea { flex:1; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-body); font-size:14px; padding:12px 14px; border-radius:var(--radius); resize:none; min-height:44px; max-height:200px; line-height:1.5; }
 .input-row textarea:focus { outline:none; border-color:var(--accent-dim); }
 .input-row textarea::placeholder { color:var(--text-muted); }
+.input-status { display:flex; align-items:center; gap:4px; padding:0 4px; height:44px; }
+.isdot { display:flex; align-items:center; }
+.isdot .status-dot { width:5px; height:5px; }
 .paperclip-btn { padding:12px 12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-secondary); font-size:18px; cursor:pointer; transition:all 0.2s; line-height:1; }
 .paperclip-btn:hover { background:var(--bg-hover); color:var(--accent); border-color:var(--accent-dim); }
 .send-btn { padding:12px 20px; background:var(--accent-dim); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
@@ -298,12 +304,6 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         <div class="df-row" id="memoryStatus"><span class="status-dot"></span> <span class="df-label">memory</span> -- entries</div>
         <div class="df-row" id="clusterStatus"><span class="status-dot"></span> <span class="df-label">cluster</span> --</div>
         <div class="cluster-panel" id="clusterPanel" style="display:none"></div>
-        <div class="stats-compact" id="statsPanel">
-            <span class="sc-item" title="CPU"><span class="sc-label">CPU</span> <span id="cpuValue">--%</span></span>
-            <span class="sc-item" title="Memory"><span class="sc-label">MEM</span> <span id="memValue">--%</span></span>
-            <span class="sc-item" title="GPU"><span class="sc-label">GPU</span> <span id="gpuValue">--%</span></span>
-            <span class="sc-item" title="VRAM"><span class="sc-label">VRAM</span> <span id="vramValue">--%</span></span>
-        </div>
     </div>
 </aside>
 
@@ -380,6 +380,12 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="hamburger" id="hamburgerBtn" onclick="toggleDrawer()" title="Conversations">&#9776;</button>
             <span class="topbar-brand">cAIc <span class="version">v{{ version }}</span></span>
         </div>
+        <div class="topbar-center">
+            <span class="tc-item"><span class="tc-label">CPU</span> <span id="cpuValue">--%</span></span>
+            <span class="tc-item"><span class="tc-label">MEM</span> <span id="memValue">--%</span></span>
+            <span class="tc-item"><span class="tc-label">GPU</span> <span id="gpuValue">--%</span></span>
+            <span class="tc-item"><span class="tc-label">VRAM</span> <span id="vramValue">--%</span></span>
+        </div>
         <div class="topbar-right">
             <button class="badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">MEM</button>
             <button class="badge on" id="searchBadge" onclick="toggleSearch()" title="Toggle auto web search">SEARCH</button>
@@ -400,6 +406,12 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="file-preview-clear" onclick="clearFileSelection()" title="Remove file">&times;</button>
         </div>
         <div class="input-row">
+            <div class="input-status">
+                <span class="isdot" id="ollamaDot" title="LLM"><span class="status-dot offline"></span></span>
+                <span class="isdot" id="searchDot" title="Search"><span class="status-dot offline"></span></span>
+                <span class="isdot" id="memoryDot" title="Memory"><span class="status-dot"></span></span>
+                <span class="isdot" id="clusterDot" title="Cluster"><span class="status-dot"></span></span>
+            </div>
             <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.pdf,.json,.py,.html,.png,.jpg,.jpeg,.gif,.svg,.webp" onchange="onFileSelected(event)">
             <button class="paperclip-btn" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
             <textarea id="userInput" placeholder="Type a message... (Shift+Enter for new line)" rows="1" autofocus></textarea>
@@ -696,16 +708,10 @@ async function updateSystemStats() {
     try {
         const resp = await authFetch('/api/stats');
         const data = await resp.json();
-        document.getElementById('cpuFill').style.width = data.cpu_percent + '%';
-        document.getElementById('cpuFill').className = 'stat-fill' + (data.cpu_percent >= 90 ? ' danger' : data.cpu_percent >= 70 ? ' warn' : '');
         document.getElementById('cpuValue').textContent = data.cpu_percent + '%';
-        document.getElementById('memFill').style.width = data.memory_percent + '%';
-        document.getElementById('memFill').className = 'stat-fill' + (data.memory_percent >= 90 ? ' danger' : data.memory_percent >= 70 ? ' warn' : '');
         document.getElementById('memValue').textContent = data.memory_percent + '%';
         if (data.gpu_available) {
-            document.getElementById('gpuFill').style.width = data.gpu_percent + '%';
             document.getElementById('gpuValue').textContent = data.gpu_percent + '%';
-            document.getElementById('vramFill').style.width = data.vram_percent + '%';
             document.getElementById('vramValue').textContent = data.vram_percent + '%';
         }
     } catch(e) {}
