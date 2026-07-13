@@ -200,6 +200,9 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .send-btn:hover { background:var(--accent); }
 .stop-btn { padding:12px 20px; background:var(--danger); border:none; border-radius:var(--radius); color:#fff; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; }
 .stop-btn:hover { background:var(--danger-hover); }
+.search-btn { padding:12px 14px; background:var(--warning); border:none; border-radius:var(--radius); color:#fff; font-size:16px; cursor:pointer; transition:background 0.2s; }
+.search-btn:hover { background:#e67e22; }
+.search-btn:disabled { background:var(--text-muted); cursor:not-allowed; }
 .file-preview { max-width:900px; margin:0 auto 8px; display:none; align-items:center; gap:10px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; }
 .file-preview.visible { display:flex; }
 .file-preview-thumb { width:48px; height:48px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
@@ -400,6 +403,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="paperclip-btn" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
             <textarea id="userInput" placeholder="Type a message... (Shift+Enter for new line)" rows="1" autofocus></textarea>
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
+            <button class="search-btn" id="searchBtn" onclick="sendSearch()" title="Search the web" style="display:none">&#128269;</button>
         </div>
     </div>
 
@@ -724,8 +728,12 @@ async function checkSearchStatus() {
         const resp = await authFetch('/api/search/status');
         const data = await resp.json();
         document.getElementById('searchStatus').innerHTML = data.available ? '<span class="status-dot"></span> search: ready' : '<span class="status-dot warning"></span> search: unavailable';
+        const searchBtn = document.getElementById('searchBtn');
+        if (searchBtn) searchBtn.style.display = data.available ? '' : 'none';
     } catch(e) {
         document.getElementById('searchStatus').innerHTML = '<span class="status-dot offline"></span> search: error';
+        const searchBtn = document.getElementById('searchBtn');
+        if (searchBtn) searchBtn.style.display = 'none';
     }
 }
 
@@ -1375,14 +1383,17 @@ async function sendMessage() {
 function setStreamingState(streaming) {
     isStreaming = streaming;
     const sendBtn = document.getElementById('sendBtn');
+    const searchBtn = document.getElementById('searchBtn');
     if (streaming) { 
         sendBtn.textContent = 'STOP'; 
         sendBtn.className = 'stop-btn'; 
         sendBtn.onclick = () => { if (abortController) abortController.abort(); setStreamingState(false); }; 
+        if (searchBtn) searchBtn.disabled = true;
     } else { 
         sendBtn.textContent = 'SEND'; 
         sendBtn.className = 'send-btn'; 
         sendBtn.onclick = sendMessage; 
+        if (searchBtn) searchBtn.disabled = false;
     }
 }
 
