@@ -98,7 +98,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .badge.off { border-color:rgba(255,51,85,0.3); color:var(--danger); background:rgba(255,51,85,0.08); }
 .badge.admin { border-color:var(--border); color:var(--text-muted); }
 .badge.admin:hover { border-color:var(--accent-dim); color:var(--accent); }
-.status-dot { width:6px; height:6px; border-radius:50%; background:var(--success); display:inline-block; flex-shrink:0; }
+.role-label .msg-time { color:var(--text-muted); font-weight:400; font-size:10px; margin-left:6px; }
 .status-dot.offline { background:var(--danger); }
 .status-dot.warning { background:var(--warning); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -409,7 +409,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         <div class="input-row">
             <input type="file" id="fileInput" style="display:none" accept=".txt,.md,.pdf,.json,.py,.html,.png,.jpg,.jpeg,.gif,.svg,.webp" onchange="onFileSelected(event)">
             <button class="paperclip-btn" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
-            <textarea id="userInput" placeholder="Type a message... (Shift+Enter for new line)" rows="1" autofocus></textarea>
+            <textarea id="userInput" placeholder="Type a message... (Shift+Enter to search, Enter to send)" rows="1" autofocus></textarea>
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
             <button class="search-btn" id="searchBtn" onclick="sendSearch()" title="Search the web" style="display:none">&#128269;</button>
         </div>
@@ -1408,7 +1408,9 @@ function appendMessage(role, content, animate, isSearch = false, afterEl = null)
     const div = document.createElement('div');
     div.className = 'message ' + role + (isSearch && role === 'assistant' ? ' search-result' : '');
     if (!animate) div.style.animation = 'none';
-    div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}</div><div class="text">${content ? renderMarkdown(content) : ''}</div>${role === 'assistant' ? '<div class="msg-toolbar"></div>' : ''}</div>`;
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}${role === 'user' ? ' <span class="msg-time">' + timeStr + '</span>' : ''}</div><div class="text">${content ? renderMarkdown(content) : ''}</div>${role === 'assistant' ? '<div class="msg-toolbar"></div>' : ''}</div>`;
     if (afterEl) {
         afterEl.parentNode.insertBefore(div, afterEl.nextSibling);
     } else {
@@ -1499,6 +1501,26 @@ function addMessageToolbar(msgDiv) {
         URL.revokeObjectURL(a.href);
     };
     toolbar.append(copyBtn, printBtn, saveBtn, sep());
+    if (!msgDiv.classList.contains('search-result')) {
+        const rating = { value: 0 };
+        const upBtn = document.createElement('button');
+        upBtn.innerHTML = '👍';
+        upBtn.title = 'Rate up';
+        upBtn.onclick = () => {
+            rating.value = rating.value === 1 ? 0 : 1;
+            upBtn.classList.toggle('active', rating.value === 1);
+            dnBtn.classList.toggle('active', false);
+        };
+        const dnBtn = document.createElement('button');
+        dnBtn.innerHTML = '👎';
+        dnBtn.title = 'Rate down';
+        dnBtn.onclick = () => {
+            rating.value = rating.value === -1 ? 0 : -1;
+            dnBtn.classList.toggle('active', rating.value === -1);
+            upBtn.classList.toggle('active', false);
+        };
+        toolbar.append(upBtn, dnBtn);
+    }
     function sep() { const s = document.createElement('span'); s.className = 'sep'; return s; }
 }
 
@@ -1525,6 +1547,7 @@ let historyDraft = '';
 userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px'; });
 userInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); return; }
+    if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); sendSearch(); return; }
     if (e.key === 'ArrowUp') {
         e.preventDefault();
         if (messageHistory.length === 0) return;
