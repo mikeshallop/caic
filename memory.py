@@ -27,6 +27,80 @@ FORGET_PATTERNS = [
 ]
 
 
+AUTO_FACT_PATTERNS = [
+    re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"),
+    re.compile(r"\b(?:systemd|nginx|docker|ssh|ufw|iptables|postgres(?:ql)?|redis|mosquitto|node_exporter|prometheus|grafana|qdrant|rabbitmq|searxng|llama-server)\b", re.IGNORECASE),
+    re.compile(r"/(?:etc|home|usr|var|opt|tmp|mnt)/\S+"),
+    re.compile(r"\b(?:Ryzen|RX\s*\d{4}|RTX\s*\d{4}|Radeon|AMD|NVIDIA|Core\s*i[579]|Threadripper)\b", re.IGNORECASE),
+    re.compile(r"\b(?:Qwen|Llama|Gemma|Phi|Mistral|DeepSeek)\S*\b", re.IGNORECASE),
+    re.compile(r"\b(?:systemd\.service|docker\s+(?:compose|container|service)|systemctl|journalctl)\b", re.IGNORECASE),
+]
+SOCIAL_TRIGGERS = {"hi", "hello", "hey", "yo", "sup", "howdy", "good morning", "good evening"}
+
+
+def _is_social(text: str) -> bool:
+    t = text.strip().lower()
+    if t in SOCIAL_TRIGGERS or any(t.startswith(w) for w in ("thanks", "thank you", "ty")):
+        return True
+    return False
+
+
+def auto_detect_facts(user_message: str, assistant_message: str) -> list[str]:
+    """Extract environmental/factual content from a chat turn.
+
+    Returns a list of fact strings ready for storage. Empty list means
+    nothing worth persisting.
+    """
+    if _is_social(user_message):
+        return []
+    if len(assistant_message) < 40:
+        return []
+    if process_remember_command(user_message) is not None:
+        return []
+
+    found = []
+    for pat in AUTO_FACT_PATTERNS:
+        if pat.search(user_message):
+            found.append(user_message)
+            break
+
+    # Also capture when the user is reporting a change they made
+    change_match = re.search(
+        r"(?:I\s+)?(?:set|changed?|updated|installed|configured|enabled|disabled|added|removed|created|deleted|restarted|reloaded|switched|moved|copied|renamed|symlinked|mounted|unmounted)\s+(?:the\s+)?(.+)",
+        user_message, re.IGNORECASE,
+    )
+    if change_match and user_message not in found:
+        found.append(user_message)
+
+    seen = set()
+    deduped = []
+    for f in found:
+        key = f.strip().lower()
+        if key not in seen:
+            seen.add(key)
+            deduped.append(f.strip()[:MAX_MEMORY_FACT_CHARS])
+    return deduped
+
+
+def check_fact_conflicts(facts: list[str]) -> list[dict]:
+    """Search for existing memories that conflict with detected facts.
+
+    Returns list of {memory_id, old_fact, new_fact} for each conflict.
+    """
+    conflicts = []
+    for new_fact in facts:
+        related = search_memories(new_fact, limit=1)
+        if related:
+            old = related[0]["fact"]
+            if old.rstrip(".") != new_fact.rstrip("."):
+                conflicts.append({
+                    "memory_id": related[0]["rowid"],
+                    "old_fact": old,
+                    "new_fact": new_fact,
+                })
+    return conflicts
+
+
 def detect_topic(fact: str) -> str:
     fact_lower = fact.lower()
     if any(w in fact_lower for w in ["prefer", "like", "hate", "always", "never", "favorite"]):

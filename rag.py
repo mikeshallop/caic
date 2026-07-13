@@ -3,6 +3,7 @@ cAIc - RAG pipeline: Qdrant vector search + system prompt assembly.
 """
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 import httpx
 
@@ -22,6 +23,103 @@ from eviction import (  # noqa: E402
     maybe_evict, get_rag_operational_stats, EVICTION_LOG,
     get_collection_count, get_collection_stats, evict_batch,
 )
+
+
+async def _upsert_fact(fact: str, text: str, topic: str,
+                       client: httpx.AsyncClient) -> bool:
+    """Embed text and upsert a fact to Qdrant."""
+    chunks = chunk_text(text)
+    if not chunks:
+        return False
+    ts = datetime.now(timezone.utc).timestamp()
+    ok = False
+    for i, chunk in enumerate(chunks):
+        try:
+            er = await client.post(
+                f"{EMBED_URL}/api/embeddings",
+                json={"model": EMBED_MODEL, "prompt": chunk},
+                timeout=10.0,
+            )
+            if er.status_code != 200:
+                continue
+            vector = er.json()["embedding"]
+            pid = f"auto-{ts}-{i}"
+            payload = {
+                "text": chunk, "source": "auto_fact", "fact": fact,
+                "ingest_date": datetime.now(timezone.utc).isoformat(),
+                "type": "auto_fact", "topic": topic,
+            }
+            r = await client.put(
+                f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points?wait=true",
+                json={"points": [{"id": pid, "vector": vector, "payload": payload}]},
+                timeout=10.0,
+            )
+            if r.status_code in (200, 201):
+                ok = True
+        except Exception as e:
+            log.warning(f"Qdrant upsert error: {e}")
+    return ok
+
+
+async def ingest_auto_fact(facts: list[str], user_message: str,
+                           assistant_message: str) -> int:
+    """Persist pre-detected facts to memories + Qdrant.
+
+    Call this when no conflicts exist — silent ingest.
+    Returns the number of facts stored.
+    """
+    from memory import add_memory, detect_topic
+
+    ingested = 0
+    async with httpx.AsyncClient() as client:
+        for fact in facts:
+            topic = detect_topic(fact)
+            add_memory(fact, topic=topic, source="auto")
+            ingested += 1
+            text = f"Q: {user_message}\nA: {assistant_message}"
+            await _upsert_fact(fact, text, topic, client)
+    if ingested:
+        log.info(f"Auto-ingested {ingested} fact(s) from conversation")
+    return ingested
+
+
+async def confirm_fact_update(memory_id: int, old_fact: str, new_fact: str,
+                              user_message: str, assistant_message: str) -> bool:
+    """Confirm a user-accepted fact update: replace memory + Qdrant entry."""
+    from memory import update_memory, detect_topic
+
+    if not update_memory(memory_id, new_fact):
+        return False
+
+    topic = detect_topic(new_fact)
+    try:
+        async with httpx.AsyncClient() as client:
+            # scroll old points with matching fact and delete them
+            scroll_r = await client.post(
+                f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points/scroll",
+                json={
+                    "filter": {"must": [{"key": "fact", "match": {"value": old_fact}}]},
+                    "limit": 100,
+                    "with_payload": False,
+                },
+                timeout=10.0,
+            )
+            if scroll_r.status_code == 200:
+                ids = [p["id"] for p in scroll_r.json().get("result", [])]
+                if ids:
+                    await client.post(
+                        f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points/delete",
+                        json={"points": ids},
+                        timeout=10.0,
+                    )
+
+            text = f"Q: {user_message}\nA: {assistant_message}"
+            await _upsert_fact(new_fact, text, topic, client)
+    except Exception as e:
+        log.warning(f"Fact update RAG error: {e}")
+
+    log.info(f"Fact updated [memory_id={memory_id}]: {new_fact}")
+    return True
 
 
 def chunk_text(text: str, chunk_size: int = 512, overlap: int = 128) -> list:

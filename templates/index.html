@@ -1418,6 +1418,9 @@ async function sendMessage() {
                         addCopyButtons(assistantDiv);
                         addMessageToolbar(assistantDiv);
                         setStreamingState(false);
+                        if (data.rag_update_suggestion && data.rag_update_suggestion.conflicts) {
+                            showFactConflictBanner(data.rag_update_suggestion.conflicts, data.conversation_id);
+                        }
                         await loadConversations();
                         await loadMemoryStats();
                         checkOllamaStatus();
@@ -1609,8 +1612,60 @@ userInput.addEventListener('keydown', e => {
     }
 });
 const toastStyle = document.createElement('style');
-toastStyle.textContent = '.toast-error { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--danger); color:#fff; padding:12px 24px; border-radius:var(--radius); font-family:var(--font-body); font-size:14px; z-index:9999; animation:fadeIn 0.2s; } @keyframes fadeIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }';
+toastStyle.textContent = '.toast-error { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--danger); color:#fff; padding:12px 24px; border-radius:var(--radius); font-family:var(--font-body); font-size:14px; z-index:9999; animation:fadeIn 0.2s; } @keyframes fadeIn { from{opacity:0;transform:translateX(-50%) translateY(10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} } .fact-conflict-banner { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--bg-secondary); border:1px solid var(--accent); border-radius:var(--radius); padding:12px 20px; font-family:var(--font-body); font-size:13px; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.3); max-width:600px; line-height:1.5; } .fact-conflict-banner .actions { margin-top:8px; display:flex; gap:8px; } .fact-conflict-banner button { padding:4px 14px; border-radius:var(--radius); cursor:pointer; font-size:12px; } .fact-conflict-banner .btn-confirm { background:var(--accent); color:var(--bg-primary); border:none; } .fact-conflict-banner .btn-dismiss { background:transparent; color:var(--text-muted); border:1px solid var(--border); }';
 document.head.appendChild(toastStyle);
+function showFactConflictBanner(conflicts, convId) {
+    if (!conflicts || !conflicts.length) return;
+    const existing = document.querySelector('.fact-conflict-banner');
+    if (existing) existing.remove();
+    let html = '<div class="fact-conflict-banner">';
+    html += '<strong>📝 Knowledge conflict detected</strong>';
+    html += '<div style="margin-top:6px;font-size:12px;color:var(--text-muted);">';
+    conflicts.forEach((c, i) => {
+        html += `<div style="margin-top:${i>0?'8':'4'}px">`;
+        html += `<div><span style="color:var(--text-muted)">Stored:</span> ${escapeHtml(c.old_fact)}</div>`;
+        html += `<div><span style="color:var(--accent)">Now:</span> ${escapeHtml(c.new_fact)}</div>`;
+        html += '<div class="actions">';
+        html += `<button class="btn-confirm" onclick="confirmFactUpdate(${c.memory_id},${Date.now()},this)">Update knowledge</button>`;
+        html += '<button class="btn-dismiss" onclick="this.closest(\'.fact-conflict-banner\').remove()">Dismiss</button>';
+        html += '</div></div>';
+    });
+    html += '</div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function confirmFactUpdate(memoryId, ts, btn) {
+    const banner = btn.closest('.fact-conflict-banner');
+    const text = banner ? banner.textContent : '';
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    const newFact = lines.length > 0 ? lines[lines.length-1].replace(/^Now:\s*/, '') : '';
+    btn.textContent = 'Updating...';
+    btn.disabled = true;
+    try {
+        const resp = await authFetch('/api/memories/confirm-update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                memory_id: memoryId,
+                new_fact: newFact,
+                old_fact: '',
+                user_message: '',
+                assistant_message: '',
+            }),
+        });
+        if (resp.ok) {
+            btn.textContent = '✓ Updated';
+            setTimeout(() => { if (banner) banner.remove(); }, 1500);
+        } else {
+            btn.textContent = 'Failed';
+            btn.style.background = 'var(--danger)';
+        }
+    } catch(e) {
+        btn.textContent = 'Error';
+        btn.style.background = 'var(--danger)';
+    }
+}
+
 userInput.addEventListener('paste', e => {
     const hasImage = Array.from(e.clipboardData.items).some(i => i.type.startsWith('image/'));
     if (hasImage) {
