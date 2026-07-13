@@ -81,7 +81,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .main { flex:1; display:flex; flex-direction:column; height:100vh; min-width:0; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; border-bottom:1px solid var(--border); background:var(--bg-secondary); flex-shrink:0; gap:12px; }
 .topbar-left { display:flex; align-items:center; gap:10px; min-width:0; }
-.topbar-center { display:flex; align-items:center; gap:12px; font-size:10px; font-family:var(--font-mono); color:var(--text-muted); }
+.topbar-center { display:flex; align-items:center; gap:12px; font-size:12px; font-family:var(--font-mono); color:var(--text-muted); }
 .tc-item { white-space:nowrap; }
 .tc-label { color:var(--text-muted); text-transform:uppercase; margin-right:2px; }
 .tc-val { transition:color 0.3s; }
@@ -91,9 +91,9 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .topbar-right { display:flex; align-items:center; gap:6px; }
 .hamburger { background:transparent; border:1px solid var(--border); color:var(--text-secondary); width:30px; height:30px; border-radius:var(--radius); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; }
 .hamburger:hover { background:var(--bg-hover); border-color:var(--accent-dim); color:var(--accent); }
-.topbar-brand { font-family:var(--font-body); font-size:14px; color:#e0e8ff; white-space:nowrap; letter-spacing:0.5px; }
-.topbar-brand .version { color:var(--text-muted); font-size:11px; }
-.badge { font-size:10px; padding:3px 10px; border-radius:10px; font-family:var(--font-body); cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-muted); transition:all 0.15s; letter-spacing:0.5px; }
+.topbar-brand { font-family:var(--font-body); font-size:16px; color:#e0e8ff; white-space:nowrap; letter-spacing:0.5px; }
+.topbar-brand .version { color:var(--text-muted); font-size:13px; }
+.badge { font-size:12px; padding:3px 10px; border-radius:10px; font-family:var(--font-body); cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-muted); transition:all 0.15s; letter-spacing:0.5px; }
 .badge.on { border-color:rgba(0,255,102,0.3); color:var(--success); background:rgba(0,255,102,0.08); }
 .badge.off { border-color:rgba(255,51,85,0.3); color:var(--danger); background:rgba(255,51,85,0.08); }
 .badge.admin { border-color:var(--border); color:var(--text-muted); }
@@ -1124,7 +1124,7 @@ async function sendSearch() {
     conversationHistory.push({ role: 'user', content: '🔍 ' + query });
     input.value = '';
     input.style.height = 'auto';
-    const assistantDiv = appendMessage('assistant', '', true, true);
+    const assistantDiv = appendMessage('assistant', '', true, true, document.querySelector('.message.user'));
     const textEl = assistantDiv.querySelector('.text');
     textEl.innerHTML = '<div class="search-indicator"><div class="spinner"></div>Searching the web...</div>';
     setStreamingState(true);
@@ -1285,7 +1285,7 @@ async function sendMessage() {
     historyIndex = -1;
     input.value = '';
     input.style.height = 'auto';
-    const assistantDiv = appendMessage('assistant', '', true);
+    const assistantDiv = appendMessage('assistant', '', true, false, document.querySelector('.message.user'));
     const textEl = assistantDiv.querySelector('.text');
     textEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
     setStreamingState(true);
@@ -1403,13 +1403,17 @@ function setStreamingState(streaming) {
     }
 }
 
-function appendMessage(role, content, animate, isSearch = false) {
+function appendMessage(role, content, animate, isSearch = false, afterEl = null) {
     const container = document.getElementById('chatContainer');
     const div = document.createElement('div');
     div.className = 'message ' + role + (isSearch && role === 'assistant' ? ' search-result' : '');
     if (!animate) div.style.animation = 'none';
     div.innerHTML = `<div class="avatar">${role === 'user' ? 'YOU' : 'AI'}</div><div class="content"><div class="role-label">${role}</div><div class="text">${content ? renderMarkdown(content) : ''}</div>${role === 'assistant' ? '<div class="msg-toolbar"></div>' : ''}</div>`;
-    container.prepend(div);
+    if (afterEl) {
+        afterEl.parentNode.insertBefore(div, afterEl.nextSibling);
+    } else {
+        container.prepend(div);
+    }
     if (content && role === 'assistant') { addCopyButtons(div); addMessageToolbar(div); }
     scrollToTop();
     return div;
@@ -1494,27 +1498,7 @@ function addMessageToolbar(msgDiv) {
         a.click();
         URL.revokeObjectURL(a.href);
     };
-
-    const rating = { value: 0 };
-    const upBtn = document.createElement('button');
-    upBtn.innerHTML = '👍';
-    upBtn.title = 'Rate up';
-    upBtn.onclick = () => {
-        rating.value = rating.value === 1 ? 0 : 1;
-        upBtn.classList.toggle('active', rating.value === 1);
-        dnBtn.classList.toggle('active', false);
-    };
-
-    const dnBtn = document.createElement('button');
-    dnBtn.innerHTML = '👎';
-    dnBtn.title = 'Rate down';
-    dnBtn.onclick = () => {
-        rating.value = rating.value === -1 ? 0 : -1;
-        dnBtn.classList.toggle('active', rating.value === -1);
-        upBtn.classList.toggle('active', false);
-    };
-
-    toolbar.append(copyBtn, printBtn, saveBtn, sep(), upBtn, dnBtn);
+    toolbar.append(copyBtn, printBtn, saveBtn, sep());
     function sep() { const s = document.createElement('span'); s.className = 'sep'; return s; }
 }
 
