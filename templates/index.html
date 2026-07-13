@@ -703,7 +703,7 @@ async function loadMemoryStats() {
 async function deleteMemory(rowid) {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this memory?')) return;
-    await authFetch(`/api/memories/${rowid}`, { method: 'DELETE' });
+    try { await authFetch(`/api/memories/${rowid}`, { method: 'DELETE' }); } catch(e) { return; }
     await loadMemoryStats();
 }
 
@@ -830,13 +830,13 @@ async function loadSettings() {
 
 async function saveSettings() {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
-    await authFetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_enabled: profileEnabled ? 'true' : 'false', search_enabled: searchEnabled ? 'true' : 'false', memory_enabled: memoryEnabled ? 'true' : 'false', skills_enabled: skillsEnabled ? 'true' : 'false' }) });
+    try { await authFetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ profile_enabled: profileEnabled ? 'true' : 'false', search_enabled: searchEnabled ? 'true' : 'false', memory_enabled: memoryEnabled ? 'true' : 'false', skills_enabled: skillsEnabled ? 'true' : 'false' }) }); } catch(e) {}
 }
 
 async function saveDefaultModel() {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     const model = document.getElementById('defaultModelSetting').value;
-    await authFetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ default_model: model }) });
+    try { await authFetch('/api/settings', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ default_model: model }) }); } catch(e) {}
 }
 
 async function loadProfile() {
@@ -852,7 +852,7 @@ async function loadProfile() {
 async function saveProfile() {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     const content = document.getElementById('profileEditor').value;
-    await authFetch('/api/profile', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: content }) });
+    try { await authFetch('/api/profile', { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: content }) }); } catch(e) { return; }
     cachedProfile = content;
     updateTokenCount();
     const btn = document.getElementById('saveProfileBtn');
@@ -976,11 +976,11 @@ async function toggleSkill(skillKey) {
     if (!skill) return;
 
     const nextEnabled = !skill.enabled;
-    await authFetch(`/api/skills/${encodeURIComponent(skillKey)}`, {
+    try { await authFetch(`/api/skills/${encodeURIComponent(skillKey)}`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ enabled: nextEnabled })
-    });
+    }); } catch(e) { return; }
     skill.enabled = nextEnabled;
     renderSkills();
 }
@@ -1024,7 +1024,7 @@ async function addPreset() {
     if (!name) return;
     const p = prompt('System prompt text:');
     if (!p) return;
-    await authFetch('/api/presets', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) });
+    try { await authFetch('/api/presets', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) }); } catch(e) { return; }
     await loadPresets();
 }
 
@@ -1036,14 +1036,14 @@ async function editPreset(id) {
     if (!name) return;
     const p = prompt('System prompt:', preset.prompt);
     if (p === null) return;
-    await authFetch(`/api/presets/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) });
+    try { await authFetch(`/api/presets/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, prompt: p}) }); } catch(e) { return; }
     await loadPresets();
 }
 
 async function deletePreset(id) {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this preset?')) return;
-    await authFetch(`/api/presets/${id}`, { method: 'DELETE' });
+    try { await authFetch(`/api/presets/${id}`, { method: 'DELETE' }); } catch(e) { return; }
     await loadPresets();
 }
 
@@ -1094,7 +1094,7 @@ async function loadConversation(convId) {
 async function deleteConversation(convId) {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete this conversation?')) return;
-    await authFetch(`/api/conversations/${convId}`, { method: 'DELETE' });
+    try { await authFetch(`/api/conversations/${convId}`, { method: 'DELETE' }); } catch(e) { return; }
     if (currentConvId === convId) { currentConvId = null; showWelcome(); }
     await loadConversations();
 }
@@ -1102,7 +1102,7 @@ async function deleteConversation(convId) {
 async function deleteAllConversations() {
     if (currentRole !== 'admin') { requireAdminNotice(); return; }
     if (!confirm('Delete ALL conversations? This cannot be undone.')) return;
-    await authFetch('/api/conversations', { method: 'DELETE' });
+    try { await authFetch('/api/conversations', { method: 'DELETE' }); } catch(e) { return; }
     currentConvId = null;
     conversationHistory = [];
     showWelcome();
@@ -1122,6 +1122,7 @@ function showWelcome() {
 }
 
 async function sendSearch() {
+    resetScrollLock();
     const input = document.getElementById('userInput');
     const query = input.value.trim();
     if (!query || isStreaming) return;
@@ -1290,6 +1291,7 @@ async function deleteGalleryItem(contextId) {
     } catch(e) {}
 }
 async function sendMessage() {
+    resetScrollLock();
     const input = document.getElementById('userInput');
     const message = input.value.trim();
     if (!message || isStreaming) return;
@@ -1556,8 +1558,17 @@ function addMessageToolbar(msgDiv) {
 }
 
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+let _userScrolledAway = false;
+document.getElementById('chatContainer')?.addEventListener('scroll', function() {
+    _userScrolledAway = this.scrollTop > 100;
+}, { passive: true });
 function scrollToBottom() { const c = document.getElementById('chatContainer'); c.scrollTop = c.scrollHeight; }
-function scrollToTop() { const c = document.getElementById('chatContainer'); c.scrollTop = 0; }
+function scrollToTop() {
+    if (_userScrolledAway) return;
+    const c = document.getElementById('chatContainer');
+    if (c) c.scrollTop = 0;
+}
+function resetScrollLock() { _userScrolledAway = false; }
 function fallbackCopy(text, btn) {
     const ta = document.createElement('textarea');
     ta.value = text;

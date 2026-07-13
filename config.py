@@ -35,7 +35,7 @@ def get_amqp_url() -> str:
     return f"amqp://caic:{pw}@localhost:5672/caic"
 
 # --- Auth ---
-SESSION_TIMEOUT_SECONDS = 90
+SESSION_TIMEOUT_SECONDS = 3600
 MAX_PIN_ATTEMPTS = 5
 PIN_LOCKOUT_SECONDS = 300
 ALLOW_DEFAULT_PIN = os.getenv("CAIC_ALLOW_DEFAULT_PIN", "false").lower() == "true"
