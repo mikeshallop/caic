@@ -1529,13 +1529,16 @@ function addMessageToolbar(msgDiv) {
     saveBtn.innerHTML = '💾';
     saveBtn.title = 'Save as .md';
     saveBtn.onclick = () => {
-        const t = getText();
-        const blob = new Blob([t], { type: 'text/markdown' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `caic-response-${Date.now()}.md`;
-        a.click();
-        URL.revokeObjectURL(a.href);
+        try {
+            const t = getText();
+            const blob = new Blob([t], { type: 'text/markdown' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `caic-response-${Date.now()}.md`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('Saved');
+        } catch(e) { showToast('Save failed'); }
     };
     toolbar.append(copyBtn, printBtn, saveBtn, sep());
     if (!msgDiv.classList.contains('search-result')) {
