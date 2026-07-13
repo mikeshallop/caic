@@ -8,11 +8,10 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from config import DEFAULT_MODEL
+from config import DEFAULT_MODEL, LLAMA_SERVER_BASE
 from db import get_db, get_upload_context
 from memory import process_remember_command
 from rag import build_system_prompt
-from triage import get_inference_url as _get_inference_url
 from search import (calculate_perplexity, is_uncertain, is_refusal,
                     clean_hedging, format_search_results, format_direct_answer,
                     extract_search_query, query_searxng)
@@ -126,7 +125,6 @@ async def chat(request: Request):
         all_logprobs = []
         tokens_per_sec = 0.0
         completion_tokens = 0
-        inference_base = await _get_inference_url(user_message)
 
         if remember_response:
             yield f"data: {json.dumps({'token': remember_response + chr(10) + chr(10), 'conversation_id': conv_id})}\n\n"
