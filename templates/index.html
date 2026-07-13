@@ -420,7 +420,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 
     <div class="chat-container" id="chatContainer">
         <div class="welcome-screen" id="welcomeScreen">
-            <img src="/static/jcscreenie.png" alt="cAIc" class="welcome-logo">
+            <img src="/static/caic-bg.png" alt="cAIc" class="welcome-logo">
         </div>
     </div>
 </main>
@@ -1104,7 +1104,7 @@ function newChat() {
 
 function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 function showWelcome() {
-    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><img src="/static/jcscreenie.png" alt="cAIc" class="welcome-logo"></div>';
+    document.getElementById('chatContainer').innerHTML = '<div class="welcome-screen" id="welcomeScreen"><img src="/static/caic-bg.png" alt="cAIc" class="welcome-logo"></div>';
 }
 
 async function sendSearch() {
