@@ -393,7 +393,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <span class="tc-item"><span class="tc-label">MEM</span> <span id="memValue" class="tc-val">--%</span></span>
             <span class="tc-item"><span class="tc-label">GPU</span> <span id="gpuValue" class="tc-val">--%</span></span>
             <span class="tc-item"><span class="tc-label">VRAM</span> <span id="vramValue" class="tc-val">--%</span></span>
-            <span class="tc-item"><span class="tc-label">TOK</span> <span id="tokValue" class="tc-val green">0</span></span>
+            <span class="tc-item"><span class="tc-label">TOK</span> <span id="tokValue">0</span> / <span id="tokPct" class="tc-val green">0%</span></span>
         </div>
         <div class="topbar-right">
             <button class="badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">MEM</button>
@@ -1185,11 +1185,12 @@ async function sendSearch() {
                                 const ttrSec = ttr / 1000;
                                 roleLabel.innerHTML += `<span class="ttr-badge search">ttr: ${ttrSec.toFixed(1)}s</span>`;
                             }
+                            let usedPct = 0;
                             if (tokenCount > 0) {
                                 const pt = data.prompt_tokens || 0;
                                 const totalTokens = pt + tokenCount;
                                 const ctxLen = data.context_length || 4096;
-                                const usedPct = Math.round((totalTokens / ctxLen) * 100);
+                                usedPct = Math.round((totalTokens / ctxLen) * 100);
                                 roleLabel.innerHTML += `<span class="tok-badge">tok: ${totalTokens}/${ctxLen} ${usedPct}%</span>`;
                             }
                         }
@@ -1197,7 +1198,7 @@ async function sendSearch() {
                         addCopyButtons(assistantDiv);
                         addMessageToolbar(assistantDiv);
                         setStreamingState(false);
-                        cumulativeTokens += tokenCount; localStorage.setItem('caicCumulativeTokens', cumulativeTokens.toString()); updateCumulativeTokens();
+                        cumulativeTokens += tokenCount; localStorage.setItem('caicCumulativeTokens', cumulativeTokens.toString()); sessionTokens += tokenCount; updateTopbarTokens(usedPct);
                         await loadConversations();
                     }
                 } catch(e) { console.log('Parse error:', e); }
@@ -1374,18 +1375,19 @@ async function sendMessage() {
                             const ttrClass = data.searched ? 'search' : (ttrSec <= 2 ? 'low' : ttrSec < 11 ? 'medium' : 'high');
                             roleLabel.innerHTML += `<span class="ttr-badge ${ttrClass}">ttr: ${ttrSec.toFixed(1)}s</span>`;
                         }
+                        let usedPct = 0;
                         if (tokenCount > 0 && roleLabel) {
                             const pt = data.prompt_tokens || 0;
                             const totalTokens = pt + tokenCount;
                             const ctxLen = data.context_length || 4096;
-                            const usedPct = Math.round((totalTokens / ctxLen) * 100);
+                            usedPct = Math.round((totalTokens / ctxLen) * 100);
                             roleLabel.innerHTML += `<span class="tok-badge">tok: ${totalTokens}/${ctxLen} ${usedPct}%</span>`;
                         }
                         conversationHistory.push({ role: 'assistant', content: fullText });
                         addCopyButtons(assistantDiv);
                         addMessageToolbar(assistantDiv);
                         setStreamingState(false);
-                        cumulativeTokens += tokenCount; localStorage.setItem('caicCumulativeTokens', cumulativeTokens.toString()); updateCumulativeTokens();
+                        cumulativeTokens += tokenCount; localStorage.setItem('caicCumulativeTokens', cumulativeTokens.toString()); sessionTokens += tokenCount; updateTopbarTokens(usedPct);
                         if (data.rag_update_suggestion && data.rag_update_suggestion.conflicts) {
                             showFactConflictBanner(data.rag_update_suggestion.conflicts, data.conversation_id);
                         }
@@ -1572,15 +1574,21 @@ const messageHistory = [];
 let historyIndex = -1;
 let historyDraft = '';
 let cumulativeTokens = parseInt(localStorage.getItem('caicCumulativeTokens') || '0', 10);
+let sessionTokens = 0;
+let lastContextPct = 0;
 
-function updateCumulativeTokens() {
-    const el = document.getElementById('tokValue');
-    if (el) {
-        el.textContent = cumulativeTokens.toLocaleString();
-        el.className = 'tc-val green';
+function updateTopbarTokens(pct) {
+    if (typeof pct === 'number') lastContextPct = pct;
+    const countEl = document.getElementById('tokValue');
+    const pctEl = document.getElementById('tokPct');
+    if (countEl) countEl.textContent = cumulativeTokens.toLocaleString();
+    if (pctEl) {
+        const cls = lastContextPct >= 95 ? 'red' : lastContextPct >= 80 ? 'orange' : 'green';
+        pctEl.textContent = lastContextPct + '%';
+        pctEl.className = 'tc-val ' + cls;
     }
 }
-updateCumulativeTokens();
+updateTopbarTokens(0);
 userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px'; });
 userInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); return; }
