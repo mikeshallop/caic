@@ -1552,32 +1552,7 @@ function addMessageToolbar(msgDiv) {
             showToast('Saved');
         } catch(e) { showToast('Save failed'); }
     };
-    toolbar.append(copyBtn, printBtn, saveBtn, sep());
-    if (!msgDiv.classList.contains('search-result')) {
-        const rating = { value: 0 };
-        const upBtn = document.createElement('button');
-        upBtn.innerHTML = '👍';
-        upBtn.title = 'Rate up';
-        upBtn.onclick = () => {
-            const was = rating.value;
-            rating.value = rating.value === 1 ? 0 : 1;
-            upBtn.classList.toggle('active', rating.value === 1);
-            dnBtn.classList.toggle('active', false);
-            showToast(rating.value === 1 ? 'Rated up' : 'Rating removed');
-        };
-        const dnBtn = document.createElement('button');
-        dnBtn.innerHTML = '👎';
-        dnBtn.title = 'Rate down';
-        dnBtn.onclick = () => {
-            const was = rating.value;
-            rating.value = rating.value === -1 ? 0 : -1;
-            dnBtn.classList.toggle('active', rating.value === -1);
-            upBtn.classList.toggle('active', false);
-            showToast(rating.value === -1 ? 'Rated down' : 'Rating removed');
-        };
-        toolbar.append(upBtn, dnBtn);
-    }
-    function sep() { const s = document.createElement('span'); s.className = 'sep'; return s; }
+    toolbar.append(copyBtn, printBtn, saveBtn);
 }
 
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
