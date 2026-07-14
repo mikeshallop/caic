@@ -139,6 +139,9 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 
 ### Completed this session
 - **B4 — RAG Corpus Management UI** — Paginated browse, semantic search, source filter, edit text with re-embed, single-point delete, bulk flush. Backend: `GET /api/rag/points`, `GET /api/rag/point/{id}`, `DELETE /api/rag/point/{id}`, `PATCH /api/rag/point/{id}`. Frontend: admin-only modal with stats bar, search bar, paginated table, per-row edit/delete, double-confirm flush.
+- **RAG bugfixes**: Fixed Qdrant collection name mismatch (`jarvis_rag` → `caic_rag`, migrated 219 points). Fixed `vectors_count` → `points_count` in `eviction.py`/`rag_admin.py` (Qdrant v1.10+ API change). Removed unindexed `order_by` that caused 502 on scroll. Made `RAG_COLLECTION` env-configurable (`CAIC_RAG_COLLECTION`).
+- **Topbar redesign**: Moved system stats (CPU/MEM/GPU/VRAM/TOK) to a centered bottom strip. Moved toggles (MEM, SEARCH, PROFILE, SORT, PRIVACY) into a ⋮ hamburger menu next to ADMIN badge. Placed palette icon immediately after version number in topbar-left. Removed standalone (i) button; privacy info accessible via ⋮ → About Privacy. Mobile-responsive padding/sizing.
+- **Semantic search fix**: Set `CAIC_EMBED_URL=http://192.168.50.108:11434` on jarvis (model `mxbai-embed-large` is on ultron, not the old embed server).
 
 ### Active
 - (none)
