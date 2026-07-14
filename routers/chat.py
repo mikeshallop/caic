@@ -114,8 +114,8 @@ async def chat(request: Request):
         else:
             db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
 
-        db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                   (conv_id, "user", encrypt_text(user_message), now))
+        db.execute("INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+                   (conv_id, "user", encrypt_text(user_message), now, None))
         db.commit()
 
         raw_rows = db.execute(
@@ -218,8 +218,8 @@ async def chat(request: Request):
                                 saved_msg = remember_response + "\n\n" + saved_msg
 
                             db2 = get_db()
-                            db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                                        (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat()))
+                            db2.execute("INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+                                        (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat(), round(perplexity, 2)))
                             db2.commit()
                             db2.close()
 
@@ -240,8 +240,8 @@ async def chat(request: Request):
                         saved_msg = remember_response + "\n\n" + saved_msg
 
                     db2 = get_db()
-                    db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                                (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat()))
+                    db2.execute("INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+                                (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat(), round(perplexity, 2)))
                     db2.commit()
                     db2.close()
 

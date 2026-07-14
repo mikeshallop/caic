@@ -123,6 +123,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL,
             role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL,
+            perplexity REAL,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
         )
     """)
@@ -161,6 +162,11 @@ def init_db():
     """)
     try:
         conn.execute("ALTER TABLE upload_context ADD COLUMN content_type TEXT DEFAULT 'text/plain'")
+    except Exception:
+        pass
+
+    try:
+        conn.execute("ALTER TABLE messages ADD COLUMN perplexity REAL")
     except Exception:
         pass
 

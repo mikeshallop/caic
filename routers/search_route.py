@@ -46,8 +46,8 @@ async def explicit_search(request: Request):
     else:
         db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
 
-    db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-               (conv_id, "user", encrypt_text(query), now))
+    db.execute("INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+               (conv_id, "user", encrypt_text(query), now, None))
     db.commit()
     db.close()
 
@@ -60,8 +60,8 @@ async def explicit_search(request: Request):
             error_msg = "No search results found."
             yield f"data: {json.dumps({'token': error_msg, 'conversation_id': conv_id})}\n\n"
             db2 = get_db()
-            db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                        (conv_id, "assistant", encrypt_text(error_msg), datetime.now(timezone.utc).isoformat()))
+            db2.execute("INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+                        (conv_id, "assistant", encrypt_text(error_msg), datetime.now(timezone.utc).isoformat(), None))
             db2.commit()
             db2.close()
             yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id})}\n\n"
@@ -102,8 +102,8 @@ async def explicit_search(request: Request):
         saved_msg = f"{summary}\n\n---\n*🔍 Web search results*"
 
         db2 = get_db()
-        db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                    (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat()))
+        db2.execute("INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+                    (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat(), None))
         db2.commit()
         db2.close()
 

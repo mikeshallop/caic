@@ -132,8 +132,8 @@ async def chat_completions(request: Request):
         content = msg.get("content", "")
         if role in ("user", "assistant"):
             db.execute(
-                "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                (conv_id, role, encrypt_text(content), now),
+                "INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+                (conv_id, role, encrypt_text(content), now, None),
             )
     db.commit()
 
@@ -195,8 +195,8 @@ async def _stream_chat(payload: dict, model: str, conv_id: str, request: Request
             if assistant_msg:
                 db = get_db()
                 db.execute(
-                    "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                    (conv_id, "assistant", encrypt_text(assistant_msg), datetime.now(timezone.utc).isoformat()),
+                    "INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+                    (conv_id, "assistant", encrypt_text(assistant_msg), datetime.now(timezone.utc).isoformat(), None),
                 )
                 db.commit()
                 db.close()
@@ -240,8 +240,8 @@ async def _blocking_chat(payload: dict, model: str, conv_id: str, request: Reque
     if assistant_msg:
         db = get_db()
         db.execute(
-            "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-            (conv_id, "assistant", encrypt_text(assistant_msg), datetime.now(timezone.utc).isoformat()),
+            "INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+            (conv_id, "assistant", encrypt_text(assistant_msg), datetime.now(timezone.utc).isoformat(), None),
         )
         db.commit()
         db.close()
