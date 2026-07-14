@@ -913,7 +913,7 @@ Run full test suite. All 26+ existing tests must continue to pass.
 
 ## Backlog (Post-Roadmap N) ⏳
 
-### B1 — Context loss in follow-up questions
+### ~~B1 — Context loss in follow-up questions [DONE]~~
 
 **Symptom:** After asking "in {context}, explain {b}", a follow-up "what is {b}'s {x}?" gets a non-sequitur response that ignores the original context.
 
@@ -925,7 +925,7 @@ Run full test suite. All 26+ existing tests must continue to pass.
 - Or: cap RAG/memory injection to only fire on the first message of a conversation, then rely solely on conversation history for follow-ups
 - Check that llama-server isn't truncating history due to context window overflow (Mistral-Nemo 12B = 128K context, unlikely)
 
-### B2 — Bang-prefixed search routing
+### ~~B2 — Bang-prefixed search routing [DONE]~~
 
 **Spec:** If a query begins with `!`, route to SearXNG search instead of local inference.
 
@@ -960,7 +960,7 @@ Run full test suite. All 26+ existing tests must continue to pass.
 
 ---
 
-### B4 — RAG Corpus Management UI (Display, Edit, CRUD)
+### ~~B4 — RAG Corpus Management UI (Display, Edit, CRUD) [DONE]~~
 
 **Goal:** Provide a management interface in the UI to browse, search, edit, and delete individual entries in the Qdrant-backed RAG corpus.
 
