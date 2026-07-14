@@ -407,7 +407,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">MEM</button>
             <button class="badge on" id="searchBadge" onclick="toggleSearch()" title="Toggle auto web search">SEARCH</button>
             <button class="badge on" id="profileBadge" onclick="toggleProfile()" title="Toggle profile injection">PROFILE</button>
-            <button class="badge on" id="directionBadge" onclick="toggleDirection()" title="Toggle message ordering">NEW</button>
+            <button class="badge on" id="directionBadge" onclick="toggleDirection()" title="Toggle sort direction (newest-first / oldest-first)">↓ SORT</button>
             <button class="badge off" id="privateBadge" onclick="togglePrivate()" title="Toggle privacy mode (no persistence, no external queries)">PRIVACY OFF</button>
             <span class="info-icon" id="privateInfo" onclick="togglePrivateInfo(event)" title="What is Privacy Mode?">&#9432;</span>
             <div class="info-popup-overlay" id="privateInfoOverlay" style="display:none" onclick="togglePrivateInfo(event)">
@@ -1623,7 +1623,7 @@ function toggleDirection() {
     _waterfallDirection = _waterfallDirection === 'newest' ? 'oldest' : 'newest';
     localStorage.setItem('waterfallDirection', _waterfallDirection);
     const badge = document.getElementById('directionBadge');
-    if (badge) badge.textContent = _waterfallDirection === 'newest' ? 'NEW' : 'OLD';
+    if (badge) badge.textContent = _waterfallDirection === 'newest' ? '↓ SORT' : '↑ SORT';
     const container = document.getElementById('chatContainer');
     const items = Array.from(container.children);
     items.reverse().forEach(el => container.appendChild(el));
