@@ -916,7 +916,7 @@ function togglePrivate() {
     privateEnabled = !privateEnabled;
     const badge = document.getElementById('privateBadge');
     badge.className = 'badge ' + (privateEnabled ? 'on' : 'off');
-    badge.textContent = privateEnabled ? 'PRIVACY' : 'PRIVACY OFF';
+    badge.textContent = privateEnabled ? 'PRIVACY ON' : 'PRIVACY OFF';
     const searchBtn = document.getElementById('searchBtn');
     if (privateEnabled) {
         if (searchBtn) searchBtn.disabled = true;
