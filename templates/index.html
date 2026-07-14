@@ -1663,7 +1663,6 @@ function scrollToLatest() {
         if (_userScrolledAway) return;
         c.scrollTop = 0;
     } else {
-        if (_userScrolledAway) return;
         requestAnimationFrame(() => {
             const cc = document.getElementById('chatContainer');
             if (cc) cc.scrollTop = cc.scrollHeight;
