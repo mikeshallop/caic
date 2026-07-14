@@ -165,7 +165,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .skill-risk { display:inline-block; margin-left:8px; padding:1px 6px; border-radius:10px; font-size:10px; text-transform:uppercase; border:1px solid var(--border); color:var(--text-secondary); }
 .skill-item.disabled .skill-meta { opacity:0.6; }
 
-.chat-container { flex:1; overflow-y:auto; padding:20px 30px; display:flex; flex-direction:column; gap:8px; background-image:radial-gradient(rgba(255,255,255,0.015) 1px, transparent 1px); background-size:24px 24px; }
+.chat-container { flex:1; overflow-y:auto; padding:20px 30px; display:flex; flex-direction:column; gap:8px; background-image:radial-gradient(rgba(255,255,255,0.015) 1px, transparent 1px); background-size:24px 24px; position:relative; z-index:2; }
 .msg-pair { display:flex; flex-direction:column; gap:8px; border-radius:var(--radius); padding:12px 12px 8px; border-left:3px solid transparent; }
 .msg-pair:nth-child(odd) { background:rgba(255,255,255,0.015); border-left-color:rgba(0,136,187,0.25); }
 .msg-pair:nth-child(even) { background:rgba(255,255,255,0.035); border-left-color:rgba(243,156,18,0.25); }
