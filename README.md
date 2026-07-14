@@ -55,6 +55,27 @@ Untested: Windows 11 / WSL2 (Debian). The codebase is pure Python with no platfo
 
 Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. AMQP-mediated cluster coordination with an OpenAI-compatible inference endpoint.
 
+### Query-routing vs. layer-splitting — why it matters
+
+Most distributed inference tools (llama.cpp RPC, vLLM with tensor parallelism, exo) split a *single model* across multiple GPUs. The first GPU runs layers 0–15, the second runs 16–31, and so on. This works well in a homogeneous cluster where every GPU is identical, but in a heterogeneous setup the slowest card sets the pace — every forward pass waits for the straggler. Communication overhead between GPUs (NCCL, RPC) adds latency too.
+
+cAIc takes a different approach: **query-routing**. Each worker runs a complete model on its own GPU. When a query comes in, triage classifies it and routes the *whole request* to the worker best suited for it — code questions go to the worker with a coder model, general chat goes to the instruct model. No layer sharing, no lockstep, no straggler problem. The tradeoff is that no single query can use combined VRAM across multiple GPUs, but the throughput and responsiveness of the cluster as a whole isn't dragged down by the weakest link.
+
+This also means a worker with a slow GPU can still contribute meaningfully — it handles less latency-sensitive queries or batch background work, while the fast GPU handles interactive chat.
+
+### Data Safety
+
+| Concern | How cAIc handles it |
+|---------|---------------------|
+| **Queries stored on disk?** | All query-derived text is encrypted at rest with AES-256-GCM before touching SQLite or Qdrant. Toggle **Private Chat** (topbar badge) and nothing touches disk at all: no SQLite writes, no FTS5 memory injection, no RAG ingestion, no external SearXNG queries. |
+| **Queries sent to external services?** | SearXNG web search is optional and disabled in Private Chat. All other services (llama-server, Qdrant, RabbitMQ) run on your own LAN. |
+| **Inter-node traffic unencrypted?** | No — WireGuard tunnels encrypt all coordinator↔worker traffic (AMQP, inference, RPC) at the network layer. Zero application changes. |
+| **Who can access the server?** | Guest sessions for anyone on the LAN. Admin access protected by a PBKDF2-hashed 4-digit PIN with rate-limited attempts. IP allowlist (CIDR) gate optional. |
+
+At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
+
+Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — includes [FAQ](https://llgit.llamachile.tube/gramps/cAIc/wiki/FAQ), [Installation Guide](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation), and [full architecture docs](https://llgit.llamachile.tube/gramps/cAIc/wiki/Developer-Architecture)
+
 ## What's New in v0.22.0
 
 ### Color Theme System
@@ -111,27 +132,6 @@ Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. AMQP-mediated cluster 
 ### Single-Node Deployment
 - Documented at `### Single-Node Deployment (Experimental)` — all services can colocate on localhost with the env vars above.
 - Untested: Windows 11 / WSL2 (Debian). No platform-specific code beyond gracefully-absent `rocm-smi` and `system_profiler`.
-
-#### Query-routing vs. layer-splitting — why it matters
-
-Most distributed inference tools (llama.cpp RPC, vLLM with tensor parallelism, exo) split a *single model* across multiple GPUs. The first GPU runs layers 0–15, the second runs 16–31, and so on. This works well in a homogeneous cluster where every GPU is identical, but in a heterogeneous setup the slowest card sets the pace — every forward pass waits for the straggler. Communication overhead between GPUs (NCCL, RPC) adds latency too.
-
-cAIc takes a different approach: **query-routing**. Each worker runs a complete model on its own GPU. When a query comes in, triage classifies it and routes the *whole request* to the worker best suited for it — code questions go to the worker with a coder model, general chat goes to the instruct model. No layer sharing, no lockstep, no straggler problem. The tradeoff is that no single query can use combined VRAM across multiple GPUs, but the throughput and responsiveness of the cluster as a whole isn't dragged down by the weakest link.
-
-This also means a worker with a slow GPU can still contribute meaningfully — it handles less latency-sensitive queries or batch background work, while the fast GPU handles interactive chat.
-
-### Data Safety
-
-| Concern | How cAIc handles it |
-|---------|---------------------|
-| **Queries stored on disk?** | All query-derived text is encrypted at rest with AES-256-GCM before touching SQLite or Qdrant. Toggle **Private Chat** (topbar badge) and nothing touches disk at all: no SQLite writes, no FTS5 memory injection, no RAG ingestion, no external SearXNG queries. |
-| **Queries sent to external services?** | SearXNG web search is optional and disabled in Private Chat. All other services (llama-server, Qdrant, RabbitMQ) run on your own LAN. |
-| **Inter-node traffic unencrypted?** | No — WireGuard tunnels encrypt all coordinator↔worker traffic (AMQP, inference, RPC) at the network layer. Zero application changes. |
-| **Who can access the server?** | Guest sessions for anyone on the LAN. Admin access protected by a PBKDF2-hashed 4-digit PIN with rate-limited attempts. IP allowlist (CIDR) gate optional. |
-
-At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
-
-Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — includes [FAQ](https://llgit.llamachile.tube/gramps/cAIc/wiki/FAQ), [Installation Guide](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation), and [full architecture docs](https://llgit.llamachile.tube/gramps/cAIc/wiki/Developer-Architecture)
 
 ## What's New in v0.20.0
 
