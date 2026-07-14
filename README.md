@@ -57,6 +57,11 @@ Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. AMQP-mediated cluster 
 
 ## What's New in v0.22.0
 
+### Color Theme System
+- Palette icon in topbar opens dropdown with 6 themes: IBM Blue, Green Ln (Matrix terminal), Dark, Light, Amber (fallout terminal), Trippin (neon rave).
+- All CSS variables are dynamically swapped; choice persists in `localStorage`.
+- Existing `:root` CSS variable architecture made this trivial — no CSS changes needed beyond the dropdown styles.
+
 ### RAG Corpus Management UI (B4)
 - New admin modal (RAG button in drawer header) to browse, search, edit, and delete individual RAG corpus entries.
 - **Endpoints**: `GET /api/rag/points` (paginated list with semantic search and source filter), `GET /api/rag/point/{id}` (single point detail), `DELETE /api/rag/point/{id}` (single point deletion), `PATCH /api/rag/point/{id}` (edit text with re-embed).

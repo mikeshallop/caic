@@ -110,6 +110,19 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .badge.off { border-color:rgba(255,51,85,0.3); color:var(--danger); background:rgba(255,51,85,0.08); }
 .badge.admin { border-color:var(--border); color:var(--text-muted); }
 .badge.admin:hover { border-color:var(--accent-dim); color:var(--accent); }
+.theme-picker { position:relative; }
+.theme-dropdown { display:none; position:absolute; top:100%; right:0; margin-top:6px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius); min-width:150px; z-index:2000; box-shadow:0 4px 20px rgba(0,0,0,0.4); }
+.theme-dropdown.open { display:block; }
+.theme-option { display:flex; align-items:center; gap:8px; padding:8px 14px; font-size:12px; font-family:var(--font-mono); color:var(--text-secondary); cursor:pointer; transition:background 0.12s; }
+.theme-option:hover { background:var(--bg-hover); color:var(--text-primary); }
+.theme-option.active { color:var(--accent); background:var(--accent-glow); }
+.theme-swatch { width:14px; height:14px; border-radius:3px; border:1px solid var(--border); flex-shrink:0; }
+.swatch-ibm { background:#0088bb; }
+.swatch-green { background:#00cc33; }
+.swatch-dark { background:#7b68ee; }
+.swatch-light { background:#e0e0e0; }
+.swatch-amber { background:#cc8800; }
+.swatch-trip { background:linear-gradient(135deg,#ff00ff,#ffff00,#00ff66); }
 .info-icon { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; border:1px solid var(--border); color:var(--text-muted); font-size:11px; cursor:pointer; user-select:none; transition:all 0.15s; }
 .info-icon:hover { border-color:var(--accent-dim); color:var(--accent); }
 .info-popup-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; display:flex; align-items:center; justify-content:center; }
@@ -517,6 +530,17 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
                 </div>
             </div>
             <button class="badge admin" id="authActionBtn" onclick="handleAuthAction()" title="Unlock admin">ADMIN</button>
+            <div class="theme-picker">
+                <button class="badge" id="themeBtn" onclick="toggleThemePicker()" title="Color scheme">&#127912;</button>
+                <div class="theme-dropdown" id="themeDropdown">
+                    <div class="theme-option active" data-theme="ibm-blue" onclick="applyTheme('ibm-blue')"><span class="theme-swatch swatch-ibm"></span>IBM Blue</div>
+                    <div class="theme-option" data-theme="green-bg" onclick="applyTheme('green-bg')"><span class="theme-swatch swatch-green"></span>Green Ln</div>
+                    <div class="theme-option" data-theme="dark" onclick="applyTheme('dark')"><span class="theme-swatch swatch-dark"></span>Dark</div>
+                    <div class="theme-option" data-theme="light" onclick="applyTheme('light')"><span class="theme-swatch swatch-light"></span>Light</div>
+                    <div class="theme-option" data-theme="amber" onclick="applyTheme('amber')"><span class="theme-swatch swatch-amber"></span>Amber</div>
+                    <div class="theme-option" data-theme="trippin" onclick="applyTheme('trippin')"><span class="theme-swatch swatch-trip"></span>Trippin</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -788,6 +812,8 @@ function startHeartbeat() {
 async function initializeMainApp() {
     if (appInitialized) return;
     appInitialized = true;
+    const savedTheme = localStorage.getItem('caic-theme') || 'ibm-blue';
+    applyTheme(savedTheme);
     await loadModels();
     await loadSettings();
     await loadSkills();
@@ -1021,6 +1047,85 @@ function togglePrivateInfo(e) {
     const overlay = document.getElementById('privateInfoOverlay');
     overlay.style.display = overlay.style.display === 'none' ? 'flex' : 'none';
 }
+
+// ---------- Theme system ----------
+const THEMES = {
+    'ibm-blue': {
+        '--bg-primary': '#080c1a', '--bg-secondary': '#0d1428', '--bg-tertiary': '#121d3a', '--bg-hover': '#182850',
+        '--text-primary': '#a0b8ff', '--text-secondary': '#7890d8', '--text-muted': '#5068a0',
+        '--accent': '#33ddff', '--accent-dim': '#0088bb', '--accent-glow': 'rgba(51,221,255,0.1)',
+        '--danger': '#ff3355', '--danger-hover': '#cc0022', '--success': '#00ff66', '--warning': '#ffaa00',
+        '--border': '#1a3060',
+    },
+    'green-bg': {
+        '--bg-primary': '#000000', '--bg-secondary': '#0a0a0a', '--bg-tertiary': '#111111', '--bg-hover': '#1a1a1a',
+        '--text-primary': '#00ff41', '--text-secondary': '#00cc33', '--text-muted': '#008800',
+        '--accent': '#00ff41', '--accent-dim': '#00aa22', '--accent-glow': 'rgba(0,255,65,0.1)',
+        '--danger': '#ff3355', '--danger-hover': '#cc0022', '--success': '#00ff66', '--warning': '#ffaa00',
+        '--border': '#003300',
+    },
+    'dark': {
+        '--bg-primary': '#1a1a2e', '--bg-secondary': '#222240', '--bg-tertiary': '#2a2a50', '--bg-hover': '#333366',
+        '--text-primary': '#e0e0ff', '--text-secondary': '#b0b0dd', '--text-muted': '#8080aa',
+        '--accent': '#bb86fc', '--accent-dim': '#8855cc', '--accent-glow': 'rgba(187,134,252,0.1)',
+        '--danger': '#cf6679', '--danger-hover': '#aa4455', '--success': '#00ff66', '--warning': '#ffaa00',
+        '--border': '#333366',
+    },
+    'light': {
+        '--bg-primary': '#f5f5f5', '--bg-secondary': '#ffffff', '--bg-tertiary': '#e8e8e8', '--bg-hover': '#dddddd',
+        '--text-primary': '#222222', '--text-secondary': '#555555', '--text-muted': '#888888',
+        '--accent': '#0066cc', '--accent-dim': '#004488', '--accent-glow': 'rgba(0,102,204,0.1)',
+        '--danger': '#cc0033', '--danger-hover': '#990022', '--success': '#008844', '--warning': '#cc8800',
+        '--border': '#cccccc',
+    },
+    'amber': {
+        '--bg-primary': '#000000', '--bg-secondary': '#0d0800', '--bg-tertiary': '#1a1000', '--bg-hover': '#2a1a00',
+        '--text-primary': '#ffb000', '--text-secondary': '#cc8800', '--text-muted': '#886600',
+        '--accent': '#ffb000', '--accent-dim': '#cc8800', '--accent-glow': 'rgba(255,176,0,0.1)',
+        '--danger': '#ff3355', '--danger-hover': '#cc0022', '--success': '#00ff66', '--warning': '#ffaa00',
+        '--border': '#332200',
+    },
+    'trippin': {
+        '--bg-primary': '#0a001a', '--bg-secondary': '#15002a', '--bg-tertiary': '#20003a', '--bg-hover': '#300050',
+        '--text-primary': '#ff66ff', '--text-secondary': '#ff33cc', '--text-muted': '#cc0099',
+        '--accent': '#ff00ff', '--accent-dim': '#cc00cc', '--accent-glow': 'rgba(255,0,255,0.15)',
+        '--danger': '#ff0066', '--danger-hover': '#cc0044', '--success': '#00ff66', '--warning': '#ffff00',
+        '--border': '#440066',
+    },
+};
+
+function applyTheme(name) {
+    const theme = THEMES[name];
+    if (!theme) return;
+    const root = document.documentElement;
+    for (const [key, val] of Object.entries(theme)) {
+        root.style.setProperty(key, val);
+    }
+    const scrollbarTrack = name === 'light' ? 'rgba(0,68,136,0.08)' :
+        name === 'trippin' ? 'rgba(204,0,204,0.08)' :
+        name === 'green-bg' ? 'rgba(0,170,34,0.08)' :
+        name === 'amber' ? 'rgba(204,136,0,0.08)' :
+        name === 'dark' ? 'rgba(136,85,204,0.08)' :
+        'rgba(0,136,187,0.08)';
+    root.style.setProperty('--scrollbar-track', scrollbarTrack);
+    root.style.setProperty('--scrollbar', theme['--accent-dim']);
+    root.style.setProperty('--scrollbar-hover', theme['--accent']);
+
+    document.querySelectorAll('.theme-option').forEach(el => {
+        el.classList.toggle('active', el.dataset.theme === name);
+    });
+    localStorage.setItem('caic-theme', name);
+}
+
+function toggleThemePicker() {
+    document.getElementById('themeDropdown').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+    const picker = document.querySelector('.theme-picker');
+    if (picker && !picker.contains(e.target)) {
+        document.getElementById('themeDropdown')?.classList.remove('open');
+    }
+});
 
 function updateProfileUI() {
     const badge = document.getElementById('profileBadge');
