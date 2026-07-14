@@ -1377,7 +1377,7 @@ async function loadRagPoints() {
     try {
         const search = document.getElementById('ragSearchInput').value.trim();
         const source = document.getElementById('ragSourceFilter').value;
-        let url = `/api/rag/points?limit=20`;
+        let url = `/api/rag/points?limit=20&sort=date&order=desc`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
         if (source) url += `&source=${encodeURIComponent(source)}`;
         if (_ragPageOffset !== null && !search) url += `&offset=${encodeURIComponent(_ragPageOffset)}`;
@@ -1389,7 +1389,10 @@ async function loadRagPoints() {
 
         table.innerHTML = '';
         if (!data.points || data.points.length === 0) {
-            table.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:40px;">No points found</td></tr>';
+            const emptyMsg = document.getElementById('ragSearchInput').value.trim()
+                ? 'No results match your search query.'
+                : 'RAG corpus is empty. Upload a file with the 📎 button (mode=ingest or both), or use /api/ingest from the terminal.';
+            table.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:30px;line-height:1.6;">${emptyMsg}</td></tr>`;
             document.getElementById('ragPagination').style.display = 'none';
             return;
         }
