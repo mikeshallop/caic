@@ -93,17 +93,18 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .main::after { right:0; border-right:none; border-radius:4px 0 0 4px; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:8px 28px; border-bottom:1px solid var(--border); background:var(--bg-secondary); flex-shrink:0; gap:12px; }
 .topbar-left { display:flex; align-items:center; gap:10px; min-width:0; }
-.topbar-center { display:flex; align-items:center; gap:12px; font-size:12px; font-family:var(--font-mono); color:var(--text-muted); }
-.tc-item { white-space:nowrap; }
-.tc-label { color:var(--text-muted); text-transform:uppercase; margin-right:2px; }
-.tc-val { transition:color 0.3s; }
-.tc-val.green { color:var(--success); }
-.tc-val.orange { color:var(--warning); }
-.tc-val.red { color:var(--danger); }
+.sys-stats { display:flex; align-items:center; gap:14px; padding:4px 28px; background:var(--bg-secondary); border-top:1px solid var(--border); font-size:11px; font-family:var(--font-mono); color:var(--text-muted); flex-shrink:0; overflow-x:auto; white-space:nowrap; }
+.sys-stats .ss-item { display:flex; align-items:center; gap:3px; }
+.sys-stats .ss-label { color:var(--text-muted); text-transform:uppercase; }
+.sys-stats .ss-val { transition:color 0.3s; }
+.sys-stats .ss-val.green { color:var(--success); }
+.sys-stats .ss-val.orange { color:var(--warning); }
+.sys-stats .ss-val.red { color:var(--danger); }
+
 .topbar-right { display:flex; align-items:center; gap:6px; }
 .hamburger { background:transparent; border:1px solid var(--border); color:var(--text-secondary); width:30px; height:30px; border-radius:var(--radius); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; }
 .hamburger:hover { background:var(--bg-hover); border-color:var(--accent-dim); color:var(--accent); }
-.topbar-brand { font-family:var(--font-body); font-size:16px; color:#e0e8ff; white-space:nowrap; letter-spacing:0.5px; }
+.topbar-brand { font-family:var(--font-body); font-size:16px; color:#e0e8ff; white-space:nowrap; letter-spacing:0.5px; display:flex; align-items:center; gap:6px; }
 .topbar-brand .version { color:var(--text-muted); font-size:13px; }
 .badge { font-size:12px; padding:3px 10px; border-radius:10px; font-family:var(--font-body); cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-muted); transition:all 0.15s; letter-spacing:0.5px; }
 .badge.on { border-color:rgba(0,255,102,0.3); color:var(--success); background:rgba(0,255,102,0.08); }
@@ -116,6 +117,18 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .theme-option { display:flex; align-items:center; gap:8px; padding:8px 14px; font-size:12px; font-family:var(--font-mono); color:var(--text-secondary); cursor:pointer; transition:background 0.12s; }
 .theme-option:hover { background:var(--bg-hover); color:var(--text-primary); }
 .theme-option.active { color:var(--accent); background:var(--accent-glow); }
+.status-menu { position:relative; }
+.status-menu-btn { background:transparent; border:1px solid var(--border); color:var(--text-secondary); width:30px; height:30px; border-radius:var(--radius); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s; flex-shrink:0; }
+.status-menu-btn:hover { background:var(--bg-hover); border-color:var(--accent-dim); color:var(--accent); }
+.status-dropdown { display:none; position:absolute; top:100%; right:0; margin-top:6px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius); min-width:180px; z-index:2000; box-shadow:0 4px 20px rgba(0,0,0,0.4); font-family:var(--font-mono); font-size:12px; }
+.status-dropdown.open { display:block; }
+.status-dropdown-item { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; color:var(--text-secondary); cursor:pointer; transition:background 0.12s; gap:10px; }
+.status-dropdown-item:hover { background:var(--bg-hover); color:var(--text-primary); }
+.status-dropdown-item .sdi-label { flex:1; white-space:nowrap; }
+.status-dropdown-item .sdi-toggle { font-size:10px; padding:2px 8px; border-radius:8px; border:1px solid; }
+.status-dropdown-item .sdi-toggle.on { border-color:rgba(0,255,102,0.3); color:var(--success); background:rgba(0,255,102,0.08); }
+.status-dropdown-item .sdi-toggle.off { border-color:rgba(255,51,85,0.3); color:var(--danger); background:rgba(255,51,85,0.08); }
+.status-dropdown-divider { height:1px; background:var(--border); margin:4px 0; }
 .theme-swatch { width:14px; height:14px; border-radius:3px; border:1px solid var(--border); flex-shrink:0; }
 .swatch-ibm { background:#0088bb; }
 .swatch-green { background:#00cc33; }
@@ -326,9 +339,12 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .raw-results small { color:var(--text-muted); display:block; margin-top:2px; }
 
 @media (max-width:768px) {
-    .topbar { padding:10px 32px; }
-    .chat-container { padding:12px 28px; }
-    .input-area { padding:10px 28px; }
+    .topbar { padding:8px 14px; gap:6px; }
+    .chat-container { padding:12px 14px; }
+    .input-area { padding:8px 14px; }
+    .sys-stats { padding:3px 14px; gap:10px; font-size:10px; }
+    .topbar-brand { font-size:14px; }
+    .topbar-brand .version { font-size:11px; }
 }
 
 .auth-screen { position: fixed; inset: 0; width: 100%; height: 100vh; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.62); z-index: 3000; }
@@ -499,22 +515,41 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     <div class="topbar">
         <div class="topbar-left">
             <button class="hamburger" id="hamburgerBtn" onclick="toggleDrawer()" title="Conversations">&#9776;</button>
-            <span class="topbar-brand">cAIc <span class="version">{{ version }}</span></span>
+            <span class="topbar-brand">cAIc <span class="version">{{ version }}</span><span class="theme-picker"><button class="badge" id="themeBtn" onclick="toggleThemePicker()" title="Color scheme">&#127912;</button><div class="theme-dropdown" id="themeDropdown"><div class="theme-option active" data-theme="ibm-blue" onclick="applyTheme('ibm-blue')"><span class="theme-swatch swatch-ibm"></span>IBM Blue</div><div class="theme-option" data-theme="green-bg" onclick="applyTheme('green-bg')"><span class="theme-swatch swatch-green"></span>Green Ln</div><div class="theme-option" data-theme="dark" onclick="applyTheme('dark')"><span class="theme-swatch swatch-dark"></span>Dark</div><div class="theme-option" data-theme="light" onclick="applyTheme('light')"><span class="theme-swatch swatch-light"></span>Light</div><div class="theme-option" data-theme="amber" onclick="applyTheme('amber')"><span class="theme-swatch swatch-amber"></span>Amber</div><div class="theme-option" data-theme="trippin" onclick="applyTheme('trippin')"><span class="theme-swatch swatch-trip"></span>Trippin</div></div></span></span>
         </div>
-        <div class="topbar-center">
-            <span class="tc-item"><span class="tc-label">CPU</span> <span id="cpuValue" class="tc-val">--%</span></span>
-            <span class="tc-item"><span class="tc-label">MEM</span> <span id="memValue" class="tc-val">--%</span></span>
-            <span class="tc-item"><span class="tc-label">GPU</span> <span id="gpuValue" class="tc-val">--%</span></span>
-            <span class="tc-item"><span class="tc-label">VRAM</span> <span id="vramValue" class="tc-val">--%</span></span>
-            <span class="tc-item"><span class="tc-label">TOK</span> <span id="tokValue">0</span> / <span id="tokPct" class="tc-val green">0%</span></span>
-        </div>
+
         <div class="topbar-right">
-            <button class="badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">MEM</button>
-            <button class="badge on" id="searchBadge" onclick="toggleSearch()" title="Toggle auto web search">SEARCH</button>
-            <button class="badge on" id="profileBadge" onclick="toggleProfile()" title="Toggle profile injection">PROFILE</button>
-            <button class="badge on" id="directionBadge" onclick="toggleDirection()" title="Toggle sort direction (newest-first / oldest-first)">↓ SORT</button>
-            <button class="badge off" id="privateBadge" onclick="togglePrivate()" title="Toggle privacy mode (no persistence, no external queries)">PRIVACY OFF</button>
-            <span class="info-icon" id="privateInfo" onclick="togglePrivateInfo(event)" title="What is Privacy Mode?">&#9432;</span>
+            <button class="badge admin" id="authActionBtn" onclick="handleAuthAction()" title="Unlock admin">ADMIN</button>
+            <div class="status-menu">
+                <button class="status-menu-btn" id="statusMenuBtn" onclick="toggleStatusMenu()" title="Settings &amp; status">&#8942;</button>
+                <div class="status-dropdown" id="statusDropdown">
+                    <div class="status-dropdown-item" onclick="toggleMemory()">
+                        <span class="sdi-label">Memory</span>
+                        <span class="sdi-toggle on" id="memoryBadge">MEM</span>
+                    </div>
+                    <div class="status-dropdown-item" onclick="toggleSearch()">
+                        <span class="sdi-label">Web Search</span>
+                        <span class="sdi-toggle on" id="searchBadge">SEARCH</span>
+                    </div>
+                    <div class="status-dropdown-item" onclick="toggleProfile()">
+                        <span class="sdi-label">Profile</span>
+                        <span class="sdi-toggle on" id="profileBadge">PROFILE</span>
+                    </div>
+                    <div class="status-dropdown-item" onclick="toggleDirection()">
+                        <span class="sdi-label">Sort</span>
+                        <span class="sdi-toggle on" id="directionBadge">↓ NEW</span>
+                    </div>
+                    <div class="status-dropdown-item" onclick="togglePrivate()">
+                        <span class="sdi-label">Privacy</span>
+                        <span class="sdi-toggle off" id="privateBadge">OFF</span>
+                    </div>
+                    <div class="status-dropdown-divider"></div>
+                    <div class="status-dropdown-item" onclick="togglePrivateInfo(event)">
+                        <span class="sdi-label" style="color:var(--text-muted);">&#9432; About Privacy</span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
             <div class="info-popup-overlay" id="privateInfoOverlay" style="display:none" onclick="togglePrivateInfo(event)">
                 <div class="info-popup-modal" onclick="event.stopPropagation()">
                     <button class="info-popup-close" onclick="togglePrivateInfo(event)">&times;</button>
@@ -531,19 +566,21 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
                     &bull; Web search available (SearXNG)
                 </div>
             </div>
-            <button class="badge admin" id="authActionBtn" onclick="handleAuthAction()" title="Unlock admin">ADMIN</button>
-            <div class="theme-picker">
-                <button class="badge" id="themeBtn" onclick="toggleThemePicker()" title="Color scheme">&#127912;</button>
-                <div class="theme-dropdown" id="themeDropdown">
-                    <div class="theme-option active" data-theme="ibm-blue" onclick="applyTheme('ibm-blue')"><span class="theme-swatch swatch-ibm"></span>IBM Blue</div>
-                    <div class="theme-option" data-theme="green-bg" onclick="applyTheme('green-bg')"><span class="theme-swatch swatch-green"></span>Green Ln</div>
-                    <div class="theme-option" data-theme="dark" onclick="applyTheme('dark')"><span class="theme-swatch swatch-dark"></span>Dark</div>
-                    <div class="theme-option" data-theme="light" onclick="applyTheme('light')"><span class="theme-swatch swatch-light"></span>Light</div>
-                    <div class="theme-option" data-theme="amber" onclick="applyTheme('amber')"><span class="theme-swatch swatch-amber"></span>Amber</div>
-                    <div class="theme-option" data-theme="trippin" onclick="applyTheme('trippin')"><span class="theme-swatch swatch-trip"></span>Trippin</div>
-                </div>
-            </div>
         </div>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+        <div class="welcome-screen" id="welcomeScreen">
+            <img src="/static/caic-bg.png" alt="cAIc" class="welcome-logo">
+        </div>
+    </div>
+
+    <div class="sys-stats" id="sysStats">
+        <span class="ss-item"><span class="ss-label">CPU</span> <span id="cpuValue" class="ss-val">--%</span></span>
+        <span class="ss-item"><span class="ss-label">MEM</span> <span id="memValue" class="ss-val">--%</span></span>
+        <span class="ss-item"><span class="ss-label">GPU</span> <span id="gpuValue" class="ss-val">--%</span></span>
+        <span class="ss-item"><span class="ss-label">VRAM</span> <span id="vramValue" class="ss-val">--%</span></span>
+        <span class="ss-item"><span class="ss-label">TOK</span> <span id="tokValue">0</span> / <span id="tokPct" class="ss-val green">0%</span></span>
     </div>
 
     <div class="input-area">
@@ -573,12 +610,6 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
                 <button class="gallery-close" onclick="closeGallery()">&times;</button>
             </div>
             <div class="gallery-body" id="galleryBody"></div>
-        </div>
-    </div>
-
-    <div class="chat-container" id="chatContainer">
-        <div class="welcome-screen" id="welcomeScreen">
-            <img src="/static/caic-bg.png" alt="cAIc" class="welcome-logo">
         </div>
     </div>
 </main>
@@ -867,14 +898,14 @@ async function updateSystemStats() {
         const data = await resp.json();
         const colorClass = v => v >= 95 ? 'red' : v >= 80 ? 'orange' : 'green';
         document.getElementById('cpuValue').textContent = data.cpu_percent + '%';
-        document.getElementById('cpuValue').className = 'tc-val ' + colorClass(data.cpu_percent);
+        document.getElementById('cpuValue').className = 'ss-val ' + colorClass(data.cpu_percent);
         document.getElementById('memValue').textContent = data.memory_percent + '%';
-        document.getElementById('memValue').className = 'tc-val ' + colorClass(data.memory_percent);
+        document.getElementById('memValue').className = 'ss-val ' + colorClass(data.memory_percent);
         if (data.gpu_available) {
             document.getElementById('gpuValue').textContent = data.gpu_percent + '%';
-            document.getElementById('gpuValue').className = 'tc-val ' + colorClass(data.gpu_percent);
+            document.getElementById('gpuValue').className = 'ss-val ' + colorClass(data.gpu_percent);
             document.getElementById('vramValue').textContent = data.vram_percent + '%';
-            document.getElementById('vramValue').className = 'tc-val ' + colorClass(data.vram_percent);
+            document.getElementById('vramValue').className = 'ss-val ' + colorClass(data.vram_percent);
         }
     } catch(e) {}
 }
@@ -1033,8 +1064,8 @@ function toggleMemory() { if (currentRole !== 'admin') { requireAdminNotice(); r
 function togglePrivate() {
     privateEnabled = !privateEnabled;
     const badge = document.getElementById('privateBadge');
-    badge.className = 'badge ' + (privateEnabled ? 'on' : 'off');
-    badge.textContent = privateEnabled ? 'PRIVACY ON' : 'PRIVACY OFF';
+    badge.className = 'sdi-toggle ' + (privateEnabled ? 'on' : 'off');
+    badge.textContent = privateEnabled ? 'ON' : 'OFF';
     const searchBtn = document.getElementById('searchBtn');
     if (privateEnabled) {
         if (searchBtn) searchBtn.disabled = true;
@@ -1122,34 +1153,42 @@ function applyTheme(name) {
 function toggleThemePicker() {
     document.getElementById('themeDropdown').classList.toggle('open');
 }
+function toggleStatusMenu() {
+    document.getElementById('statusDropdown').classList.toggle('open');
+    document.getElementById('privateInfoOverlay').style.display = 'none';
+}
 document.addEventListener('click', function(e) {
     const picker = document.querySelector('.theme-picker');
     if (picker && !picker.contains(e.target)) {
         document.getElementById('themeDropdown')?.classList.remove('open');
+    }
+    const menu = document.querySelector('.status-menu');
+    if (menu && !menu.contains(e.target)) {
+        document.getElementById('statusDropdown')?.classList.remove('open');
     }
 });
 
 function updateProfileUI() {
     const badge = document.getElementById('profileBadge');
     const toggle = document.getElementById('profileToggle');
-    badge.className = 'badge ' + (profileEnabled ? 'on' : 'off');
-    badge.textContent = profileEnabled ? 'PROFILE' : 'PROFILE OFF';
+    badge.className = 'sdi-toggle ' + (profileEnabled ? 'on' : 'off');
+    badge.textContent = profileEnabled ? 'ON' : 'OFF';
     if (toggle) toggle.className = 'toggle-switch' + (profileEnabled ? ' on' : '');
 }
 
 function updateSearchUI() {
     const badge = document.getElementById('searchBadge');
     const toggle = document.getElementById('searchToggle');
-    badge.className = 'badge ' + (searchEnabled ? 'on' : 'off');
-    badge.innerHTML = searchEnabled ? 'SEARCH' : 'SEARCH OFF';
+    badge.className = 'sdi-toggle ' + (searchEnabled ? 'on' : 'off');
+    badge.innerHTML = searchEnabled ? 'ON' : 'OFF';
     if (toggle) toggle.className = 'toggle-switch' + (searchEnabled ? ' on' : '');
 }
 
 function updateMemoryUI() {
     const badge = document.getElementById('memoryBadge');
     const toggle = document.getElementById('memoryToggle');
-    badge.className = 'badge ' + (memoryEnabled ? 'on' : 'off');
-    badge.innerHTML = memoryEnabled ? 'MEM' : 'MEM OFF';
+    badge.className = 'sdi-toggle ' + (memoryEnabled ? 'on' : 'off');
+    badge.innerHTML = memoryEnabled ? 'ON' : 'OFF';
     if (toggle) toggle.className = 'toggle-switch' + (memoryEnabled ? ' on' : '');
 }
 
@@ -2001,7 +2040,7 @@ function toggleDirection() {
     _waterfallDirection = _waterfallDirection === 'newest' ? 'oldest' : 'newest';
     localStorage.setItem('waterfallDirection', _waterfallDirection);
     const badge = document.getElementById('directionBadge');
-    if (badge) badge.textContent = _waterfallDirection === 'newest' ? '↓ SORT' : '↑ SORT';
+    if (badge) badge.textContent = _waterfallDirection === 'newest' ? '↓ NEW' : '↑ OLD';
     const container = document.getElementById('chatContainer');
     const items = Array.from(container.children);
     items.reverse().forEach(el => container.appendChild(el));
@@ -2076,7 +2115,7 @@ function updateTopbarTokens(pct) {
     if (pctEl) {
         const cls = lastContextPct >= 95 ? 'red' : lastContextPct >= 80 ? 'orange' : 'green';
         pctEl.textContent = lastContextPct + '%';
-        pctEl.className = 'tc-val ' + cls;
+        pctEl.className = 'ss-val ' + cls;
     }
 }
 updateTopbarTokens(0);
