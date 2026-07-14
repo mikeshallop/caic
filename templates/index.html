@@ -26,8 +26,9 @@
     --success: #00ff66;
     --warning: #ffaa00;
     --border: #1a3060;
-    --scrollbar: #1a3060;
-    --scrollbar-track: rgba(255,255,255,0.04);
+    --scrollbar: var(--accent-dim);
+    --scrollbar-hover: var(--accent);
+    --scrollbar-track: rgba(0,136,187,0.08);
     --radius: 6px;
     --font-body: 'JetBrains Mono', 'Consolas', monospace;
     --font-mono: 'JetBrains Mono', 'Consolas', monospace;
@@ -38,8 +39,14 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
 ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; border: 2px solid transparent; background-clip: content-box; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); border: 2px solid transparent; background-clip: content-box; }
-* { scrollbar-width: thin; scrollbar-color: var(--scrollbar) var(--scrollbar-track); }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); border: 2px solid transparent; background-clip: content-box; }
+
+.chat-container { scrollbar-width: thin; scrollbar-color: var(--scrollbar) var(--scrollbar-track); }
+
+.chat-container::-webkit-scrollbar { width: 8px; }
+.chat-container::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+.chat-container::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; border: 2px solid transparent; background-clip: content-box; }
+.chat-container::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); border: 2px solid transparent; background-clip: content-box; }
 
 /* --- slide-out drawer (replaces sidebar) --- */
 .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:90; display:none; }
