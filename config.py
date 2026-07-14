@@ -9,10 +9,10 @@ import logging
 
 log = logging.getLogger("caic")
 
-VERSION = "v0.20.0"
+VERSION = "v0.21.0"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://192.168.50.108:8081")
-SEARXNG_BASE = "http://localhost:8888"
+SEARXNG_BASE = os.environ.get("CAIC_SEARXNG_BASE", "http://localhost:8888")
 DEFAULT_MODEL = "qwen2.5-7b-instruct"
 COMPLETIONS_API_KEY = os.environ.get("CAIC_COMPLETIONS_API_KEY", "caic-sk-" + os.urandom(24).hex())
 MODEL_CONTEXT_LENGTH = 4096
@@ -32,6 +32,7 @@ def get_amqp_url() -> str:
             pw = f.read().strip()
     except (FileNotFoundError, OSError):
         pw = "password"
+        log.warning("AMQP secret file not found at %s — using default password", AMQP_SECRET_PATH)
     return f"amqp://caic:{pw}@localhost:5672/caic"
 
 # --- Auth ---
@@ -65,7 +66,7 @@ BODY_LIMIT_CHAT_BYTES = 128 * 1024
 BODY_LIMIT_PROFILE_BYTES = 256 * 1024
 
 # --- Upload ---
-UPLOAD_DIR = "/tmp/caic_uploads"
+UPLOAD_DIR = os.environ.get("CAIC_UPLOAD_DIR", "/tmp/caic_uploads")
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 SUPPORTED_UPLOAD_TYPES = {"text/plain", "text/markdown", "application/pdf", "application/json", "text/x-python", "text/html", "image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp"}
 QDRANT_URL = os.environ.get("CAIC_QDRANT_URL", "http://192.168.50.108:6333")

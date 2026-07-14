@@ -45,9 +45,11 @@ import routers.cluster as cluster_router
 # --- Logging ---
 log = logging.getLogger("caic")
 log.setLevel(logging.DEBUG)
-syslog_handler = logging.handlers.SysLogHandler(address="/dev/log")
-syslog_handler.setFormatter(logging.Formatter("caic[%(process)d]: %(levelname)s %(message)s"))
-log.addHandler(syslog_handler)
+syslog_address = os.environ.get("CAIC_SYSLOG_ADDRESS", "/dev/log")
+if syslog_address:
+    syslog_handler = logging.handlers.SysLogHandler(address=syslog_address)
+    syslog_handler.setFormatter(logging.Formatter("caic[%(process)d]: %(levelname)s %(message)s"))
+    log.addHandler(syslog_handler)
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -179,4 +181,4 @@ for router_module in [
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host=os.environ.get("CAIC_HOST", "0.0.0.0"), port=int(os.environ.get("CAIC_PORT", "8080")))

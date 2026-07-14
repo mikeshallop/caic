@@ -137,9 +137,12 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 ## Work State
 
 ### Completed this session
-- **At-Rest Encryption (v0.20.0)** — `crypto.py` with AES-256-GCM encrypt/decrypt + `ensure_key()`. Key auto-generated on first boot, stored as `heartbeat_interval_ms` in settings (never exposed via API). All 12 storage call sites wired: `routers/chat.py`, `routers/search_route.py`, `routers/conversations.py`, `routers/completions.py`, `memory.py`, `db.py` (upload_context), `rag.py`, `routers/upload.py`, `routers/ingest.py`. `memory.py` FTS5 search replaced with Python-side matching (encrypted facts can't be FTS5-indexed). `app.py` lifespan calls `ensure_key()` after `init_db()`. 200/200 tests pass. Deployed to jarvis with fresh DB.
+- **v0.21.0 Release** — Scrollbar/DOM fixes, perplexity persistence, all service URLs env-overridable, single-node deployment docs, hardware.py Qdrant URL bugfix. See README for full changelog.
 
 ### Active
+- (none)
+
+### Blocked
 - (none)
 
 ### Blocked
@@ -150,7 +153,7 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - Private Chat mode was implemented in B8 (v0.19.3). WireGuard in-transit encryption documented in wiki. At-rest encryption implemented in v0.20.0.
 
 ### Key config values (current)
-- `VERSION = "v0.20.0"` in `config.py`
+- **Current VERSION**: `v0.21.0` in `config.py`.
 - `SESSION_TIMEOUT_SECONDS = 3600`
 - `DEFAULT_MODEL = "qwen2.5-7b-instruct"`
 - `LLAMA_SERVER_BASE = "http://192.168.50.108:8081"`

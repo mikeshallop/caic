@@ -17,7 +17,7 @@ from config import MAX_SKILL_PROMPT_CHARS, QDRANT_URL, RAG_COLLECTION
 log = logging.getLogger("caic")
 
 EMBED_URL = os.environ.get("CAIC_EMBED_URL", "http://192.168.50.210:11434")
-EMBED_MODEL = "mxbai-embed-large"
+EMBED_MODEL = os.environ.get("CAIC_EMBED_MODEL", "mxbai-embed-large")
 RAG_SCORE_THRESHOLD = 0.25
 
 # Re-export eviction symbols for backward compatibility

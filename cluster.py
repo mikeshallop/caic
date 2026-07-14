@@ -4,6 +4,7 @@ Maintains node registry, event log, coordinator state, and ping-based health che
 """
 import asyncio
 import logging
+import os
 import uuid
 from collections import deque
 from datetime import datetime, timezone
@@ -17,7 +18,7 @@ CLUSTER_NODES: dict[str, dict] = {}
 CLUSTER_EVENTS: deque = deque(maxlen=1000)
 CLUSTER_COORDINATOR: str | None = None
 _pending_pings: dict[str, tuple[str, asyncio.Event]] = {}
-NODE_NAME: str = "ultron"
+NODE_NAME: str = os.environ.get("CAIC_NODE_NAME", "ultron")
 PING_TIMEOUT: float = 5.0
 
 

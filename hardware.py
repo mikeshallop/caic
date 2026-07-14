@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 import psutil
 
-from config import LLAMA_SERVER_BASE, SEARXNG_BASE
+from config import LLAMA_SERVER_BASE, SEARXNG_BASE, QDRANT_URL
 
 log = logging.getLogger("caic")
 
@@ -95,7 +95,7 @@ async def assess_hardware() -> dict:
     qdrant_collections = []
     try:
         async with httpx.AsyncClient(timeout=3) as client:
-            resp = await client.get("http://192.168.50.108:6333/collections")
+            resp = await client.get(f"{QDRANT_URL}/collections")
             if resp.status_code == 200:
                 qdrant_reachable = True
                 data = resp.json()

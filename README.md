@@ -1,6 +1,6 @@
 ![cAIc banner](static/readme-banner.png)
 
-# cAIc v0.20.0
+# cAIc v0.21.0
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
@@ -37,8 +37,16 @@ To deploy single-node, override the remote service URLs:
 ```bash
 export CAIC_QDRANT_URL=http://localhost:6333
 export CAIC_EMBED_URL=http://localhost:11434
+export CAIC_EMBED_MODEL=mxbai-embed-large
+export CAIC_SEARXNG_BASE=http://localhost:8888
 export LLAMA_SERVER_BASE=http://localhost:8081
-# AMQP URL is already configurable via CAIC_AMQP_URL
+export CAIC_NODE_NAME=$(hostname)
+export CAIC_UPLOAD_DIR=/tmp/caic_uploads
+export CAIC_DB_PATH=/opt/caic/caic.db
+export CAIC_HOST=0.0.0.0
+export CAIC_PORT=8080
+# AMQP URL is already configurable via CAIC_AMQP_URL or CAIC_AMQP_SECRET_PATH
+# Syslog: set CAIC_SYSLOG_ADDRESS to /dev/log (Linux), empty to disable, or a remote address
 ```
 
 All services degrade gracefully if unreachable — RAG, search, cluster, and triage log warnings and continue. Only llama-server (inference) is strictly required.
@@ -46,6 +54,48 @@ All services degrade gracefully if unreachable — RAG, search, cluster, and tri
 Untested: Windows 11 / WSL2 (Debian). The codebase is pure Python with no platform-specific dependencies beyond `rocm-smi` (AMD GPU stats, gracefully absent) and `system_profiler` (macOS, absent on Linux/WSL). llama.cpp builds and runs on WSL2 with NVIDIA GPU passthrough.
 
 Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. AMQP-mediated cluster coordination with an OpenAI-compatible inference endpoint.
+
+## What's New in v0.21.0
+
+### Scrollbar + DOM Fixes
+- Scrollbar hidden behind `.main::after` barcode strip — fixed by elevating `.chat-container` z-index above the pseudo-element overlay.
+- Scrollbar repositioned to the dark-blue channel between content and spool-hole strip via `margin-right: 28px`, widened to 10px.
+- `scrollToLatest()` now uses `requestAnimationFrame` so `scrollHeight` reflects rendered content — fixes "responses below viewport" during streaming.
+- Direction-aware `_userScrolledAway` guard: in `oldest` mode, detects scroll-away from bottom (not from top, which broke `newest` mode).
+- Removed `_userScrolledAway` guard from `oldest` branch to restore always-scroll-to-bottom behavior.
+
+### Perplexity Persistence
+- New `perplexity REAL` column in `messages` table (auto-migration on existing DBs).
+- Assistant responses now store `perplexity` alongside content in all storage paths (chat, search, completions).
+- Loaded conversations display confidence badges from stored perplexity.
+
+### DOM Pairing Bugfix
+- `appendMessage('assistant', ...)` was finding the **first** `.message.user` via `querySelector`, appending Q2's response to Q1's pair in multi-turn conversations.
+- Fixed by capturing `appendMessage('user', ...)` return value and passing the exact user element as `afterEl`.
+
+### Config Overhaul — All Service URLs Now Env-Overridable
+| Env Var | Default | Purpose |
+|---------|---------|---------|
+| `CAIC_QDRANT_URL` | `http://192.168.50.108:6333` | Qdrant vector search |
+| `CAIC_EMBED_URL` | `http://192.168.50.210:11434` | Ollama embeddings |
+| `CAIC_EMBED_MODEL` | `mxbai-embed-large` | Embedding model name |
+| `CAIC_SEARXNG_BASE` | `http://localhost:8888` | SearXNG web search |
+| `CAIC_NODE_NAME` | `ultron` | Coordinator node name |
+| `CAIC_UPLOAD_DIR` | `/tmp/caic_uploads` | Upload temp directory |
+| `CAIC_DB_PATH` | `<cwd>/caic.db` | SQLite database path |
+| `CAIC_HOST` | `0.0.0.0` | uvicorn listen address |
+| `CAIC_PORT` | `8080` | uvicorn listen port |
+| `CAIC_SYSLOG_ADDRESS` | `/dev/log` | Syslog socket (empty=disable) |
+| `CAIC_AMQP_SECRET_PATH` | `/home/gramps/.caic_amqp_secret` | AMQP password file |
+| `CAIC_AMQP_URL` | (from secret file or default) | Full AMQP connection string |
+
+### Bugfixes
+- `hardware.py` Qdrant health check was hardcoded to `192.168.50.108:6333`, bypassing `CAIC_QDRANT_URL` — now uses `QDRANT_URL` from config.
+- AMQP fallback password now logs a warning when the secret file is missing.
+
+### Single-Node Deployment
+- Documented at `### Single-Node Deployment (Experimental)` — all services can colocate on localhost with the env vars above.
+- Untested: Windows 11 / WSL2 (Debian). No platform-specific code beyond gracefully-absent `rocm-smi` and `system_profiler`.
 
 #### Query-routing vs. layer-splitting — why it matters
 
