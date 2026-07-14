@@ -401,6 +401,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="badge on" id="memoryBadge" onclick="toggleMemory()" title="Toggle memory injection">MEM</button>
             <button class="badge on" id="searchBadge" onclick="toggleSearch()" title="Toggle auto web search">SEARCH</button>
             <button class="badge on" id="profileBadge" onclick="toggleProfile()" title="Toggle profile injection">PROFILE</button>
+            <button class="badge on" id="directionBadge" onclick="toggleDirection()" title="Toggle message ordering">NEW</button>
             <button class="badge admin" id="authActionBtn" onclick="handleAuthAction()" title="Unlock admin">ADMIN</button>
         </div>
     </div>
@@ -1101,7 +1102,7 @@ async function loadConversation(convId) {
         container.innerHTML = '';
         conversationHistory = [];
         data.messages.forEach(msg => { appendMessage(msg.role, msg.content, false); conversationHistory.push({ role: msg.role, content: msg.content }); });
-        scrollToTop();
+        scrollToLatest();
         await loadConversations();
     } catch(e) {}
 }
@@ -1179,7 +1180,7 @@ async function sendSearch() {
                     if (data.error) { textEl.textContent = 'Error: ' + data.error; setStreamingState(false); return; }
                     if (data.conversation_id && !currentConvId) { currentConvId = data.conversation_id; await loadConversations(); }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results, summarizing...</div>'; }
-                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToTop(); }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToLatest(); }
                     if (data.raw_results) {
                         let rawHtml = '<details class="raw-results"><summary>🔍 View raw search results (' + data.raw_results.length + ')</summary><ul>';
                         data.raw_results.forEach(r => { 
@@ -1386,7 +1387,7 @@ async function sendMessage() {
                     }
                     if (data.searching) { textEl.innerHTML = fullText ? renderMarkdown(fullText) + '<div class="search-indicator"><div class="spinner"></div>Searching...</div>' : '<div class="search-indicator"><div class="spinner"></div>Searching...</div>'; searchTriggered = true; }
                     if (data.search_results) { textEl.innerHTML = '<div class="search-indicator">🔍 Found ' + data.search_results + ' results...</div>'; fullText = ''; firstToken = true; }
-                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToTop(); }
+                    if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToLatest(); }
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
                         if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
@@ -1460,19 +1461,27 @@ function appendMessage(role, content, animate, isSearch = false, afterEl = null)
         const pair = document.createElement('div');
         pair.className = 'msg-pair' + (isSearch ? ' search-pair' : '');
         pair.appendChild(div);
-        container.prepend(pair);
+        if (_waterfallDirection === 'newest') {
+            container.prepend(pair);
+        } else {
+            container.appendChild(pair);
+        }
     } else if (role === 'assistant') {
         const pair = afterEl ? afterEl.closest('.msg-pair') : container.querySelector('.msg-pair');
         if (pair) {
             pair.appendChild(div);
-        } else {
+        } else if (_waterfallDirection === 'newest') {
             container.prepend(div);
+        } else {
+            container.appendChild(div);
         }
-    } else {
+    } else if (_waterfallDirection === 'newest') {
         container.prepend(div);
+    } else {
+        container.appendChild(div);
     }
     if (content && role === 'assistant') { addCopyButtons(div); addMessageToolbar(div); }
-    scrollToTop();
+    scrollToLatest();
     return div;
 }
 
@@ -1563,17 +1572,29 @@ function addMessageToolbar(msgDiv) {
 }
 
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+let _waterfallDirection = localStorage.getItem('waterfallDirection') || 'newest';
+function toggleDirection() {
+    _waterfallDirection = _waterfallDirection === 'newest' ? 'oldest' : 'newest';
+    localStorage.setItem('waterfallDirection', _waterfallDirection);
+    const badge = document.getElementById('directionBadge');
+    if (badge) badge.textContent = _waterfallDirection === 'newest' ? 'NEW' : 'OLD';
+}
 let _userScrolledAway = false;
 document.getElementById('chatContainer')?.addEventListener('scroll', function() {
     _userScrolledAway = this.scrollTop > 100;
 }, { passive: true });
-function scrollToBottom() { const c = document.getElementById('chatContainer'); c.scrollTop = c.scrollHeight; }
-function scrollToTop() {
-    if (_userScrolledAway) return;
+function scrollToLatest() {
     const c = document.getElementById('chatContainer');
-    if (c) c.scrollTop = 0;
+    if (!c) return;
+    if (_waterfallDirection === 'newest') {
+        if (_userScrolledAway) return;
+        c.scrollTop = 0;
+    } else {
+        c.scrollTop = c.scrollHeight;
+    }
 }
 function resetScrollLock() { _userScrolledAway = false; }
+function scrollToBottom() { scrollToLatest(); }
 function execCopy(text) {
     const ta = document.createElement('textarea');
     ta.value = text;

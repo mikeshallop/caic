@@ -1,6 +1,6 @@
 ![cAIc banner](static/readme-banner.png)
 
-# cAIc v0.19.1
+# cAIc v0.19.2
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
@@ -42,12 +42,27 @@ At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU
 
 Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — includes [FAQ](https://llgit.llamachile.tube/gramps/cAIc/wiki/FAQ), [Installation Guide](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation), and [full architecture docs](https://llgit.llamachile.tube/gramps/cAIc/wiki/Developer-Architecture)
 
+## What's New in v0.19.2
+
+### Waterfall Direction Toggle (B6)
+- **NEW/OLD toggle** — topbar button switches between newest-first (waterfall) and oldest-first (traditional chat)
+- **Direction-aware scroll** — newest-first scrolls to top, oldest-first scrolls to bottom
+- **localStorage persistence** — preference survives page reloads, default is newest-first (waterfall)
+
 ## What's New in v0.19.1
 
 ### Default Model Auto-Pull on First Start (B5)
 - **`model_pull.py`** — new module that checks if `default_model` is available on llama-server at startup, falls back to Ollama pull API if not found
 - **Startup integration** — `app.py` lifespan calls `ensure_model()` after `assess_hardware()`, pulling the missing model via Ollama's streaming pull API
 - **Idempotent** — skips pull if model already available on llama-server or Ollama
+
+## What's New in v0.19.0
+
+### Apple Silicon Worker Support (B7)
+- **`gpu.py`** — now detects `sys.platform == "darwin"` and parses `system_profiler SPDisplaysDataType` for GPU model/VRAM instead of `rocm-smi`
+- **`hardware.py`** — darwin branch via `_get_vram_darwin()` for VRAM assessment on macOS
+- **`node_agent/agent.py`** — `get_load()` reports VRAM via `system_profiler SPDisplaysDataType` on macOS workers
+- Hybrid detection — falls back to AMD rocm-smi on Linux, `available: False` if neither is detected
 
 ## What's New in v0.18.0
 
