@@ -93,7 +93,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .main::after { right:0; border-right:none; border-radius:4px 0 0 4px; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:8px 28px; border-bottom:1px solid var(--border); background:var(--bg-secondary); flex-shrink:0; gap:12px; }
 .topbar-left { display:flex; align-items:center; gap:10px; min-width:0; }
-.sys-stats { display:flex; align-items:center; justify-content:center; gap:16px; padding:4px 28px; background:var(--bg-secondary); border-top:1px solid var(--border); font-size:11px; font-family:var(--font-mono); color:var(--text-muted); flex-shrink:0; overflow-x:auto; white-space:nowrap; }
+.sys-stats { display:flex; align-items:center; justify-content:center; gap:16px; padding:4px 28px; background:var(--bg-primary); border-top:1px solid var(--border); font-size:11px; font-family:var(--font-mono); color:var(--text-muted); flex-shrink:0; overflow-x:auto; white-space:nowrap; }
 .sys-stats .ss-item { display:flex; align-items:center; gap:3px; }
 .sys-stats .ss-label { color:var(--text-muted); text-transform:uppercase; }
 .sys-stats .ss-val { transition:color 0.3s; }
@@ -279,7 +279,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .msg-toolbar .sep { width:1px; height:14px; background:var(--border); margin:0 4px; }
 .msg-toolbar .toolbar-label { font-size:10px; font-family:var(--font-mono); color:var(--text-muted); margin-right:4px; }
 
-.input-area { padding:16px 28px; border-top:1px solid var(--border); background:var(--bg-secondary); }
+.input-area { padding:16px 28px; border-bottom:1px solid var(--border); background:var(--bg-secondary); }
 .input-row { max-width:900px; margin:0 auto; display:flex; gap:10px; align-items:flex-end; }
 .input-row textarea { flex:1; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-body); font-size:14px; padding:12px 14px; border-radius:var(--radius); resize:none; min-height:44px; max-height:200px; line-height:1.5; }
 .input-row textarea:focus { outline:none; border-color:var(--accent-dim); }
@@ -569,20 +569,6 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         </div>
     </div>
 
-    <div class="chat-container" id="chatContainer">
-        <div class="welcome-screen" id="welcomeScreen">
-            <img src="/static/caic-bg.png" alt="cAIc" class="welcome-logo">
-        </div>
-    </div>
-
-    <div class="sys-stats" id="sysStats">
-        <span class="ss-item"><span class="ss-label">CPU</span> <span id="cpuValue" class="ss-val">--%</span></span>
-        <span class="ss-item"><span class="ss-label">MEM</span> <span id="memValue" class="ss-val">--%</span></span>
-        <span class="ss-item"><span class="ss-label">GPU</span> <span id="gpuValue" class="ss-val">--%</span></span>
-        <span class="ss-item"><span class="ss-label">VRAM</span> <span id="vramValue" class="ss-val">--%</span></span>
-        <span class="ss-item"><span class="ss-label">TOK</span> <span id="tokValue">0</span> / <span id="tokPct" class="ss-val green">0%</span></span>
-    </div>
-
     <div class="input-area">
         <div class="file-preview" id="filePreview">
             <img class="file-preview-thumb" id="filePreviewThumb" src="" alt="" style="display:none">
@@ -601,6 +587,20 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
             <button class="search-btn" id="searchBtn" onclick="sendSearch()" title="Search the web">WEB &#128269;</button>
         </div>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+        <div class="welcome-screen" id="welcomeScreen">
+            <img src="/static/caic-bg.png" alt="cAIc" class="welcome-logo">
+        </div>
+    </div>
+
+    <div class="sys-stats" id="sysStats">
+        <span class="ss-item"><span class="ss-label">CPU</span> <span id="cpuValue" class="ss-val">--%</span></span>
+        <span class="ss-item"><span class="ss-label">MEM</span> <span id="memValue" class="ss-val">--%</span></span>
+        <span class="ss-item"><span class="ss-label">GPU</span> <span id="gpuValue" class="ss-val">--%</span></span>
+        <span class="ss-item"><span class="ss-label">VRAM</span> <span id="vramValue" class="ss-val">--%</span></span>
+        <span class="ss-item"><span class="ss-label">TOK</span> <span id="tokValue">0</span> / <span id="tokPct" class="ss-val green">0%</span></span>
     </div>
 
     <div class="gallery-overlay" id="galleryOverlay" onclick="closeGallery(event)">
