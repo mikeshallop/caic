@@ -1437,7 +1437,7 @@ async function sendMessage() {
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
                         if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
-                        if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; const conf = Math.round((1 / ppl) * 100); const cls = conf >= 80 ? 'high' : conf >= 20 ? 'medium' : 'low'; roleLabel.innerHTML += `<span class="conf-badge ${cls}">${conf}%</span>`; }
+                        if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; const conf = Math.round(Math.max(0, Math.min(100, (1 - (ppl - 1) / 10) * 100))); const cls = conf >= 80 ? 'high' : conf >= 15 ? 'medium' : 'low'; roleLabel.innerHTML += `<span class="conf-badge ${cls}">${conf}%</span>`; }
                         if (typeof data.tokens_per_sec === 'number' && data.tokens_per_sec > 0 && roleLabel) roleLabel.innerHTML += `<span class="tps-badge">${data.tokens_per_sec.toFixed(1)} t/s</span>`;
                         if (roleLabel && ttr > 0) {
                             const ttrSec = ttr / 1000;
