@@ -1379,7 +1379,7 @@ async function loadRagPoints() {
     try {
         const search = document.getElementById('ragSearchInput').value.trim();
         const source = document.getElementById('ragSourceFilter').value;
-        let url = `/api/rag/points?limit=20&sort=date&order=desc`;
+        let url = `/api/rag/points?limit=20`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
         if (source) url += `&source=${encodeURIComponent(source)}`;
         if (_ragPageOffset !== null && !search) url += `&offset=${encodeURIComponent(_ragPageOffset)}`;

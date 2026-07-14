@@ -46,7 +46,8 @@ async def get_collection_count() -> int:
                 timeout=10.0,
             )
             if resp.status_code == 200:
-                return resp.json().get("result", {}).get("vectors_count", 0)
+                info = resp.json().get("result", {})
+                return info.get("points_count", info.get("vectors_count", 0))
     except Exception as e:
         log.warning(f"get_collection_count error: {e}")
     return 0

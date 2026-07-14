@@ -93,9 +93,6 @@ async def rag_list_points(
             scroll_body["offset"] = offset
         if source:
             scroll_body["filter"] = {"must": [{"match": {"key": "source", "value": source}}]}
-        if sort:
-            direction = "asc" if order == "asc" else "desc"
-            scroll_body["order_by"] = {"key": sort, "direction": direction}
 
         sr = await client.post(
             f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points/scroll",
@@ -114,7 +111,8 @@ async def rag_list_points(
         )
         total = 0
         if info_resp.status_code == 200:
-            total = info_resp.json().get("result", {}).get("vectors_count", 0)
+            info = info_resp.json().get("result", {})
+            total = info.get("points_count", info.get("vectors_count", 0))
 
         points = []
         for r in raw_points:

@@ -70,7 +70,7 @@ UPLOAD_DIR = os.environ.get("CAIC_UPLOAD_DIR", "/tmp/caic_uploads")
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 SUPPORTED_UPLOAD_TYPES = {"text/plain", "text/markdown", "application/pdf", "application/json", "text/x-python", "text/html", "image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp"}
 QDRANT_URL = os.environ.get("CAIC_QDRANT_URL", "http://192.168.50.108:6333")
-RAG_COLLECTION = "caic_rag"
+RAG_COLLECTION = os.environ.get("CAIC_RAG_COLLECTION", "caic_rag")
 UPLOAD_CONTEXT_EXPIRY_HOURS = 1
 BODY_LIMIT_UPLOAD_BYTES = MAX_UPLOAD_BYTES
 
