@@ -1155,7 +1155,7 @@ async function loadConversation(convId) {
         container.innerHTML = '';
         conversationHistory = [];
         data.messages.forEach(msg => { appendMessage(msg.role, msg.content, false, false, null, msg.perplexity); conversationHistory.push({ role: msg.role, content: msg.content }); });
-        scrollToLatest();
+                scrollToLatest();
         await loadConversations();
     } catch(e) {}
 }
@@ -1650,7 +1650,11 @@ function toggleDirection() {
 }
 let _userScrolledAway = false;
 document.getElementById('chatContainer')?.addEventListener('scroll', function() {
-    _userScrolledAway = this.scrollTop > 100;
+    if (_waterfallDirection === 'newest') {
+        _userScrolledAway = this.scrollTop > 100;
+    } else {
+        _userScrolledAway = this.scrollTop < this.scrollHeight - this.clientHeight - 60;
+    }
 }, { passive: true });
 function scrollToLatest() {
     const c = document.getElementById('chatContainer');
@@ -1659,7 +1663,11 @@ function scrollToLatest() {
         if (_userScrolledAway) return;
         c.scrollTop = 0;
     } else {
-        c.scrollTop = c.scrollHeight;
+        if (_userScrolledAway) return;
+        requestAnimationFrame(() => {
+            const cc = document.getElementById('chatContainer');
+            if (cc) cc.scrollTop = cc.scrollHeight;
+        });
     }
 }
 function resetScrollLock() { _userScrolledAway = false; }
