@@ -1,6 +1,6 @@
 ![cAIc banner](static/readme-banner.png)
 
-# cAIc v0.18.0
+# cAIc v0.19.1
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
@@ -42,13 +42,19 @@ At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU
 
 Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — includes [FAQ](https://llgit.llamachile.tube/gramps/cAIc/wiki/FAQ), [Installation Guide](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation), and [full architecture docs](https://llgit.llamachile.tube/gramps/cAIc/wiki/Developer-Architecture)
 
+## What's New in v0.19.1
+
+### Default Model Auto-Pull on First Start (B5)
+- **`model_pull.py`** — new module that checks if `default_model` is available on llama-server at startup, falls back to Ollama pull API if not found
+- **Startup integration** — `app.py` lifespan calls `ensure_model()` after `assess_hardware()`, pulling the missing model via Ollama's streaming pull API
+- **Idempotent** — skips pull if model already available on llama-server or Ollama
+
 ## What's New in v0.18.0
 
 ### Wiki — Installation Guide, Screenshots Gallery, Full Documentation
 - **New Installation & Configuration page** — bare-metal walkthrough, cluster setup, config reference, security checklist, 12 troubleshooting topics. Everything a new user needs to get cAIc running.
 - **Screenshots gallery** — clickable image gallery on the wiki Screenshots page
 - **Wiki fully populated** — 5 pages linked from Home, renders at root URL
-- **B5 added to backlog** — auto-download of default GGUF model on first start
 
 ### UX Polish — Waterfall Layout, Barcode Stripes, Confidence Badges
 - **Waterfall display** — newest messages at top via `prepend()`, scroll to top

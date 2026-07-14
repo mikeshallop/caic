@@ -40,7 +40,7 @@ Every router has a dedicated test file:
 | `test_error_envelopes.py` | Global exception handler + stream error incidents |
 | `test_upload.py` | `routers/upload.py` — upload, delete, link, by-conversation, attachment_count integration |
 
-Modules that call `httpx.AsyncClient` (chat, completions, models, search_route, upload, ingest)
+Modules that call `httpx.AsyncClient` (chat, completions, models, search_route, upload, ingest, model_pull)
 are mocked via `monkeypatch.setattr` on `AsyncClient.stream`, `.get`, or `.post`.
 CPU stats in `models.py` (`api/stats`) use real `psutil`; GPU stats are
 monkeypatched via `routers.models.get_gpu_stats`.
@@ -61,6 +61,7 @@ Refactored from single-file (`app.py`) into modules under project root:
 | `rag.py` | Qdrant vector search + system prompt assembly + chunk_text() helper |
 | `eviction.py` | Score-based RAG eviction engine |
 | `gpu.py` | GPU stats — `rocm-smi` (AMD/Linux) or `system_profiler` (Apple Silicon/macOS) |
+| `model_pull.py` | Startup model availability check + Ollama pull API |
 | `triage.py` | Phi-4-mini-based query classification + cluster node selection |
 | `cluster.py` | Cluster node registry, event log, coordinator election, ping/pong, model swap handlers |
 | `amqp.py` | AMQP connection manager — connect, disconnect, publish, subscribe, auto-reconnect |
@@ -113,7 +114,7 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 | wttr.in | No | weather shortcut |
 | rocm-smi | No | AMD GPU stats |
 | Qdrant | No | 6333 (coordinator) — RAG vector search |
-| Ollama (worker) | No | 11434 — embeddings only |
+| Ollama (worker) | No | 11434 — embeddings + model pull |
 
 ### Config quirks
 
@@ -136,6 +137,7 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 
 ### Completed this session
 - **B7 (v0.19.0)** — Apple Silicon worker support. `gpu.py` now detects `sys.platform == "darwin"` and parses `system_profiler SPDisplaysDataType` for GPU model/VRAM instead of `rocm-smi`. `hardware.py` has darwin branch via `_get_vram_darwin()`. `node_agent/agent.py` reports VRAM on macOS via `system_profiler`. 5 new tests cover linux/darwin gpu paths, 3 new hardware tests cover darwin assessment + VRAM parsing.
+- **B5 (v0.19.1)** — Default model auto-pull on first start. `model_pull.py` with `ensure_model()` checks llama-server availability, falls back to Ollama pull API. Integrated into `app.py` lifespan. 11 tests cover all paths.
 - **Scroll-position fighting** — `scrollToTop()` now respects `_userScrolledAway` flag (100px threshold), skips auto-scroll when user is reading older content. `resetScrollLock()` called on new messages.
 - **401 error cascade** — `SESSION_TIMEOUT_SECONDS` bumped 90→3600 (1 hour). All 10 unprotected `authFetch` calls wrapped in try/catch.
 - **Token counter** — removed localStorage persistence; resets to 0 on page refresh.
@@ -155,14 +157,13 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 
 ### Upcoming (backlog)
 - B4 — RAG Corpus Management UI
-- B5 — default model auto-pull on first start
 - B6 — waterfall direction toggle
 - B8 — **Encryption & PHI readiness** — spec out encryption at rest (SQLCipher for caic.db, Qdrant payload encryption) and in-transit (TLS for inference, AMQP, RAG). Per-user auth, audit logging, log sanitizer, data lifecycle. Document the "personal LAN HIPAA gap."
   - **Preferred approach: Private Chat mode** — a toggle that skips DB persistence, memory/RAG injection, content logging, and **external SearXNG searching** entirely. Zero stored data, zero external queries = zero data to protect. Simpler, more robust, less code to audit than full encryption. Design this as the primary PHI path before reaching for crypto.
   - **In-transit still needs TLS** — Private Chat eliminates at-rest risk, but AMQP (RabbitMQ) and inference (llama-server) traffic between coordinator and workers is still plaintext on the wire. TLS termination on each node is the lightweight fix (self-signed CA, nginx sidecar or RabbitMQ TLS).
 
 ### Key config values (current)
-- `VERSION = "v0.19.0"` in `config.py`
+- `VERSION = "v0.19.1"` in `config.py`
 - `SESSION_TIMEOUT_SECONDS = 3600`
 - `DEFAULT_MODEL = "qwen2.5-7b-instruct"`
 - `LLAMA_SERVER_BASE = "http://192.168.50.108:8081"`

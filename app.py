@@ -16,8 +16,8 @@ from fastapi.templating import Jinja2Templates
 
 from amqp import connect as amqp_connect, disconnect as amqp_disconnect
 from cluster import start_cluster_subscriptions
-from config import VERSION, RATE_WINDOW_SECONDS, UPLOAD_DIR, RAG_MAX_VECTORS, RAG_EVICTION_HIGH_WATER, RAG_EVICTION_LOW_WATER, RAG_EVICTION_BATCH
-from db import init_db
+from config import VERSION, DEFAULT_MODEL, RATE_WINDOW_SECONDS, UPLOAD_DIR, RAG_MAX_VECTORS, RAG_EVICTION_HIGH_WATER, RAG_EVICTION_LOW_WATER, RAG_EVICTION_BATCH
+from db import init_db, get_db, get_setting
 from hardware import assess_hardware
 from memory import get_memory_count
 from security import (
@@ -60,6 +60,11 @@ async def lifespan(app: FastAPI):
     init_db()
     log.info(f"Memory system: {get_memory_count()} memories loaded")
     await assess_hardware()
+    from model_pull import ensure_model
+    _db = get_db()
+    _user_model = get_setting(_db, "default_model", DEFAULT_MODEL)
+    _db.close()
+    await ensure_model(_user_model)
     await amqp_connect()
     await start_cluster_subscriptions()
 
