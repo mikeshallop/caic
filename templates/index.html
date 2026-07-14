@@ -440,7 +440,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="paperclip-btn" id="paperclipBtn" onclick="document.getElementById('fileInput').click()" title="Attach file">&#128206;</button>
             <textarea id="userInput" placeholder="Type a message... (Ctrl+Enter to Online Search, Enter to Private Search)" rows="1" autofocus></textarea>
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">SEND</button>
-            <button class="search-btn" id="searchBtn" onclick="sendSearch()" title="Search the web" style="display:none">WEB &#128269;</button>
+            <button class="search-btn" id="searchBtn" onclick="sendSearch()" title="Search the web">WEB &#128269;</button>
         </div>
     </div>
 
@@ -773,11 +773,11 @@ async function checkSearchStatus() {
         const data = await resp.json();
         document.getElementById('searchStatus').innerHTML = data.available ? '<span class="status-dot"></span> search: ready' : '<span class="status-dot warning"></span> search: unavailable';
         const searchBtn = document.getElementById('searchBtn');
-        if (searchBtn) searchBtn.style.display = data.available ? '' : 'none';
+        if (searchBtn) searchBtn.disabled = !data.available;
     } catch(e) {
         document.getElementById('searchStatus').innerHTML = '<span class="status-dot offline"></span> search: error';
         const searchBtn = document.getElementById('searchBtn');
-        if (searchBtn) searchBtn.style.display = 'none';
+        if (searchBtn) searchBtn.disabled = true;
     }
 }
 
