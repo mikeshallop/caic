@@ -51,6 +51,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -194,6 +195,20 @@ def get_load() -> dict:
                 load["vram_pct"] = round(used / total * 100)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
+    # Darwin / Apple Silicon
+    if sys.platform == "darwin" and "vram_pct" not in load:
+        try:
+            result = subprocess.run(
+                ["system_profiler", "SPDisplaysDataType"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    m = re.match(r"\s+VRAM \(Dynamic, Max\):\s+(\d+)\s+GB", line)
+                    if m:
+                        load["vram_pct"] = 50  # unified memory — best guess
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
     return load
 
 

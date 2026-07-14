@@ -4,7 +4,9 @@ cAIc — Startup hardware self-assessment.
 import asyncio
 import json
 import logging
+import re
 import subprocess
+import sys
 from pathlib import Path
 
 import httpx
@@ -18,12 +20,28 @@ HARDWARE_STATE_PATH = Path("hardware_state.json")
 _TIMEOUT_EXPIRED = subprocess.TimeoutExpired
 
 
-async def assess_hardware() -> dict:
-    mem = psutil.virtual_memory()
-    ram_total_gb = round(mem.total / (1024 ** 3), 1)
-    ram_available_gb = round(mem.available / (1024 ** 3), 1)
-    cpu_count = psutil.cpu_count()
+def _get_vram_darwin() -> tuple[int, int]:
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPDisplaysDataType"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return 0, 0
+        vram_total_mb = 0
+        for line in result.stdout.splitlines():
+            m = re.match(r"\s+VRAM \(Dynamic, Max\):\s+(\d+)\s+GB", line)
+            if m:
+                vram_total_mb += int(m.group(1)) * 1024
+        return vram_total_mb, vram_total_mb  # free ~ total (unified memory)
+    except (FileNotFoundError, _TIMEOUT_EXPIRED):
+        log.warning("system_profiler not available — VRAM stats set to 0")
+    except Exception as e:
+        log.warning(f"Darwin VRAM error: {e}")
+    return 0, 0
 
+
+def _get_vram_linux() -> tuple[int, int]:
     vram_total_mb = 0
     vram_free_mb = 0
     try:
@@ -47,6 +65,19 @@ async def assess_hardware() -> dict:
         log.warning("rocm-smi not available or failed — VRAM stats set to 0")
     except Exception as e:
         log.warning(f"rocm-smi error: {e}")
+    return vram_total_mb, vram_free_mb
+
+
+async def assess_hardware() -> dict:
+    mem = psutil.virtual_memory()
+    ram_total_gb = round(mem.total / (1024 ** 3), 1)
+    ram_available_gb = round(mem.available / (1024 ** 3), 1)
+    cpu_count = psutil.cpu_count()
+
+    if sys.platform == "darwin":
+        vram_total_mb, vram_free_mb = _get_vram_darwin()
+    else:
+        vram_total_mb, vram_free_mb = _get_vram_linux()
 
     llama_reachable = False
     llama_models = []

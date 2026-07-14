@@ -1,14 +1,50 @@
 """
-cAIc - AMD GPU stats via rocm-smi.
+cAIc - GPU stats: rocm-smi (AMD/Linux), system_profiler (Apple Silicon/macOS).
 """
 import json
 import logging
+import platform
+import re
 import subprocess
+import sys
 
 log = logging.getLogger("caic")
 
 
-def get_gpu_stats() -> dict:
+def _parse_darwin_gpu_stats() -> dict:
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPDisplaysDataType"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return {}
+        text = result.stdout
+        gpu_model = ""
+        vram_mb = 0
+        for line in text.splitlines():
+            m = re.match(r"\s+Chipset Model:\s+(.+)", line)
+            if m:
+                gpu_model = m.group(1).strip()
+            m = re.match(r"\s+VRAM \(Dynamic, Max\):\s+(\d+)\s+GB", line)
+            if m:
+                vram_mb = int(m.group(1)) * 1024
+        if gpu_model:
+            return {
+                "gpu_percent": 0,
+                "vram_percent": 0,
+                "available": True,
+                "gpu_model": gpu_model,
+                "vram_total_mb": vram_mb,
+            }
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    except Exception as e:
+        log.warning("Darwin GPU stats error: %s", e)
+    return {}
+
+
+def _parse_linux_gpu_stats() -> dict:
     try:
         result = subprocess.run(
             ["rocm-smi", "--showuse", "--showmemuse", "--json"],
@@ -27,5 +63,16 @@ def get_gpu_stats() -> dict:
     except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
         pass
     except Exception as e:
-        log.warning(f"GPU stats error: {e}")
+        log.warning("Linux GPU stats error: %s", e)
+    return {}
+
+
+def get_gpu_stats() -> dict:
+    if sys.platform == "darwin":
+        stats = _parse_darwin_gpu_stats()
+        if stats:
+            return stats
+    stats = _parse_linux_gpu_stats()
+    if stats:
+        return stats
     return {"gpu_percent": 0, "vram_percent": 0, "available": False}

@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import httpx
@@ -174,3 +175,62 @@ def test_get_hardware_endpoint(tmp_path: Path, monkeypatch):
         assert data["searxng_reachable"] is True
         assert "llama_models" in data
         assert "qdrant_collections" in data
+
+
+def test_assess_hardware_darwin(tmp_path: Path, monkeypatch):
+    hardware.HARDWARE_STATE_PATH = tmp_path / "hardware_state.json"
+    monkeypatch.setattr(psutil, "virtual_memory", lambda: type("M", (), {"total": 16 * 1024 ** 3, "available": 8 * 1024 ** 3})())
+    monkeypatch.setattr(psutil, "cpu_count", lambda: 8)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(hardware, "_get_vram_darwin", lambda: (16384, 16384))
+
+    async def mock_get(self, url, *args, **kwargs):
+        if "v1/models" in url:
+            return _MockGet(200, {"data": [{"id": "qwen2.5:latest"}]})
+        if "6333" in url:
+            return _MockGet(200, {"result": {"collections": [{"name": "caic"}]}})
+        if "8888" in url:
+            return _MockGet(200, {})
+        return _MockGet(200, {})
+    monkeypatch.setattr(httpx.AsyncClient, "get", mock_get)
+
+    state = asyncio.run(hardware.assess_hardware())
+
+    assert state["vram_total_mb"] == 16384
+    assert state["vram_free_mb"] == 16384
+    assert state["ram_total_gb"] == 16.0
+    assert state["llama_reachable"] is True
+
+
+def test_get_vram_darwin_parse(monkeypatch):
+    sp_output = """Graphics/Displays:
+
+    Apple M2 Pro:
+
+      Chipset Model: Apple M2 Pro
+      VRAM (Dynamic, Max): 16 GB
+"""
+
+    class MockProc:
+        returncode = 0
+        stdout = sp_output
+
+    class MockSP:
+        TimeoutExpired = subprocess.TimeoutExpired
+        run = staticmethod(lambda cmd, **kw: MockProc())
+
+    monkeypatch.setattr(hardware, "subprocess", MockSP())
+    total, free = hardware._get_vram_darwin()
+    assert total == 16384
+    assert free == 16384
+
+
+def test_get_vram_darwin_system_profiler_absent(monkeypatch):
+    class MockSP:
+        TimeoutExpired = subprocess.TimeoutExpired
+        run = staticmethod(lambda cmd, **kw: (_ for _ in ()).throw(FileNotFoundError("no system_profiler")))
+
+    monkeypatch.setattr(hardware, "subprocess", MockSP())
+    total, free = hardware._get_vram_darwin()
+    assert total == 0
+    assert free == 0
