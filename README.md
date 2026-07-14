@@ -1,6 +1,6 @@
 ![cAIc banner](static/readme-banner.png)
 
-# cAIc v0.19.2
+# cAIc v0.19.3
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
@@ -38,16 +38,41 @@ cAIc takes a different approach: **query-routing**. Each worker runs a complete 
 
 This also means a worker with a slow GPU can still contribute meaningfully — it handles less latency-sensitive queries or batch background work, while the fast GPU handles interactive chat.
 
+### Data Safety
+
+| Concern | How cAIc handles it |
+|---------|---------------------|
+| **Queries stored on disk?** | Yes, by default — conversations persist to SQLite. Toggle **Private Chat** (topbar badge) and nothing touches disk: no SQLite writes, no FTS5 memory injection, no RAG ingestion, no external SearXNG queries. |
+| **Queries sent to external services?** | SearXNG web search is optional and disabled in Private Chat. All other services (llama-server, Qdrant, RabbitMQ) run on your own LAN. |
+| **Inter-node traffic unencrypted?** | No — WireGuard tunnels encrypt all coordinator↔worker traffic (AMQP, inference, RPC) at the network layer. Zero application changes. |
+| **Who can access the server?** | Guest sessions for anyone on the LAN. Admin access protected by a PBKDF2-hashed 4-digit PIN with rate-limited attempts. IP allowlist (CIDR) gate optional. |
+
 At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
 
 Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — includes [FAQ](https://llgit.llamachile.tube/gramps/cAIc/wiki/FAQ), [Installation Guide](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation), and [full architecture docs](https://llgit.llamachile.tube/gramps/cAIc/wiki/Developer-Architecture)
 
+## What's New in v0.19.3
+
+### Private Chat Mode (B8)
+- **PRIVATE badge** — topbar toggle switches to private mode where nothing is persisted, no memory/RAG is injected, and web search is disabled
+- **Info popup** — click the (i) icon next to the badge for a full explanation of what private mode does and doesn't do
+- **No-storage guarantee** — conversation is streamed to the user but never touches SQLite, FTS5, or Qdrant
+- **Search blocked** — `/api/search` returns 403 in private mode; WEB button is disabled in the UI
+
+### WireGuard In-Transit Encryption
+- WireGuard tunnels encrypt all inter-node traffic. See Data Safety section above.
+
 ## What's New in v0.19.2
 
-### Waterfall Direction Toggle (B6)
+### Waterfall Direction Toggle (B6) + UX Polish
 - **NEW/OLD toggle** — topbar button switches between newest-first (waterfall) and oldest-first (traditional chat)
-- **Direction-aware scroll** — newest-first scrolls to top, oldest-first scrolls to bottom
+- **Direction-aware scroll** — newest-first scrolls to top, oldest-first scrolls to bottom; respects user scroll-away to avoid fighting
 - **localStorage persistence** — preference survives page reloads, default is newest-first (waterfall)
+- **Toast notifications** — slide-out notifications for copy, save, delete, rate actions
+- **Clipboard reliability** — `execCopy()` helper for HTTP fallback (`document.execCommand`) when `navigator.clipboard` fails on plain HTTP
+- **Model label** — `modelLabel()` derives shorthand display names (e.g. `qwen2.5:7B:i`)
+- **Keybinding fix** — Shift+Enter = newline, Ctrl+Enter = send (universal conventions)
+- **Token counter** — resets to 0 on page refresh, no longer persisted to localStorage
 
 ## What's New in v0.19.1
 
@@ -150,6 +175,7 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 - **Conversation History** — SQLite-backed chat persistence with mass-delete option
 - **Model Switching** — Change inference models on the fly
 - **Skills Framework** — Built-in skill registry with per-skill enable/disable controls
+- **Private Chat** — Toggle to keep conversations ephemeral: no persistence, no memory/RAG, no web search
 
 ## File Structure
 
@@ -162,12 +188,13 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 ├── config.py           # Constants, env vars, limits, skill registry
 ├── db.py               # SQLite schema, connection factory
 ├── eviction.py         # Score-based RAG eviction engine
-├── gpu.py              # AMD GPU stats via rocm-smi
-├── hardware.py         # Hardware self-assessment (CPU, RAM, VRAM)
+├── gpu.py              # GPU stats — rocm-smi (Linux/AMD) + system_profiler (Darwin/Apple Silicon)
+├── hardware.py         # Hardware self-assessment (CPU, RAM, VRAM) — Linux + Darwin
 ├── memory.py           # FTS5 memory CRUD, remember/forget commands
 ├── rag.py              # Qdrant vector search + system prompt assembly
 ├── search.py           # SearXNG integration, perplexity, refusal detection
 ├── security.py         # Rate limiting, origin checks, IP allowlist, audit
+├── model_pull.py         # Startup model auto-pull (llama-server → Ollama fallback)
 ├── triage.py           # Query classification + cluster node selection
 ├── routers/
 │   ├── chat.py         # /api/chat streaming endpoint
@@ -190,7 +217,7 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 ├── node_agent/
 │   ├── agent.py        # Standalone worker agent (AMQP client)
 │   └── requirements.txt
-└── tests/              # 179 pytest tests
+└── tests/              # 198 pytest tests
 ```
 
 ## Requirements
@@ -200,6 +227,7 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 - SearXNG (optional, for web search)
 - RabbitMQ (optional, for AMQP cluster — coordinator only)
 - Qdrant (optional, for RAG vector search)
+- WireGuard (optional, for encrypted inter-node transit — see [WireGuard-Setup.md](docs/wiki/WireGuard-Setup.md))
 
 ## Installation
 
@@ -404,7 +432,7 @@ Settings are stored in the `settings` table and include:
 python3 -m pytest tests/ -v
 ```
 
-All 179 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
+All 198 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
 
 ## License
 

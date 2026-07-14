@@ -479,6 +479,48 @@ caddy:
 
 This is out of scope for v1.0 but documented for future.
 
+### 5.4 WireGuard tunnel (off-site workers)
+
+When a worker node runs on a different network (colo, friend's house, VPS), all cross-site traffic must be encrypted. WireGuard provides this at the network layer with zero application changes.
+
+**Approach:** Install WireGuard on the Docker host (not inside a container). The host creates a tunnel interface (`wg0`) with a virtual IP in the `10.0.2.0/24` range. Containers that need to reach remote workers use the host's WireGuard IP via `network_mode: host` or standard routing.
+
+```
+Off-site worker                     Docker host (coordinator)
+┌────────────────────┐              ┌───────────────────────────────┐
+│  wg0: 10.0.2.2     │◄───UDP──────│  wg0: 10.0.2.1                │
+│  llama-server      │   :51820     │                               │
+│  node_agent.py     │   encrypts   │  ┌───────────────────────┐   │
+│                    │   all        │  │  cAIc container        │   │
+│                    │   traffic    │  │  LLAMA_SERVER_BASE     │   │
+│                    │              │  │    → 10.0.2.2:8081     │   │
+│                    │              │  │  CAIC_AMQP_URL         │   │
+│                    │              │  │    → amqp://caic:@...  │   │
+│                    │              │  └───────────────────────┘   │
+└────────────────────┘              └───────────────────────────────┘
+```
+
+**Host setup (coordinator):**
+```bash
+sudo apt install wireguard
+wg genkey | tee /etc/wireguard/private.key | wg pubkey > /etc/wireguard/public.key
+chmod 600 /etc/wireguard/private.key
+```
+Then create `/etc/wireguard/wg0.conf` — see [WireGuard-Setup.md](WireGuard-Setup.md) for full per-node configs.
+
+**Container networking:** The cAIc container needs to reach the WireGuard IP. Options:
+1. **`network_mode: host`** — simplest, container shares host network stack. Done by adding `network_mode: host` to the cAIc service. Trade-off: no port isolation.
+2. **Host routing** — the host's kernel routes `10.0.2.0/24` via `wg0`. Containers on the default bridge or compose network can reach those IPs if `ip_forward` is enabled. This works out of the box on Linux.
+
+**cAIc env vars after WireGuard:**
+```env
+# Point at worker's WireGuard IP instead of LAN IP
+LLAMA_SERVER_BASE=http://10.0.2.2:8081   # falls back to coordinator's own llama-server
+CAIC_AMQP_URL=amqp://caic:password@10.0.2.1:5672/caic  # coordinator's RMQ on WG IP
+```
+
+The node agent on each worker configures its registration IP as the WireGuard tunnel IP (`node_ip = 10.0.2.2`), so `triage.py` constructs inference URLs pointing at the encrypted interface.
+
 ---
 
 ## 6. Setup Wizard (Extraction)
@@ -642,6 +684,7 @@ If the setup wizard fails mid-way, a partial rollback is better than leaving det
 | **Reverse proxy** | Caddy is simplest for auto-HTTPS. Out of scope for v1.0 but design for it. | Low |
 | **Healthcheck strategy** | `depends_on` with `condition: service_healthy` is the safest approach but increases startup time. Acceptable. | Medium |
 | **Database migration** | SQLite file in volume — no migration needed for v1.0 format. If schema changes post-v1.0, need a migration container. | Low |
+| **WireGuard integration** | Documented in docker.md §5.4 + wiki. Host-level install; no container changes needed. WireGuard sidecar container (`linuxserver/wireguard`) is an alternative for users who want everything in compose. | Low |
 | **Linux vs macOS vs Windows** | Linux-primary. macOS may work with changes (no rocm-smi). Windows via WSL2 only. | Low |
 | **LLM model download** | HuggingFace CLI integration in setup.sh, or manual download. Manual is simpler. | Low |
 | **Dockerfile optimization** | Pin pip hashes, use `--no-cache-dir`, consider `slim` vs `alpine`. Alpine has musl compatibility issues with psutil. Stay with slim. | Medium |
@@ -684,6 +727,10 @@ Worker machine (e.g. worker01, worker02)
 ### 9.3 Worker setup
 
 ```bash
+# Install WireGuard (required for off-site workers — encrypts all traffic)
+sudo apt install wireguard
+# See docs/wiki/WireGuard-Setup.md for per-node config
+
 # Install llama-server binary
 wget https://github.com/ggml-org/llama.cpp/releases/.../llama-server
 chmod +x llama-server
@@ -691,8 +738,9 @@ chmod +x llama-server
 # Install node agent deps
 pip install aio-pika httpx
 
-# Create node agent script (from repo: node_agent/agent.py)
-# Configure COORDINATOR_AMQP_URL in environment
+# Create node agent config: /etc/caic-node-agent.conf
+# Set node_ip to the WireGuard tunnel IP (e.g., 10.0.2.2)
+# Set amqp_url to the coordinator's WireGuard IP (e.g., amqp://caic:password@10.0.2.1:5672/caic)
 ```
 
 ### 9.4 Multiple workers
@@ -728,6 +776,7 @@ The broker-mediated model is the preferred architecture for this project because
 - [ ] `docker compose up -d` works without any manual steps beyond setup.sh
 - [ ] `docker compose down -v` followed by `setup.sh && docker compose up -d` = fresh stack
 - [ ] Healthchecks prevent serving before dependencies are ready
+- [ ] WireGuard tunnel documented and tested for off-site workers
 - [ ] v1.0 release tag created
 
 ---

@@ -101,6 +101,9 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .badge.off { border-color:rgba(255,51,85,0.3); color:var(--danger); background:rgba(255,51,85,0.08); }
 .badge.admin { border-color:var(--border); color:var(--text-muted); }
 .badge.admin:hover { border-color:var(--accent-dim); color:var(--accent); }
+.info-icon { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; border:1px solid var(--border); color:var(--text-muted); font-size:11px; cursor:pointer; user-select:none; transition:all 0.15s; }
+.info-icon:hover { border-color:var(--accent-dim); color:var(--accent); }
+.info-popup { position:absolute; top:100%; right:0; margin-top:6px; width:320px; background:var(--bg-secondary); border:1px solid var(--border); border-radius:10px; padding:14px 16px; font-size:12px; line-height:1.6; color:var(--text-primary); z-index:100; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
 .role-label .msg-time { color:var(--text-muted); font-weight:400; font-size:10px; margin-left:6px; }
 .status-dot.offline { background:var(--danger); }
 .status-dot.warning { background:var(--warning); }
@@ -402,6 +405,21 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
             <button class="badge on" id="searchBadge" onclick="toggleSearch()" title="Toggle auto web search">SEARCH</button>
             <button class="badge on" id="profileBadge" onclick="toggleProfile()" title="Toggle profile injection">PROFILE</button>
             <button class="badge on" id="directionBadge" onclick="toggleDirection()" title="Toggle message ordering">NEW</button>
+            <button class="badge off" id="privateBadge" onclick="togglePrivate()" title="Toggle private chat mode (no persistence, no external queries)">PRIVATE</button>
+            <span class="info-icon" id="privateInfo" onclick="togglePrivateInfo(event)" title="What is Private Chat?">&#9432;</span>
+            <div class="info-popup" id="privateInfoPopup" style="display:none">
+                <strong>&#128274; Private Chat</strong><br><br>
+                When enabled:<br>
+                &bull; Nothing is saved to the database<br>
+                &bull; No memory or RAG context is injected<br>
+                &bull; Web search is disabled (no external queries)<br>
+                &bull; Messages are not auto-ingested as facts<br>
+                &bull; No conversation history is kept after refresh<br><br>
+                When disabled:<br>
+                &bull; All conversations are persisted to disk<br>
+                &bull; Queries may be stored for training purposes<br>
+                &bull; Web search uses external services (SearXNG)
+            </div>
             <button class="badge admin" id="authActionBtn" onclick="handleAuthAction()" title="Unlock admin">ADMIN</button>
         </div>
     </div>
@@ -452,6 +470,7 @@ let profileEnabled = true;
 let searchEnabled = true;
 let memoryEnabled = true;
 let skillsEnabled = true;
+let privateEnabled = false;
 let presets = [];
 let skillsRegistry = [];
 let currentModel = '';
@@ -887,6 +906,20 @@ async function resetProfile() {
 function toggleProfile() { if (currentRole !== 'admin') { requireAdminNotice(); return; } profileEnabled = !profileEnabled; updateProfileUI(); saveSettings(); }
 function toggleSearch() { if (currentRole !== 'admin') { requireAdminNotice(); return; } searchEnabled = !searchEnabled; updateSearchUI(); saveSettings(); }
 function toggleMemory() { if (currentRole !== 'admin') { requireAdminNotice(); return; } memoryEnabled = !memoryEnabled; updateMemoryUI(); saveSettings(); }
+function togglePrivate() {
+    privateEnabled = !privateEnabled;
+    const badge = document.getElementById('privateBadge');
+    badge.className = 'badge ' + (privateEnabled ? 'on' : 'off');
+    badge.textContent = privateEnabled ? 'PRIVATE' : 'PRIVATE OFF';
+    const searchBtn = document.getElementById('searchBtn');
+    if (privateEnabled) {
+        if (searchBtn) searchBtn.disabled = true;
+        showToast('Private chat: nothing stored, no external queries');
+    } else {
+        if (searchBtn && !isStreaming) searchBtn.disabled = false;
+        showToast('Public mode: conversations are persisted to disk');
+    }
+}
 
 function updateProfileUI() {
     const badge = document.getElementById('profileBadge');
@@ -1141,6 +1174,7 @@ function showWelcome() {
 }
 
 async function sendSearch() {
+    if (privateEnabled) { showToast('Web search is disabled in private chat mode'); return; }
     resetScrollLock();
     const input = document.getElementById('userInput');
     const query = input.value.trim();
@@ -1361,6 +1395,7 @@ async function sendMessage() {
         }
         const chatBody = { conversation_id: currentConvId, message, model };
         if (uploadContextId) chatBody.upload_context_id = uploadContextId;
+        if (privateEnabled) chatBody.private_chat = true;
         const resp = await authFetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(chatBody), signal: abortController.signal });
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
@@ -1441,7 +1476,7 @@ function setStreamingState(streaming) {
         sendBtn.textContent = 'SEND'; 
         sendBtn.className = 'send-btn'; 
         sendBtn.onclick = sendMessage; 
-        if (searchBtn) searchBtn.disabled = false;
+        if (searchBtn) searchBtn.disabled = privateEnabled;
     }
 }
 

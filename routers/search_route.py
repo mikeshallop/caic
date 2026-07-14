@@ -30,6 +30,10 @@ async def explicit_search(request: Request):
     if not query:
         raise HTTPException(status_code=400, detail="Empty query")
 
+    private_chat = body.get("private_chat", False)
+    if private_chat:
+        raise HTTPException(status_code=403, detail="Web search is disabled in private chat mode")
+
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
 

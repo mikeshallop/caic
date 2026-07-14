@@ -265,25 +265,28 @@ All streaming endpoints yield `data: {json}\n\n`:
 - No live external services required
 - Test factories reset `SESSIONS`, `PIN_ATTEMPTS`, `RATE_EVENTS` globals per test
 
-### 8.2 Test Coverage Areas (179 tests)
+### 8.2 Test Coverage Areas (198 tests)
 
 | Test file | Coverage |
 |-----------|----------|
 | test_auth_capabilities.py | Guest/admin sessions, origin blocking, logout |
-| test_chat_streaming_and_memory_paths.py | Streaming, auto-search, remember/forget, upload context injection |
+| test_chat_streaming_and_memory_paths.py | Streaming, auto-search, remember/forget, upload context injection, private chat |
 | test_cluster.py | Registration, deregistration, pong, events, coordinator query |
 | test_cluster_heartbeat.py | Heartbeat handler, known/unknown node |
 | test_completions.py | API key auth, FIM, streaming, blocking, errors |
 | test_conversations.py | Full CRUD, guest admin, attachment_count |
+| test_error_envelopes.py | Global exception handler + stream errors |
+| test_gpu.py | GPU stats — rocm-smi (Linux), system_profiler (Darwin/Apple Silicon) |
 | test_ingest.py | Bearer auth, chunk/embed/upsert, validation |
 | test_ip_allowlist.py | IP allowlist helper + middleware |
 | test_memories.py | Edit, search, stats |
+| test_model_pull.py | Default model auto-pull — llama-server check, Ollama fallback, error paths |
 | test_model_swap.py | request_model_swap, handle_model_ready/failed, select_node swap triggering |
 | test_models_router.py | Models list, ps, show, stats, search/status |
 | test_node_agent.py | Node agent registration, ping/pong, model swap |
 | test_presets.py | Full CRUD, default preset protection |
 | test_profile.py | Get, update, default, length validation |
-| test_rag_management.py | Collection stats, eviction algorithm (pinned/grace/scoring/batch), maybe_evict hysteresis, operational stats, flush, concurrency lock |
+| test_rag_management.py | Collection stats, eviction algorithm, hysteresis, flush |
 | test_rate_and_payload_guardrails.py | Rate limits + payload size |
 | test_search_route.py | Explicit search flow, no results, errors |
 | test_search_url_sanitization.py | URL sanitizer |
@@ -291,7 +294,6 @@ All streaming endpoints yield `data: {json}\n\n`:
 | test_skills_framework.py | List, toggle, unknown skill, prompt injection |
 | test_triage.py | classify_query, select_node, get_inference_url |
 | test_upload.py | Upload, delete, link, by-conversation, attachment_count |
-| test_error_envelopes.py | Global exception handler + stream errors |
 
 ### 8.3 DoD Process
 

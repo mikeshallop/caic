@@ -74,6 +74,7 @@ async def chat(request: Request):
     model = body.get("model", DEFAULT_MODEL)
     preset_prompt = body.get("system_prompt", "")
     upload_context_id = body.get("upload_context_id")
+    private_chat = body.get("private_chat", False)
 
     if not user_message:
         raise HTTPException(status_code=400, detail="Empty message")
@@ -81,44 +82,55 @@ async def chat(request: Request):
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
     settings = {row["key"]: row["value"] for row in db.execute("SELECT key, value FROM settings").fetchall()}
-    search_enabled = settings.get("search_enabled", "true") == "true"
+    search_enabled = settings.get("search_enabled", "true") == "true" and not private_chat
 
     upload_doc = None
-    if upload_context_id:
+    if upload_context_id and not private_chat:
         ctx = get_upload_context(db, upload_context_id)
         if ctx:
             upload_doc = f"[ATTACHED DOCUMENT: {ctx['filename']}]\n{ctx['content']}\n[END DOCUMENT]"
         else:
             log.warning(f"upload_context_id {upload_context_id} not found or expired, continuing without it")
 
-    remember_response = process_remember_command(user_message)
+    remember_response = None if private_chat else process_remember_command(user_message)
 
-    if not conv_id:
-        conv_id = str(uuid.uuid4())
-        title = user_message[:80] + ("..." if len(user_message) > 80 else "")
-        db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                   (conv_id, title, model, now, now))
+    if private_chat:
+        if not conv_id:
+            conv_id = str(uuid.uuid4())
+        system_prompt = ""
+        messages = []
+        if preset_prompt:
+            messages.append({"role": "system", "content": preset_prompt})
+        messages.append({"role": "user", "content": user_message})
+        history_rows = []
+        db.close()
     else:
-        db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
+        if not conv_id:
+            conv_id = str(uuid.uuid4())
+            title = user_message[:80] + ("..." if len(user_message) > 80 else "")
+            db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                       (conv_id, title, model, now, now))
+        else:
+            db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
 
-    db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-               (conv_id, "user", user_message, now))
-    db.commit()
+        db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                   (conv_id, "user", user_message, now))
+        db.commit()
 
-    history_rows = db.execute(
-        "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,)
-    ).fetchall()
-    extra_prompt = preset_prompt
-    if upload_doc:
-        extra_prompt = (extra_prompt + "\n\n" + upload_doc) if extra_prompt else upload_doc
-    system_prompt = await build_system_prompt(db, extra_prompt, user_message)
-    db.close()
+        history_rows = db.execute(
+            "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,)
+        ).fetchall()
+        extra_prompt = preset_prompt
+        if upload_doc:
+            extra_prompt = (extra_prompt + "\n\n" + upload_doc) if extra_prompt else upload_doc
+        system_prompt = await build_system_prompt(db, extra_prompt, user_message)
+        db.close()
 
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    for row in history_rows:
-        messages.append({"role": row["role"], "content": row["content"]})
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        for row in history_rows:
+            messages.append({"role": row["role"], "content": row["content"]})
 
     upstream_payload = {"model": model, "messages": messages, "stream": True, "logprobs": True}
 
@@ -196,44 +208,46 @@ async def chat(request: Request):
 
                         yield f"data: {json.dumps({'token': cleaned_response, 'conversation_id': conv_id, 'augmented': True})}\n\n"
 
-                        saved_msg = cleaned_response + "\n\n---\n*🔍 Enhanced with web search results*"
-                        if remember_response:
-                            saved_msg = remember_response + "\n\n" + saved_msg
+                        if not private_chat:
+                            saved_msg = cleaned_response + "\n\n---\n*🔍 Enhanced with web search results*"
+                            if remember_response:
+                                saved_msg = remember_response + "\n\n" + saved_msg
 
-                        db2 = get_db()
-                        db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                                    (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
-                        db2.commit()
-                        db2.close()
+                            db2 = get_db()
+                            db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                                        (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+                            db2.commit()
+                            db2.close()
 
-                        facts = auto_detect_facts(user_message, cleaned_response)
-                        if facts:
-                            conflicts = check_fact_conflicts(facts)
-                            if conflicts:
-                                rag_update = {"conflicts": conflicts}
-                            else:
-                                asyncio.ensure_future(ingest_auto_fact(facts, user_message, cleaned_response))
+                            facts = auto_detect_facts(user_message, cleaned_response)
+                            if facts:
+                                conflicts = check_fact_conflicts(facts)
+                                if conflicts:
+                                    rag_update = {"conflicts": conflicts}
+                                else:
+                                    asyncio.ensure_future(ingest_auto_fact(facts, user_message, cleaned_response))
 
                         yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'searched': True, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'prompt_tokens': prompt_tokens, 'completion_tokens': completion_tokens, 'context_length': MODEL_CONTEXT_LENGTH, **(rag_update and {'rag_update_suggestion': rag_update} or {})})}\n\n"
                         return
 
-                saved_msg = assistant_msg
-                if remember_response:
-                    saved_msg = remember_response + "\n\n" + saved_msg
+                if not private_chat:
+                    saved_msg = assistant_msg
+                    if remember_response:
+                        saved_msg = remember_response + "\n\n" + saved_msg
 
-                db2 = get_db()
-                db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                            (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
-                db2.commit()
-                db2.close()
+                    db2 = get_db()
+                    db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                                (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+                    db2.commit()
+                    db2.close()
 
-                facts = auto_detect_facts(user_message, assistant_msg)
-                if facts:
-                    conflicts = check_fact_conflicts(facts)
-                    if conflicts:
-                        rag_update = {"conflicts": conflicts}
-                    else:
-                        asyncio.ensure_future(ingest_auto_fact(facts, user_message, assistant_msg))
+                    facts = auto_detect_facts(user_message, assistant_msg)
+                    if facts:
+                        conflicts = check_fact_conflicts(facts)
+                        if conflicts:
+                            rag_update = {"conflicts": conflicts}
+                        else:
+                            asyncio.ensure_future(ingest_auto_fact(facts, user_message, assistant_msg))
 
                 yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'prompt_tokens': prompt_tokens, 'completion_tokens': completion_tokens, 'context_length': MODEL_CONTEXT_LENGTH, **(rag_update and {'rag_update_suggestion': rag_update} or {})})}\n\n"
 

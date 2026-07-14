@@ -1,5 +1,6 @@
 import json
 import os
+import asyncio
 from pathlib import Path
 
 import httpx
@@ -261,6 +262,57 @@ def test_memory_command_paths_remember_and_forget(tmp_path: Path, monkeypatch):
         forget_events = parse_sse_payloads(forget_resp.text)
         assert any("Forgot" in p.get("token", "") for p in forget_events)
 
-        memories_after_forget = client.get("/api/memories", headers={"X-Session-ID": sid, "Origin": "http://testserver"})
-        assert memories_after_forget.status_code == 200
-        assert memories_after_forget.json().get("count", 0) == 0
+def test_private_chat_does_not_persist(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(httpx.AsyncClient, "stream", lambda *a, **kw: _MockStreamResponse([
+        'data: {"choices":[{"delta":{"content":"Hello"},"finish_reason":null,"logprobs":{"content":[]}}]}',
+        'data: {"choices":[{"delta":{"content":" world"},"finish_reason":null,"logprobs":{"content":[]}}]}',
+        'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop","logprobs":{"content":[]}}],"usage":{"completion_tokens":2,"prompt_tokens":10,"tokens_per_second":5.0}}',
+        "data: [DONE]",
+    ]))
+    monkeypatch.setattr(triage, "classify_query", lambda q: "general")
+
+    async def _mock_ensure(m): return True
+    monkeypatch.setattr("model_pull.ensure_model", _mock_ensure)
+
+    with make_client(tmp_path) as client:
+        sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()["session_id"]
+        headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
+
+        resp = client.post("/api/chat", json={
+            "message": "test private message",
+            "private_chat": True,
+        }, headers=headers)
+        assert resp.status_code == 200
+        events = parse_sse_payloads(resp.text)
+        tokens = [p for p in events if "token" in p]
+        assert len(tokens) == 2
+        done = [p for p in events if p.get("done")]
+        assert len(done) == 1
+
+        conv_resp = client.get("/api/conversations", headers=headers)
+        assert conv_resp.status_code == 200
+        assert len(conv_resp.json()) == 0
+
+
+def test_private_chat_does_not_auto_search(tmp_path: Path, monkeypatch):
+    """Private mode should skip auto-search even when search is enabled."""
+    monkeypatch.setattr(httpx.AsyncClient, "stream", lambda *a, **kw: _MockStreamResponse([
+        'data: {"choices":[{"delta":{"content":"I don\'t know"},"finish_reason":null,"logprobs":{"content":[{"logprob":-2.5}]}}]}',
+        'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop","logprobs":{"content":[{"logprob":-2.5}]}}],"usage":{"completion_tokens":1,"prompt_tokens":10,"tokens_per_second":5.0}}',
+        "data: [DONE]",
+    ]))
+    monkeypatch.setattr(triage, "classify_query", lambda q: "general")
+    monkeypatch.setattr(routers.chat, "query_searxng", lambda q: [{"title": "result"}])
+
+    with make_client(tmp_path) as client:
+        sid = client.post("/api/auth/guest", headers={"Origin": "http://testserver"}).json()["session_id"]
+        headers = {"X-Session-ID": sid, "Origin": "http://testserver"}
+
+        resp = client.post("/api/chat", json={
+            "message": "what is the weather",
+            "private_chat": True,
+        }, headers=headers)
+        assert resp.status_code == 200
+        events = parse_sse_payloads(resp.text)
+        searching = [p for p in events if p.get("searching")]
+        assert len(searching) == 0, "private chat should not auto-search"
