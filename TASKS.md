@@ -960,4 +960,35 @@ Run full test suite. All 26+ existing tests must continue to pass.
 
 ---
 
-### ~~B4 — RAG Corpus Management UI (Display, Edit, CRUD) [DONE]~~
+### B4 — RAG Corpus Management UI (Display, Edit, CRUD)
+
+**Goal:** Provide a management interface in the UI to browse, search, edit, and delete individual entries in the Qdrant-backed RAG corpus.
+
+**Backend — add to `routers/rag_admin.py`:**
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/rag/points` | Return paginated list of RAG points with payload (text, source, date). Supports `?offset=0&limit=50&search=` query params | Admin |
+| GET | `/api/rag/point/{point_id}` | Return a single point with full payload | Admin |
+| DELETE | `/api/rag/point/{point_id}` | Delete a single point from Qdrant | Admin |
+| PATCH | `/api/rag/point/{point_id}` | Update a point's text payload (re-embed the new text) | Admin |
+
+Helper functions for Qdrant scroll/delete/update go in `rag.py` or `eviction.py`.
+
+**Frontend — add to `templates/index.html`:**
+
+A "RAG" button in the admin UI (drawer or settings modal) that opens a management panel:
+- **Stats bar**: vector count, max vectors, percent full, pinned sources
+- **Search bar**: text input to search the RAG corpus by semantic similarity
+- **Results table**: paginated list showing each vector's text snippet, source label, ingest date, retrieval count
+  - Click to expand full text
+  - Delete button per row (with confirmation)
+  - Edit button per row (inline text edit → re-embed on save)
+- **Bulk actions**: flush all (existing `/api/rag/flush`) with confirmation
+
+**Tests:**
+
+- `tests/test_rag_admin.py` — cover new endpoints: list, get, delete, update, admin-enforcement
+- Mock all Qdrant calls via monkeypatch
+
+Run full test suite. All existing tests must continue to pass.**
