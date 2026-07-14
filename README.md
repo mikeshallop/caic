@@ -1,6 +1,6 @@
 ![cAIc banner](static/readme-banner.png)
 
-# cAIc v0.21.0
+# cAIc v0.22.0
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
@@ -54,6 +54,16 @@ All services degrade gracefully if unreachable — RAG, search, cluster, and tri
 Untested: Windows 11 / WSL2 (Debian). The codebase is pure Python with no platform-specific dependencies beyond `rocm-smi` (AMD GPU stats, gracefully absent) and `system_profiler` (macOS, absent on Linux/WSL). llama.cpp builds and runs on WSL2 with NVIDIA GPU passthrough.
 
 Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. AMQP-mediated cluster coordination with an OpenAI-compatible inference endpoint.
+
+## What's New in v0.22.0
+
+### RAG Corpus Management UI (B4)
+- New admin modal (RAG button in drawer header) to browse, search, edit, and delete individual RAG corpus entries.
+- **Endpoints**: `GET /api/rag/points` (paginated list with semantic search and source filter), `GET /api/rag/point/{id}` (single point detail), `DELETE /api/rag/point/{id}` (single point deletion), `PATCH /api/rag/point/{id}` (edit text with re-embed).
+- **Frontend**: Stats bar (vector count, % full, pinned, avg retrievals, at-risk, eviction rate), semantic search bar, source filter dropdown, paginated results table, per-row edit/delete with confirmation, double-confirm bulk flush.
+- All endpoints admin-protected; text decrypted for display, re-encrypted on edit.
+- 14 new tests (32 total in test_rag_management.py). 214 tests pass overall.
+- Renamed `AGENTS.md` → `ai.md` for tool-agnostic project context. `CLAUDE.md` now points to `ai.md`.
 
 ## What's New in v0.21.0
 

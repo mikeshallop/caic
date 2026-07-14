@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 import app
 import config
+import crypto
 import db
 import rag
 from security import SESSIONS, PIN_ATTEMPTS, RATE_EVENTS
@@ -407,3 +408,269 @@ def test_eviction_lock_prevents_concurrent_eviction(monkeypatch):
     # First call evicted, second found count already below high water or lock serialized
     assert r1 >= 0
     assert r2 >= 0
+
+
+# ---------- GET /api/rag/points ----------
+
+def test_rag_list_points_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FakeAsyncClient())
+    with make_client(tmp_path) as client:
+        resp = client.get("/api/rag/points", headers=_admin_headers(client))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "points" in data
+        assert data["total"] == 123
+        assert len(data["points"]) == 0
+
+
+def test_rag_list_points_requires_admin(tmp_path, monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FakeAsyncClient())
+    with make_client(tmp_path) as client:
+        resp = client.get("/api/rag/points", headers=_guest_headers(client))
+        assert resp.status_code == 403
+
+
+def test_rag_list_points_with_data(tmp_path, monkeypatch):
+    with make_client(tmp_path) as client:
+        encrypted = crypto.encrypt_text("Hello world test content")
+
+        class DataClient(FakeAsyncClient):
+            async def post(self, url, **kw):
+                if "/points/scroll" in url:
+                    return FakeResponse(200, {
+                        "result": {
+                            "points": [{
+                                "id": "test-pt-1",
+                                "payload": {
+                                    "text": encrypted,
+                                    "source": "terminal",
+                                    "ingest_date": "2024-06-15T10:00:00",
+                                    "type": "ingest",
+                                    "retrieval_count": 3,
+                                },
+                            }],
+                            "next_page_offset": None,
+                        }
+                    })
+                return FakeResponse(200)
+            async def get(self, url, **kw):
+                if "/collections/caic_rag" in url:
+                    return FakeResponse(200, {"result": {"vectors_count": 1}})
+                return FakeResponse(200)
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: DataClient())
+        resp = client.get("/api/rag/points", headers=_admin_headers(client))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["points"]) == 1
+        p = data["points"][0]
+        assert p["id"] == "test-pt-1"
+        assert p["source"] == "terminal"
+        assert p["type"] == "ingest"
+        assert "Hello world" in p["text"]
+        assert p["retrieval_count"] == 3
+
+
+def test_rag_list_points_source_filter(tmp_path, monkeypatch):
+    """Source filter should be passed as Qdrant must-match."""
+    class FilterClient(FakeAsyncClient):
+        async def post(self, url, **kw):
+            if "/points/scroll" in url:
+                body = kw.get("json", {})
+                filt = body.get("filter", {})
+                must = filt.get("must", [])
+                # Verify the source filter was passed
+                assert any(m.get("match", {}).get("value") == "upload" for m in must)
+                return FakeResponse(200, {"result": {"points": [], "next_page_offset": None}})
+            return FakeResponse(200)
+        async def get(self, url, **kw):
+            return FakeResponse(200, {"result": {"vectors_count": 0}})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FilterClient())
+    with make_client(tmp_path) as client:
+        resp = client.get("/api/rag/points?source=upload", headers=_admin_headers(client))
+        assert resp.status_code == 200
+
+
+def test_rag_list_points_search(tmp_path, monkeypatch):
+    """Semantic search should use Qdrant search endpoint."""
+    encrypted = crypto.encrypt_text("Semantic match text")
+
+    class SearchClient(FakeAsyncClient):
+        call_log = []
+        async def post(self, url, **kw):
+            SearchClient.call_log.append(url)
+            if "/api/embeddings" in url:
+                vec = [0.1] * 768
+                return FakeResponse(200, {"embedding": vec})
+            if "/points/search" in url:
+                return FakeResponse(200, {"result": [{
+                    "id": "search-hit-1",
+                    "score": 0.85,
+                    "payload": {
+                        "text": encrypted,
+                        "source": "terminal",
+                        "ingest_date": "2024-06-15T10:00:00",
+                        "type": "ingest",
+                        "retrieval_count": 1,
+                    },
+                }]})
+            return FakeResponse(200)
+        async def get(self, url, **kw):
+            return FakeResponse(200, {"result": {}})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: SearchClient())
+    with make_client(tmp_path) as client:
+        resp = client.get("/api/rag/points?search=hello+world", headers=_admin_headers(client))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["points"]) == 1
+        assert data["points"][0]["id"] == "search-hit-1"
+        assert data["points"][0]["score"] == 0.85
+
+
+# ---------- GET /api/rag/point/{point_id} ----------
+
+def test_rag_get_point_requires_admin(tmp_path, monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FakeAsyncClient())
+    with make_client(tmp_path) as client:
+        resp = client.get("/api/rag/point/test-1", headers=_guest_headers(client))
+        assert resp.status_code == 403
+
+
+def test_rag_get_point_found(tmp_path, monkeypatch):
+    with make_client(tmp_path) as client:
+        encrypted = crypto.encrypt_text("Single point text")
+
+        class GetClient(FakeAsyncClient):
+            async def get(self, url, **kw):
+                if "/collections/caic_rag/points/test-1" in url:
+                    return FakeResponse(200, {"result": {
+                        "id": "test-1",
+                        "payload": {
+                            "text": encrypted,
+                            "source": "terminal",
+                            "ingest_date": "2024-06-15T10:00:00",
+                            "type": "ingest",
+                            "retrieval_count": 5,
+                        },
+                    }})
+                return FakeResponse(200)
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: GetClient())
+        resp = client.get("/api/rag/point/test-1", headers=_admin_headers(client))
+        assert resp.status_code == 200
+        p = resp.json()
+        assert p["id"] == "test-1"
+        assert p["source"] == "terminal"
+        assert "Single point" in p["text"]
+
+
+def test_rag_get_point_not_found(tmp_path, monkeypatch):
+    class NotFoundClient(FakeAsyncClient):
+        async def get(self, url, **kw):
+            if "/collections/caic_rag/points/" in url:
+                return FakeResponse(404, {"detail": "Not found"})
+            return FakeResponse(200)
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: NotFoundClient())
+    with make_client(tmp_path) as client:
+        resp = client.get("/api/rag/point/nonexistent", headers=_admin_headers(client))
+        assert resp.status_code == 404
+
+
+# ---------- DELETE /api/rag/point/{point_id} ----------
+
+def test_rag_delete_point_requires_admin(tmp_path, monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FakeAsyncClient())
+    with make_client(tmp_path) as client:
+        resp = client.delete("/api/rag/point/test-1", headers=_guest_headers(client))
+        assert resp.status_code == 403
+
+
+def test_rag_delete_point_success(tmp_path, monkeypatch):
+    class DeleteClient(FakeAsyncClient):
+        async def post(self, url, **kw):
+            if "/points/delete" in url:
+                pts = kw.get("json", {}).get("points", [])
+                assert "test-1" in pts
+                return FakeResponse(200)
+            return FakeResponse(200)
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: DeleteClient())
+    with make_client(tmp_path) as client:
+        resp = client.delete("/api/rag/point/test-1", headers=_admin_headers(client))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "deleted"
+        assert data["id"] == "test-1"
+
+
+# ---------- PATCH /api/rag/point/{point_id} ----------
+
+def test_rag_update_point_requires_admin(tmp_path, monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FakeAsyncClient())
+    with make_client(tmp_path) as client:
+        resp = client.patch("/api/rag/point/test-1", json={"text": "new"}, headers=_guest_headers(client))
+        assert resp.status_code == 403
+
+
+def test_rag_update_point_success(tmp_path, monkeypatch):
+    encrypted_old = crypto.encrypt_text("old text")
+
+    class UpdateClient(FakeAsyncClient):
+        async def get(self, url, **kw):
+            if "/collections/caic_rag/points/test-1" in url:
+                return FakeResponse(200, {"result": {
+                    "id": "test-1",
+                    "payload": {
+                        "text": encrypted_old,
+                        "source": "terminal",
+                        "ingest_date": "2024-06-15T10:00:00",
+                        "type": "ingest",
+                        "retrieval_count": 2,
+                    },
+                }})
+            return FakeResponse(200)
+        async def post(self, url, **kw):
+            if "/api/embeddings" in url:
+                return FakeResponse(200, {"embedding": [0.2] * 768})
+            return FakeResponse(200)
+        async def put(self, url, **kw):
+            if "/points?wait=true" in url:
+                pts = kw.get("json", {}).get("points", [])
+                assert len(pts) == 1
+                assert len(pts[0]["vector"]) == 768
+                payload = pts[0]["payload"]
+                assert "text" in payload
+                assert payload["source"] == "terminal"
+                return FakeResponse(200)
+            return FakeResponse(200)
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: UpdateClient())
+    with make_client(tmp_path) as client:
+        resp = client.patch("/api/rag/point/test-1", json={"text": "updated text"}, headers=_admin_headers(client))
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "updated"
+        assert data["id"] == "test-1"
+
+
+def test_rag_update_point_empty_text(tmp_path, monkeypatch):
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: FakeAsyncClient())
+    with make_client(tmp_path) as client:
+        resp = client.patch("/api/rag/point/test-1", json={"text": ""}, headers=_admin_headers(client))
+        assert resp.status_code == 400
+
+
+def test_rag_update_point_not_found(tmp_path, monkeypatch):
+    class NotFoundClient(FakeAsyncClient):
+        async def get(self, url, **kw):
+            if "/collections/caic_rag/points/" in url:
+                return FakeResponse(404)
+            return FakeResponse(200)
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: NotFoundClient())
+    with make_client(tmp_path) as client:
+        resp = client.patch("/api/rag/point/nonexistent", json={"text": "new"}, headers=_admin_headers(client))
+        assert resp.status_code == 404

@@ -129,6 +129,39 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .modal-close { background:none; border:none; color:var(--text-muted); font-size:24px; cursor:pointer; }
 .modal-close:hover { color:var(--text-primary); }
 .modal-body { padding: 20px 24px; }
+.rag-stats-bar { display:flex; flex-wrap:wrap; gap:12px 24px; padding:10px 14px; background:var(--bg-tertiary); border-radius:var(--radius); margin-bottom:14px; font-size:11px; font-family:var(--font-mono); }
+.rag-stat-item { display:flex; gap:4px; align-items:center; }
+.rag-stat-label { color:var(--text-muted); text-transform:uppercase; }
+.rag-stat-value { color:var(--text-primary); font-weight:600; }
+.rag-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+.rag-toolbar-left { display:flex; gap:8px; align-items:center; flex:1; }
+.rag-toolbar-right { display:flex; gap:8px; align-items:center; flex-shrink:0; }
+.rag-search-input { flex:1; min-width:160px; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-mono); font-size:12px; padding:8px 12px; border-radius:var(--radius); }
+.rag-search-input:focus { outline:none; border-color:var(--accent-dim); }
+.rag-source-select { background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-mono); font-size:12px; padding:7px 10px; border-radius:var(--radius); cursor:pointer; }
+.rag-source-select:focus { outline:none; border-color:var(--accent-dim); }
+.rag-table-wrap { overflow-x:auto; margin-bottom:12px; }
+.rag-table { width:100%; border-collapse:collapse; font-size:11px; font-family:var(--font-mono); }
+.rag-table th { text-align:left; padding:8px 6px; border-bottom:1px solid var(--border); color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; font-size:10px; white-space:nowrap; }
+.rag-table td { padding:8px 6px; border-bottom:1px solid var(--border); color:var(--text-primary); vertical-align:top; }
+.rag-table tr:hover td { background:var(--bg-hover); }
+.rag-col-id { width:80px; }
+.rag-col-text { min-width:200px; }
+.rag-col-source { width:100px; }
+.rag-col-type { width:80px; }
+.rag-col-date { width:140px; }
+.rag-col-retr { width:50px; text-align:center; }
+.rag-col-actions { width:80px; text-align:center; white-space:nowrap; }
+.rag-text-snippet { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; word-break:break-word; cursor:pointer; }
+.rag-text-snippet.expanded { -webkit-line-clamp:unset; }
+.rag-action-btn { background:none; border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; font-size:11px; padding:3px 7px; color:var(--text-muted); transition:all 0.15s; }
+.rag-action-btn:hover { border-color:var(--accent-dim); color:var(--accent); }
+.rag-action-btn.danger:hover { border-color:var(--danger); color:var(--danger); }
+.rag-pagination { display:flex; align-items:center; justify-content:center; gap:12px; padding:8px 0; }
+.rag-page-info { font-size:11px; color:var(--text-muted); font-family:var(--font-mono); }
+.rag-edit-modal { max-width:700px; }
+.rag-edit-textarea { width:100%; min-height:200px; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-mono); font-size:12px; padding:12px; border-radius:var(--radius); resize:vertical; line-height:1.6; }
+.rag-edit-textarea:focus { outline:none; border-color:var(--accent-dim); }
 .modal-section { margin-bottom: 24px; }
 .modal-section h3 { font-family:var(--font-mono); font-size:13px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
 .modal-section p.desc { font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height:1.5; }
@@ -318,6 +351,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         <span class="drawer-title">cAIc <span class="version">{{ version }}</span></span>
         <div class="drawer-actions">
             <button class="drawer-btn" onclick="newChat()" title="New chat">+</button>
+            <button class="drawer-btn" onclick="openRagAdmin()" title="RAG corpus management">R</button>
             <button class="drawer-btn" onclick="openSettings()" title="Settings">&#9881;</button>
             <button class="drawer-btn danger" onclick="deleteAllConversations()" title="Delete all">&#128465;</button>
         </div>
@@ -331,6 +365,53 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         <div class="cluster-panel" id="clusterPanel" style="display:none"></div>
     </div>
 </aside>
+
+<div class="modal-overlay" id="ragAdminModal">
+    <div class="modal" style="max-width:960px;">
+        <div class="modal-header">
+            <h2>RAG Corpus Management</h2>
+            <button class="modal-close" onclick="closeRagAdmin()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="rag-stats-bar" id="ragStatsBar">Loading stats...</div>
+            <div class="rag-toolbar">
+                <div class="rag-toolbar-left">
+                    <input type="text" id="ragSearchInput" class="rag-search-input" placeholder="Semantic search..." onkeydown="if(event.key==='Enter')loadRagPoints()">
+                    <select id="ragSourceFilter" class="rag-source-select" onchange="loadRagPoints()">
+                        <option value="">All sources</option>
+                    </select>
+                </div>
+                <div class="rag-toolbar-right">
+                    <button class="btn-small btn-save" onclick="loadRagPoints()" id="ragRefreshBtn">&#8635; Refresh</button>
+                    <button class="btn-small btn-reset" onclick="flushRagCollection()" style="color:var(--danger);border-color:var(--danger);">Flush All</button>
+                </div>
+            </div>
+            <div class="rag-table-wrap">
+                <table class="rag-table" id="ragTable">
+                    <thead>
+                        <tr>
+                            <th class="rag-col-id">ID</th>
+                            <th class="rag-col-text">Text</th>
+                            <th class="rag-col-source">Source</th>
+                            <th class="rag-col-type">Type</th>
+                            <th class="rag-col-date">Date</th>
+                            <th class="rag-col-retr">Retr</th>
+                            <th class="rag-col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ragTableBody">
+                        <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:40px;">No points loaded</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="rag-pagination" id="ragPagination" style="display:none;">
+                <button class="btn-small" id="ragPrevBtn" onclick="ragPage(-1)">&#9664; Prev</button>
+                <span class="rag-page-info" id="ragPageInfo">Page 1</span>
+                <button class="btn-small" id="ragNextBtn" onclick="ragPage(1)">Next &#9654;</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal-overlay" id="settingsModal">
     <div class="modal">
@@ -1127,6 +1208,174 @@ function openSettings() {
 }
 function closeSettings() { document.getElementById('settingsModal').classList.remove('visible'); }
 document.getElementById('settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') closeSettings(); });
+
+// ---------- RAG Admin ----------
+let _ragPageOffset = null;
+let _ragPrevOffsets = [];
+let _ragNextOffset = null;
+let _ragTotal = 0;
+
+function openRagAdmin() {
+    if (currentRole !== 'admin') { requireAdminNotice(); return; }
+    document.getElementById('ragAdminModal').classList.add('visible');
+    _ragPageOffset = null;
+    _ragPrevOffsets = [];
+    _ragNextOffset = null;
+    _ragTotal = 0;
+    loadRagStats();
+    loadRagPoints();
+    populateRagSourceFilter();
+}
+function closeRagAdmin() { document.getElementById('ragAdminModal').classList.remove('visible'); }
+document.getElementById('ragAdminModal').addEventListener('click', e => { if (e.target.id === 'ragAdminModal') closeRagAdmin(); });
+
+async function loadRagStats() {
+    try {
+        const resp = await authFetch('/api/rag/stats');
+        const data = await resp.json();
+        const bar = document.getElementById('ragStatsBar');
+        bar.innerHTML = `
+            <span class="rag-stat-item"><span class="rag-stat-label">Vectors</span> <span class="rag-stat-value">${data.vector_count}</span></span>
+            <span class="rag-stat-item"><span class="rag-stat-label">Max</span> <span class="rag-stat-value">${data.max_vectors}</span></span>
+            <span class="rag-stat-item"><span class="rag-stat-label">Full</span> <span class="rag-stat-value">${data.percent_full}%</span></span>
+            <span class="rag-stat-item"><span class="rag-stat-label">Pinned</span> <span class="rag-stat-value">${data.pinned_count}</span></span>
+            <span class="rag-stat-item"><span class="rag-stat-label">Avg Retr</span> <span class="rag-stat-value">${data.avg_retrieval_count}</span></span>
+            <span class="rag-stat-item"><span class="rag-stat-label">At Risk</span> <span class="rag-stat-value">${data.at_risk_count}</span></span>
+            <span class="rag-stat-item"><span class="rag-stat-label">Evictions (1m)</span> <span class="rag-stat-value">${data.eviction_counts_last_1m}</span></span>
+        `;
+    } catch(e) {
+        document.getElementById('ragStatsBar').textContent = 'Failed to load stats';
+    }
+}
+
+async function populateRagSourceFilter() {
+    const sel = document.getElementById('ragSourceFilter');
+    if (sel.options.length > 1) return;
+    try {
+        const resp = await authFetch('/api/rag/points?limit=100');
+        const data = await resp.json();
+        const sources = new Set();
+        (data.points || []).forEach(p => { if (p.source) sources.add(p.source); });
+        const sorted = Array.from(sources).sort();
+        sorted.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s;
+            opt.textContent = s;
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+}
+
+async function loadRagPoints() {
+    const table = document.getElementById('ragTableBody');
+    table.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:40px;">Loading...</td></tr>';
+    try {
+        const search = document.getElementById('ragSearchInput').value.trim();
+        const source = document.getElementById('ragSourceFilter').value;
+        let url = `/api/rag/points?limit=20`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (source) url += `&source=${encodeURIComponent(source)}`;
+        if (_ragPageOffset !== null && !search) url += `&offset=${encodeURIComponent(_ragPageOffset)}`;
+
+        const resp = await authFetch(url);
+        const data = await resp.json();
+        _ragTotal = data.total || 0;
+        _ragNextOffset = data.next_offset || null;
+
+        table.innerHTML = '';
+        if (!data.points || data.points.length === 0) {
+            table.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:40px;">No points found</td></tr>';
+            document.getElementById('ragPagination').style.display = 'none';
+            return;
+        }
+
+        data.points.forEach(p => {
+            const tr = document.createElement('tr');
+            const textSnippet = (p.text || '').substring(0, 200);
+            tr.innerHTML = `
+                <td class="rag-col-id" title="${escapeHtml(p.id)}">${escapeHtml((p.id || '').substring(0, 24))}${(p.id || '').length > 24 ? '...' : ''}</td>
+                <td class="rag-col-text"><div class="rag-text-snippet" onclick="this.classList.toggle('expanded')" title="Click to expand/collapse">${escapeHtml(textSnippet)}</div></td>
+                <td class="rag-col-source">${escapeHtml(p.source || '')}</td>
+                <td class="rag-col-type">${escapeHtml(p.type || '')}</td>
+                <td class="rag-col-date" style="white-space:nowrap;">${escapeHtml((p.date || '').substring(0, 16))}</td>
+                <td class="rag-col-retr">${p.retrieval_count || 0}</td>
+                <td class="rag-col-actions">
+                    <button class="rag-action-btn" onclick="editRagPoint('${escapeHtml(p.id)}', this)" title="Edit">&#9998;</button>
+                    <button class="rag-action-btn danger" onclick="deleteRagPoint('${escapeHtml(p.id)}')" title="Delete">&#10005;</button>
+                </td>
+            `;
+            table.appendChild(tr);
+        });
+
+        const pagination = document.getElementById('ragPagination');
+        if (!search) {
+            pagination.style.display = 'flex';
+            document.getElementById('ragPageInfo').textContent = `Page ${_ragPrevOffsets.length + 1} (${_ragTotal} total)`;
+            document.getElementById('ragPrevBtn').disabled = _ragPrevOffsets.length === 0;
+            document.getElementById('ragNextBtn').disabled = !_ragNextOffset;
+        } else {
+            pagination.style.display = 'flex';
+            document.getElementById('ragPageInfo').textContent = `${data.points.length} results`;
+            document.getElementById('ragPrevBtn').disabled = true;
+            document.getElementById('ragNextBtn').disabled = true;
+        }
+    } catch(e) {
+        table.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger);padding:40px;">Failed to load points</td></tr>';
+    }
+}
+
+function ragPage(dir) {
+    if (dir === -1 && _ragPrevOffsets.length > 0) {
+        _ragPageOffset = _ragPrevOffsets.pop();
+        loadRagPoints();
+    } else if (dir === 1 && _ragNextOffset) {
+        _ragPrevOffsets.push(_ragPageOffset);
+        _ragPageOffset = _ragNextOffset;
+        _ragNextOffset = null;
+        loadRagPoints();
+    }
+}
+
+async function deleteRagPoint(pointId) {
+    if (!confirm('Delete this RAG point?')) return;
+    try {
+        const resp = await authFetch(`/api/rag/point/${encodeURIComponent(pointId)}`, { method: 'DELETE' });
+        if (!resp.ok) { showToast('Delete failed'); return; }
+        showToast('Point deleted');
+        loadRagStats();
+        loadRagPoints();
+    } catch(e) { showToast('Delete error'); }
+}
+
+async function editRagPoint(pointId, btn) {
+    const row = btn.closest('tr');
+    const currentText = row ? row.querySelector('.rag-text-snippet')?.textContent : '';
+    const newText = prompt('Edit RAG text:', currentText || '');
+    if (newText === null || newText.trim() === '' || newText === currentText) return;
+    try {
+        const resp = await authFetch(`/api/rag/point/${encodeURIComponent(pointId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: newText }),
+        });
+        if (!resp.ok) { showToast('Update failed'); return; }
+        showToast('Point updated, re-embedded');
+        loadRagStats();
+        loadRagPoints();
+    } catch(e) { showToast('Update error'); }
+}
+
+async function flushRagCollection() {
+    if (!confirm('PERMANENTLY DELETE ALL RAG VECTORS? This cannot be undone.')) return;
+    if (!confirm('Are you absolutely sure? All RAG corpus entries will be lost.')) return;
+    try {
+        const resp = await authFetch('/api/rag/flush', { method: 'POST' });
+        const data = await resp.json();
+        showToast(`Flushed ${data.deleted_count} points`);
+        loadRagStats();
+        loadRagPoints();
+    } catch(e) { showToast('Flush failed'); }
+}
 
 async function loadConversations() {
     try {

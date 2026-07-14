@@ -26,6 +26,7 @@ Every router has a dedicated test file:
 | `test_models_router.py` | `routers/models.py` — models list, ps, show, stats, search/status |
 | `test_presets.py` | `routers/presets.py` — full CRUD, default preset protection |
 | `test_profile.py` | `routers/profile.py` — get, update, default, length validation |
+| `test_rag_management.py` | `eviction.py` + `routers/rag_admin.py` — eviction engine, stats, flush, browse, search, edit, delete individual points |
 | `test_search_route.py` | `routers/search_route.py` — explicit search flow, no results, errors |
 | `test_search_url_sanitization.py` | `search.py` URL sanitizer |
 | `test_cluster.py` | `cluster.py` — registration, deregistration, pong, events, coordinator query |
@@ -137,7 +138,7 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 ## Work State
 
 ### Completed this session
-- **v0.21.0 Release** — Scrollbar/DOM fixes, perplexity persistence, all service URLs env-overridable, single-node deployment docs, hardware.py Qdrant URL bugfix. See README for full changelog.
+- **B4 — RAG Corpus Management UI** — Paginated browse, semantic search, source filter, edit text with re-embed, single-point delete, bulk flush. Backend: `GET /api/rag/points`, `GET /api/rag/point/{id}`, `DELETE /api/rag/point/{id}`, `PATCH /api/rag/point/{id}`. Frontend: admin-only modal with stats bar, search bar, paginated table, per-row edit/delete, double-confirm flush.
 
 ### Active
 - (none)
@@ -145,16 +146,11 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 ### Blocked
 - (none)
 
-### Blocked
-- (none)
-
 ### Upcoming (backlog)
 - B3 — Docker distribution
-- B4 — RAG Corpus Management UI
-- Private Chat mode was implemented in B8 (v0.19.3). WireGuard in-transit encryption documented in wiki. At-rest encryption implemented in v0.20.0.
 
 ### Key config values (current)
-- **Current VERSION**: `v0.21.0` in `config.py`.
+- **Current VERSION**: `v0.22.0` in `config.py`.
 - `SESSION_TIMEOUT_SECONDS = 3600`
 - `DEFAULT_MODEL = "qwen2.5-7b-instruct"`
 - `LLAMA_SERVER_BASE = "http://192.168.50.108:8081"`
