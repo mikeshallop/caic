@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from crypto import encrypt_text, decrypt_text
 from eviction import _update_retrieval_count
 from db import get_db, get_setting, list_skills_with_state, format_active_skills_prompt
 from memory import search_memories
@@ -45,7 +46,7 @@ async def _upsert_fact(fact: str, text: str, topic: str,
             vector = er.json()["embedding"]
             pid = f"auto-{ts}-{i}"
             payload = {
-                "text": chunk, "source": "auto_fact", "fact": fact,
+                "text": encrypt_text(chunk), "source": "auto_fact", "fact": fact,
                 "ingest_date": datetime.now(timezone.utc).isoformat(),
                 "type": "auto_fact", "topic": topic,
             }
@@ -189,7 +190,7 @@ async def build_system_prompt(db, extra_prompt: str = "", user_message: str = ""
         try:
             rag_results = await query_rag(user_message)
             if rag_results:
-                rag_lines = [r["payload"]["text"] for r in rag_results if r["score"] > RAG_SCORE_THRESHOLD]
+                rag_lines = [decrypt_text(r["payload"]["text"]) for r in rag_results if r["score"] > RAG_SCORE_THRESHOLD]
                 if rag_lines:
                     parts.append("## Retrieved Context\n" + "\n\n---\n\n".join(rag_lines))
                     log.info(f"RAG injected {len(rag_lines)} chunks into context")

@@ -48,6 +48,7 @@ def test_upload_unsupported_mime(tmp_path: Path):
 
 
 def test_upload_context_mode(tmp_path: Path):
+    from crypto import decrypt_text
     with make_client(tmp_path) as client:
         resp = client.post(
             "/api/upload", headers=_admin_headers(client),
@@ -62,7 +63,7 @@ def test_upload_context_mode(tmp_path: Path):
         assert "chunks_ingested" not in data
 
         row = db.get_db().execute("SELECT content FROM upload_context WHERE id = ?", (data["context_id"],)).fetchone()
-        assert row["content"] == "Hello world notes"
+        assert decrypt_text(row["content"]) == "Hello world notes"
 
 
 def test_upload_ingest_mode(tmp_path: Path, monkeypatch):

@@ -56,11 +56,12 @@ Refactored from single-file (`app.py`) into modules under project root:
 | `db.py` | SQLite schema, connection factory, settings helpers, upload_context CRUD |
 | `auth.py` | PIN-based guest/admin sessions, auth routes |
 | `security.py` | Rate limiting, origin checks, IP allowlist, audit/incident logging |
-| `memory.py` | FTS5 memory CRUD, remember/forget command parsing |
+| `memory.py` | FTS5 memory CRUD (encrypted facts, Python-side matching), remember/forget command parsing |
 | `search.py` | SearXNG integration, perplexity scoring, refusal detection |
-| `rag.py` | Qdrant vector search + system prompt assembly + chunk_text() helper |
+| `rag.py` | Qdrant vector search (encrypted payload text) + system prompt assembly + chunk_text() helper |
 | `eviction.py` | Score-based RAG eviction engine |
 | `gpu.py` | GPU stats — `rocm-smi` (AMD/Linux) or `system_profiler` (Apple Silicon/macOS) |
+| `crypto.py` | AES-256-GCM encrypt/decrypt + key management (stored as `heartbeat_interval_ms` in settings) |
 | `model_pull.py` | Startup model availability check + Ollama pull API |
 | `triage.py` | Phi-4-mini-based query classification + cluster node selection |
 | `cluster.py` | Cluster node registry, event log, coordinator election, ping/pong, model swap handlers |
@@ -136,19 +137,7 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 ## Work State
 
 ### Completed this session
-- **B7 (v0.19.0)** — Apple Silicon worker support. `gpu.py` now detects `sys.platform == "darwin"` and parses `system_profiler SPDisplaysDataType` for GPU model/VRAM instead of `rocm-smi`. `hardware.py` has darwin branch via `_get_vram_darwin()`. `node_agent/agent.py` reports VRAM on macOS via `system_profiler`. 5 new tests cover linux/darwin gpu paths, 3 new hardware tests cover darwin assessment + VRAM parsing.
-- **B5 (v0.19.1)** — Default model auto-pull on first start. `model_pull.py` with `ensure_model()` checks llama-server availability, falls back to Ollama pull API. Integrated into `app.py` lifespan. 11 tests cover all paths.
-- **B6 (v0.19.2)** — Waterfall direction toggle. NEW/OLD topbar button toggles between newest-first and oldest-first ordering. `scrollToTop()` replaced by `scrollToLatest()` which checks direction. Preference persisted in localStorage.
-- **Scroll-position fighting** — `scrollToTop()` now respects `_userScrolledAway` flag (100px threshold), skips auto-scroll when user is reading older content. `resetScrollLock()` called on new messages.
-- **401 error cascade** — `SESSION_TIMEOUT_SECONDS` bumped 90→3600 (1 hour). All 10 unprotected `authFetch` calls wrapped in try/catch.
-- **Token counter** — removed localStorage persistence; resets to 0 on page refresh.
-- **Ctrl+Enter for web search** — Shift+Enter now inserts newline (universal convention), Ctrl+Enter triggers search.
-- **Search button styling** — WEB button matches SEND: same font/size/weight, orange bg with dark navy text (`var(--bg-tertiary)`). Input placeholder updated.
-- **Toast notifications** — `showToast()` helper, every action icon now fires a slide-out notification (copy, save, delete, rate, etc.). Print is the exception (dialog handles it).
-- **Clipboard reliability** — `execCopy()` helper for HTTP fallback (navigator.clipboard fails on plain HTTP). All three copy paths (user inline, toolbar, code blocks) now work on jarvis:8080.
-- **User copy icon** — single 📋 inline at end of user query text (not a full toolbar). Uses `data-content` attr to avoid HTML injection in onclick.
-- **Rating thumbs removed** — 👍👎 cut (no backend, no persistence, privacy concern).
-- **Keybinding fix** — Shift+Enter = newline, Ctrl+Enter = search (universal conventions).
+- **At-Rest Encryption (v0.20.0)** — `crypto.py` with AES-256-GCM encrypt/decrypt + `ensure_key()`. Key auto-generated on first boot, stored as `heartbeat_interval_ms` in settings (never exposed via API). All 12 storage call sites wired: `routers/chat.py`, `routers/search_route.py`, `routers/conversations.py`, `routers/completions.py`, `memory.py`, `db.py` (upload_context), `rag.py`, `routers/upload.py`, `routers/ingest.py`. `memory.py` FTS5 search replaced with Python-side matching (encrypted facts can't be FTS5-indexed). `app.py` lifespan calls `ensure_key()` after `init_db()`. 200/200 tests pass. Deployed to jarvis with fresh DB.
 
 ### Active
 - (none)
@@ -158,12 +147,10 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 
 ### Upcoming (backlog)
 - B4 — RAG Corpus Management UI
-- B8 — **Encryption & PHI readiness** — spec out encryption at rest (SQLCipher for caic.db, Qdrant payload encryption) and in-transit (TLS for inference, AMQP, RAG). Per-user auth, audit logging, log sanitizer, data lifecycle. Document the "personal LAN HIPAA gap."
-  - **Preferred approach: Private Chat mode** — a toggle that skips DB persistence, memory/RAG injection, content logging, and **external SearXNG searching** entirely. Zero stored data, zero external queries = zero data to protect. Simpler, more robust, less code to audit than full encryption. Design this as the primary PHI path before reaching for crypto.
-  - **In-transit still needs TLS** — Private Chat eliminates at-rest risk, but AMQP (RabbitMQ) and inference (llama-server) traffic between coordinator and workers is still plaintext on the wire. TLS termination on each node is the lightweight fix (self-signed CA, nginx sidecar or RabbitMQ TLS).
+- Private Chat mode was implemented in B8 (v0.19.3). WireGuard in-transit encryption documented in wiki. At-rest encryption implemented in v0.20.0.
 
 ### Key config values (current)
-- `VERSION = "v0.19.2"` in `config.py`
+- `VERSION = "v0.20.0"` in `config.py`
 - `SESSION_TIMEOUT_SECONDS = 3600`
 - `DEFAULT_MODEL = "qwen2.5-7b-instruct"`
 - `LLAMA_SERVER_BASE = "http://192.168.50.108:8081"`

@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from config import DEFAULT_MODEL, LLAMA_SERVER_BASE
+from crypto import encrypt_text, decrypt_text
 from db import get_db, get_upload_context
 from memory import process_remember_command, auto_detect_facts, check_fact_conflicts
 from rag import build_system_prompt, ingest_auto_fact
@@ -109,17 +110,20 @@ async def chat(request: Request):
             conv_id = str(uuid.uuid4())
             title = user_message[:80] + ("..." if len(user_message) > 80 else "")
             db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                       (conv_id, title, model, now, now))
+                       (conv_id, encrypt_text(title), model, now, now))
         else:
             db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
 
         db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                   (conv_id, "user", user_message, now))
+                   (conv_id, "user", encrypt_text(user_message), now))
         db.commit()
 
-        history_rows = db.execute(
+        raw_rows = db.execute(
             "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,)
         ).fetchall()
+        history_rows = []
+        for row in raw_rows:
+            history_rows.append({"role": row["role"], "content": decrypt_text(row["content"])})
         extra_prompt = preset_prompt
         if upload_doc:
             extra_prompt = (extra_prompt + "\n\n" + upload_doc) if extra_prompt else upload_doc
@@ -215,7 +219,7 @@ async def chat(request: Request):
 
                             db2 = get_db()
                             db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                                        (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+                                        (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat()))
                             db2.commit()
                             db2.close()
 
@@ -237,7 +241,7 @@ async def chat(request: Request):
 
                     db2 = get_db()
                     db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                                (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+                                (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat()))
                     db2.commit()
                     db2.close()
 

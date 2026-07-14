@@ -6,11 +6,9 @@ Scope: Active roadmap items and backlog.
 
 ## Completed
 
-- **B7 (v0.19.0)** — Apple Silicon worker support. gpu.py darwin branch, hardware.py darwin VRAM, node_agent/agent.py macOS VRAM reporting.
-- **B5 (v0.19.1)** — Default model auto-pull. model_pull.py + ensure_model() in app.py lifespan.
-- **B6 (v0.19.2)** — Waterfall direction toggle (NEW/OLD), scroll/lock fixes, toast notifications, execCopy, modelLabel, Ctrl+Enter.
 - **B8 (v0.19.3)** — Private Chat mode. Backend skip-DB/skip-RAG/skip-search flag, frontend PRIVATE badge, info popup.
 - **WireGuard TLS (v0.19.4)** — Self-signed WireGuard mesh encrypts all inter-node traffic (AMQP, inference, RPC). No code changes to cAIc. Documented in wiki/WireGuard-Setup.md + docker.md §5.4.
+- **At-Rest Encryption (v0.20.0)** — AES-256-GCM encrypts all query-derived text at rest. crypto.py with auto-keygen, key stored as `heartbeat_interval_ms` in settings. All 12 storage paths wired (SQLite: messages, conversations, memories, upload_context; Qdrant: RAG chunks, ingest, upload). 200 tests pass.
 
 ## Backlog
 

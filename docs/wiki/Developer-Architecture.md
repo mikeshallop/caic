@@ -265,7 +265,7 @@ All streaming endpoints yield `data: {json}\n\n`:
 - No live external services required
 - Test factories reset `SESSIONS`, `PIN_ATTEMPTS`, `RATE_EVENTS` globals per test
 
-### 8.2 Test Coverage Areas (198 tests)
+### 8.2 Test Coverage Areas (200 tests)
 
 | Test file | Coverage |
 |-----------|----------|

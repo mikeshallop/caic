@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+from crypto import encrypt_text, decrypt_text
 from db import get_db
 from config import MAX_MEMORY_FACT_CHARS
 
@@ -119,7 +120,7 @@ def add_memory(fact: str, topic: str = "general", source: str = "explicit") -> O
     now = datetime.now(timezone.utc).isoformat()
     cur = db.execute(
         "INSERT INTO memories (fact, topic, source, created_at) VALUES (?, ?, ?, ?)",
-        (fact, topic, source, now),
+        (encrypt_text(fact), topic, source, now),
     )
     db.commit()
     rowid = cur.lastrowid
@@ -131,31 +132,16 @@ def add_memory(fact: str, topic: str = "general", source: str = "explicit") -> O
 def search_memories(query: str, limit: int = 5) -> list:
     if not query.strip():
         return []
-    db = get_db()
-    words = re.findall(r"[A-Za-z0-9_]+", query)
-    if not words:
-        db.close()
-        return []
-    escaped = []
-    for word in words[:10]:
-        if word.upper() in {"AND", "OR", "NOT", "NEAR"}:
-            escaped.append(f'"{word}"*')
-        else:
-            escaped.append(word + "*")
-    safe_query = " OR ".join(escaped)
-    try:
-        rows = db.execute(
-            "SELECT rowid, fact, topic, source, created_at, bm25(memories) AS rank "
-            "FROM memories WHERE memories MATCH ? ORDER BY rank LIMIT ?",
-            (safe_query, limit),
-        ).fetchall()
-        results = [dict(row) for row in rows]
-        log.debug(f"Memory search '{query}' returned {len(results)} results")
-    except Exception as e:
-        log.warning(f"Memory search error: {e}")
-        results = []
-    db.close()
-    return results
+    all_mems = get_all_memories()
+    words = set(re.findall(r"[A-Za-z0-9_]+", query.lower()))
+    scored = []
+    for m in all_mems:
+        fact_lower = m["fact"].lower()
+        score = sum(1 for w in words if w in fact_lower)
+        if score > 0:
+            scored.append((score, m))
+    scored.sort(key=lambda x: -x[0])
+    return [m for _, m in scored[:limit]]
 
 
 def get_all_memories(topic: Optional[str] = None) -> list:
@@ -167,7 +153,12 @@ def get_all_memories(topic: Optional[str] = None) -> list:
     else:
         rows = db.execute("SELECT rowid, * FROM memories ORDER BY created_at DESC").fetchall()
     db.close()
-    return [dict(row) for row in rows]
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["fact"] = decrypt_text(d["fact"])
+        result.append(d)
+    return result
 
 
 def delete_memory(rowid: int) -> bool:
@@ -183,7 +174,7 @@ def delete_memory(rowid: int) -> bool:
 
 def update_memory(rowid: int, fact: str) -> bool:
     db = get_db()
-    cur = db.execute("UPDATE memories SET fact = ? WHERE rowid = ?", (fact, rowid))
+    cur = db.execute("UPDATE memories SET fact = ? WHERE rowid = ?", (encrypt_text(fact), rowid))
     db.commit()
     updated = cur.rowcount > 0
     db.close()

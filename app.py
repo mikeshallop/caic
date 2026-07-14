@@ -58,6 +58,8 @@ async def lifespan(app: FastAPI):
     log.info(f"cAIc {VERSION} starting up")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     init_db()
+    from crypto import ensure_key
+    ensure_key()
     log.info(f"Memory system: {get_memory_count()} memories loaded")
     await assess_hardware()
     from model_pull import ensure_model

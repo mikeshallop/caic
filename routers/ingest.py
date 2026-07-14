@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from config import COMPLETIONS_API_KEY
+from crypto import encrypt_text
 from eviction import maybe_evict
 from rag import chunk_text, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
 
@@ -50,7 +51,7 @@ async def ingest_content(request: Request):
                 continue
             vector = embed_resp.json()["embedding"]
             point_id = f"ingest-{source}-{datetime.now(timezone.utc).timestamp()}-{i}"
-            payload = {"text": chunk, "source": source, "ingest_date": datetime.now(timezone.utc).isoformat(), "type": "ingest"}
+            payload = {"text": encrypt_text(chunk), "source": source, "ingest_date": datetime.now(timezone.utc).isoformat(), "type": "ingest"}
             payload.update(metadata)
             upsert_resp = await client.put(
                 f"{QDRANT_URL}/collections/{RAG_COLLECTION}/points?wait=true",

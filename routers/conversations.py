@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from db import get_db
+from crypto import encrypt_text, decrypt_text
 from security import read_json_body, BODY_LIMIT_DEFAULT_BYTES
 from config import DEFAULT_MODEL, MAX_CONVERSATION_TITLE_CHARS
 
@@ -18,6 +19,7 @@ async def list_conversations():
     result = []
     for r in rows:
         c = dict(r)
+        c["title"] = decrypt_text(c["title"])
         attach_count = db.execute(
             "SELECT COUNT(*) FROM upload_context WHERE conversation_id = ?", (c["id"],)
         ).fetchone()[0]
@@ -36,7 +38,7 @@ async def create_conversation(request: Request):
     title = str(body.get("title", "New Chat"))[:MAX_CONVERSATION_TITLE_CHARS]
     db = get_db()
     db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-               (conv_id, title, model, now, now))
+               (conv_id, encrypt_text(title), model, now, now))
     db.commit()
     db.close()
     return {"id": conv_id, "title": title, "model": model, "created_at": now, "updated_at": now}
@@ -51,7 +53,14 @@ async def get_conversation(conv_id: str):
         raise HTTPException(status_code=404, detail="Conversation not found")
     messages = db.execute("SELECT * FROM messages WHERE conversation_id = ? ORDER BY id ASC", (conv_id,)).fetchall()
     db.close()
-    return {"conversation": dict(conv), "messages": [dict(m) for m in messages]}
+    conv_dict = dict(conv)
+    conv_dict["title"] = decrypt_text(conv_dict["title"])
+    msg_list = []
+    for m in messages:
+        md = dict(m)
+        md["content"] = decrypt_text(md["content"])
+        msg_list.append(md)
+    return {"conversation": conv_dict, "messages": msg_list}
 
 
 @router.put("/api/conversations/{conv_id}")
@@ -61,7 +70,7 @@ async def update_conversation(conv_id: str, request: Request):
     now = datetime.now(timezone.utc).isoformat()
     if "title" in body:
         db.execute("UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?",
-                   (str(body["title"])[:MAX_CONVERSATION_TITLE_CHARS], now, conv_id))
+                   (encrypt_text(str(body["title"])[:MAX_CONVERSATION_TITLE_CHARS]), now, conv_id))
     if "model" in body:
         db.execute("UPDATE conversations SET model = ?, updated_at = ? WHERE id = ?",
                    (body["model"], now, conv_id))

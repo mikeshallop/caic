@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from config import DEFAULT_MODEL, LLAMA_SERVER_BASE, MAX_SEARCH_QUERY_CHARS
+from crypto import encrypt_text
 from db import get_db
 from search import query_searxng, format_search_results
 from routers.chat import parse_llama_stream_chunk
@@ -41,12 +42,12 @@ async def explicit_search(request: Request):
         conv_id = str(uuid.uuid4())
         title = query[:70] + "..." if len(query) > 70 else query
         db.execute("INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                   (conv_id, title, model, now, now))
+                   (conv_id, encrypt_text(title), model, now, now))
     else:
         db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
 
     db.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-               (conv_id, "user", query, now))
+               (conv_id, "user", encrypt_text(query), now))
     db.commit()
     db.close()
 
@@ -60,7 +61,7 @@ async def explicit_search(request: Request):
             yield f"data: {json.dumps({'token': error_msg, 'conversation_id': conv_id})}\n\n"
             db2 = get_db()
             db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                        (conv_id, "assistant", error_msg, datetime.now(timezone.utc).isoformat()))
+                        (conv_id, "assistant", encrypt_text(error_msg), datetime.now(timezone.utc).isoformat()))
             db2.commit()
             db2.close()
             yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id})}\n\n"
@@ -102,7 +103,7 @@ async def explicit_search(request: Request):
 
         db2 = get_db()
         db2.execute("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                    (conv_id, "assistant", saved_msg, datetime.now(timezone.utc).isoformat()))
+                    (conv_id, "assistant", encrypt_text(saved_msg), datetime.now(timezone.utc).isoformat()))
         db2.commit()
         db2.close()
 

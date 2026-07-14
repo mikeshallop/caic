@@ -1,6 +1,6 @@
 ![cAIc banner](static/readme-banner.png)
 
-# cAIc v0.19.3
+# cAIc v0.20.0
 
 Consumer AI hardware is a wasteland of incompatibility. NVIDIA speaks CUDA, AMD speaks ROCm. Your RTX 5070 Ti lives in one machine with 16 GB VRAM; your RX 6600 XT lives in another with 12 GB. Alone, neither can run a 14B model at usable speed. Together, they could — if the software stack didn't treat heterogeneous hardware as a bug instead of a feature.
 
@@ -42,7 +42,7 @@ This also means a worker with a slow GPU can still contribute meaningfully — i
 
 | Concern | How cAIc handles it |
 |---------|---------------------|
-| **Queries stored on disk?** | Yes, by default — conversations persist to SQLite. Toggle **Private Chat** (topbar badge) and nothing touches disk: no SQLite writes, no FTS5 memory injection, no RAG ingestion, no external SearXNG queries. |
+| **Queries stored on disk?** | All query-derived text is encrypted at rest with AES-256-GCM before touching SQLite or Qdrant. Toggle **Private Chat** (topbar badge) and nothing touches disk at all: no SQLite writes, no FTS5 memory injection, no RAG ingestion, no external SearXNG queries. |
 | **Queries sent to external services?** | SearXNG web search is optional and disabled in Private Chat. All other services (llama-server, Qdrant, RabbitMQ) run on your own LAN. |
 | **Inter-node traffic unencrypted?** | No — WireGuard tunnels encrypt all coordinator↔worker traffic (AMQP, inference, RPC) at the network layer. Zero application changes. |
 | **Who can access the server?** | Guest sessions for anyone on the LAN. Admin access protected by a PBKDF2-hashed 4-digit PIN with rate-limited attempts. IP allowlist (CIDR) gate optional. |
@@ -50,6 +50,22 @@ This also means a worker with a slow GPU can still contribute meaningfully — i
 At v1.0, this ships with a Docker compose stack and setup wizard that detect CPU vs GPU, probe your hardware, and stand up SearXNG, Qdrant, RabbitMQ, and everything else with a single `docker compose up`. The same install docs work bare-metal for those who prefer to skip containers entirely.
 
 Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — includes [FAQ](https://llgit.llamachile.tube/gramps/cAIc/wiki/FAQ), [Installation Guide](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation), and [full architecture docs](https://llgit.llamachile.tube/gramps/cAIc/wiki/Developer-Architecture)
+
+## What's New in v0.20.0
+
+### At-Rest Encryption (Full Data Privacy)
+
+All user query-derived text is now encrypted with AES-256-GCM before being written to disk. Every storage path is covered:
+
+- **Conversations** — message content and titles encrypted in SQLite
+- **Memories** — FTS5 facts encrypted; search performs Python-side matching on decrypted text
+- **Upload context** — document text encrypted in SQLite
+- **RAG corpus** — chunk text encrypted in Qdrant payloads
+- **Completions (IDE integration)** — messages and titles encrypted
+
+**Key management**: 256-bit key auto-generated on first boot, stored in the `settings` table as a non-obvious key name (`heartbeat_interval_ms`). Never exposed via any API endpoint. If the key is deleted, stored data is unrecoverable.
+
+**Zero-trust boundary**: the encryption key lives in the same SQLite database as the encrypted data. This protects against filesystem-level access (stolen `.db` file, backup exposure, disk forensic recovery) but does not protect against runtime compromise (attacker with SQLite read access while the server is running, since decryption keys are in memory during requests).
 
 ## What's New in v0.19.3
 
@@ -176,6 +192,7 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 - **Model Switching** — Change inference models on the fly
 - **Skills Framework** — Built-in skill registry with per-skill enable/disable controls
 - **Private Chat** — Toggle to keep conversations ephemeral: no persistence, no memory/RAG, no web search
+- **At-Rest Encryption** — AES-256-GCM encryption of all query-derived text on disk (SQLite + Qdrant)
 
 ## File Structure
 
@@ -186,6 +203,7 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 ├── auth.py             # PIN-based guest/admin sessions, auth routes
 ├── cluster.py          # Cluster protocol: node registry, event log, ping/pong
 ├── config.py           # Constants, env vars, limits, skill registry
+├── crypto.py           # AES-256-GCM encrypt/decrypt + key management
 ├── db.py               # SQLite schema, connection factory
 ├── eviction.py         # Score-based RAG eviction engine
 ├── gpu.py              # GPU stats — rocm-smi (Linux/AMD) + system_profiler (Darwin/Apple Silicon)
@@ -217,7 +235,7 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 ├── node_agent/
 │   ├── agent.py        # Standalone worker agent (AMQP client)
 │   └── requirements.txt
-└── tests/              # 198 pytest tests
+└── tests/              # 200 pytest tests
 ```
 
 ## Requirements
@@ -432,7 +450,7 @@ Settings are stored in the `settings` table and include:
 python3 -m pytest tests/ -v
 ```
 
-All 198 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
+All 200 tests use `tmp_path` fixtures + monkeypatched `httpx.AsyncClient`/`aio-pika`. No external services needed.
 
 ## License
 

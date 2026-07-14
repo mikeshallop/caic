@@ -15,6 +15,7 @@ from config import (
     BUILTIN_SKILLS, DEFAULT_MODEL, DEFAULT_PRESETS, DEFAULT_PROFILE,
     MAX_SKILL_PROMPT_CHARS, ALLOWED_NETWORKS,
 )
+from crypto import encrypt_text, decrypt_text
 
 log = logging.getLogger("caic")
 
@@ -72,7 +73,7 @@ def insert_upload_context(db, conversation_id: str, filename: str, content: str,
     now = datetime.now(timezone.utc).isoformat()
     cur = db.execute(
         "INSERT INTO upload_context (conversation_id, filename, content, content_type, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (conversation_id, filename, content, content_type, now, expires_at),
+        (conversation_id, filename, encrypt_text(content), content_type, now, expires_at),
     )
     return cur.lastrowid
 
@@ -102,7 +103,9 @@ def get_upload_context(db, context_id: int):
         db.execute("DELETE FROM upload_context WHERE id = ?", (context_id,))
         db.commit()
         return None
-    return dict(row)
+    d = dict(row)
+    d["content"] = decrypt_text(d["content"])
+    return d
 
 
 def init_db():

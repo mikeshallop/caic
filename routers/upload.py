@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
 from config import UPLOAD_DIR, MAX_UPLOAD_BYTES, SUPPORTED_UPLOAD_TYPES, UPLOAD_CONTEXT_EXPIRY_HOURS
+from crypto import encrypt_text
 from db import get_db, insert_upload_context, list_upload_context_by_conversation, delete_upload_context_by_id
 from eviction import maybe_evict
 from rag import chunk_text, QDRANT_URL, EMBED_URL, EMBED_MODEL, RAG_COLLECTION
@@ -78,7 +79,7 @@ async def upload_file(
                         "points": [{
                             "id": pid,
                             "vector": vector,
-                            "payload": {"text": chunk, "source": file.filename, "upload_date": datetime.now(timezone.utc).isoformat(), "type": "upload"},
+                            "payload": {"text": encrypt_text(chunk), "source": file.filename, "upload_date": datetime.now(timezone.utc).isoformat(), "type": "upload"},
                         }]
                     },
                     timeout=30.0,

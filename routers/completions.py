@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 
 from config import DEFAULT_MODEL, LLAMA_SERVER_BASE, COMPLETIONS_API_KEY
+from crypto import encrypt_text
 from db import get_db
 from rag import build_system_prompt
 from routers.chat import parse_llama_stream_chunk
@@ -124,7 +125,7 @@ async def chat_completions(request: Request):
     title = f"[IDE] {user_message[:72]}{'...' if len(user_message) > 72 else ''}"
     db.execute(
         "INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (conv_id, title, model, now, now),
+        (conv_id, encrypt_text(title), model, now, now),
     )
     for msg in messages:
         role = msg.get("role")
@@ -132,7 +133,7 @@ async def chat_completions(request: Request):
         if role in ("user", "assistant"):
             db.execute(
                 "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                (conv_id, role, content, now),
+                (conv_id, role, encrypt_text(content), now),
             )
     db.commit()
 
@@ -195,7 +196,7 @@ async def _stream_chat(payload: dict, model: str, conv_id: str, request: Request
                 db = get_db()
                 db.execute(
                     "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                    (conv_id, "assistant", assistant_msg, datetime.now(timezone.utc).isoformat()),
+                    (conv_id, "assistant", encrypt_text(assistant_msg), datetime.now(timezone.utc).isoformat()),
                 )
                 db.commit()
                 db.close()
@@ -240,7 +241,7 @@ async def _blocking_chat(payload: dict, model: str, conv_id: str, request: Reque
         db = get_db()
         db.execute(
             "INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-            (conv_id, "assistant", assistant_msg, datetime.now(timezone.utc).isoformat()),
+            (conv_id, "assistant", encrypt_text(assistant_msg), datetime.now(timezone.utc).isoformat()),
         )
         db.commit()
         db.close()
