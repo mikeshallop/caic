@@ -1,7 +1,15 @@
 # cAIc — OpenCode Prompt Sequence
-# Generated: 2026-07-01
+# Generated: 2026-07-14
 # Execute sequentially. Run full test suite after each task before proceeding.
 # Test command: ./venv/bin/python -m pytest tests/ -v
+
+---
+
+## Session 2026-07-14 — RAG bugfixes + Topbar redesign
+
+- **RAG bugs fixed**: Collection name mismatch (`jarvis_rag` → `caic_rag`, migrated 219 points), `vectors_count`→`points_count` (Qdrant v1.10+ API change), removed unindexed `order_by` that caused 502 on scroll, made `RAG_COLLECTION` env-configurable (`CAIC_RAG_COLLECTION`).
+- **Semantic search fixed**: Set `CAIC_EMBED_URL=http://192.168.50.108:11434` (mxbai-embed-large lives on ultron, not the old embed server).
+- **Topbar redesign**: Moved system stats (CPU/MEM/GPU/VRAM/TOK) to a centered bottom strip. Moved toggles (MEM, SEARCH, PROFILE, SORT, PRIVACY) into a ⋮ hamburger menu next to ADMIN badge. Palette icon sits immediately after version number in topbar-left. Removed standalone (i) button — privacy info accessible via ⋮ → About Privacy. Input bar above chat, stats at very bottom. Mobile-responsive padding/sizing.
 
 ---
 
