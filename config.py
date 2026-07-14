@@ -21,7 +21,7 @@ MODEL_CONTEXT_LENGTH = 4096
 AMQP_RECONNECT_DELAY = 5
 AMQP_EXCHANGE_ADMIN = "jc.admin"
 AMQP_EXCHANGE_SYSTEM = "jc.system"
-AMQP_SECRET_PATH = "/home/gramps/.caic_amqp_secret"
+AMQP_SECRET_PATH = os.environ.get("CAIC_AMQP_SECRET_PATH", "/home/gramps/.caic_amqp_secret")
 
 def get_amqp_url() -> str:
     url = os.environ.get("CAIC_AMQP_URL")
@@ -68,7 +68,7 @@ BODY_LIMIT_PROFILE_BYTES = 256 * 1024
 UPLOAD_DIR = "/tmp/caic_uploads"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 SUPPORTED_UPLOAD_TYPES = {"text/plain", "text/markdown", "application/pdf", "application/json", "text/x-python", "text/html", "image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp"}
-QDRANT_URL = "http://192.168.50.108:6333"
+QDRANT_URL = os.environ.get("CAIC_QDRANT_URL", "http://192.168.50.108:6333")
 RAG_COLLECTION = "caic_rag"
 UPLOAD_CONTEXT_EXPIRY_HOURS = 1
 BODY_LIMIT_UPLOAD_BYTES = MAX_UPLOAD_BYTES

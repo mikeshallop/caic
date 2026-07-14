@@ -28,6 +28,23 @@ cAIc splits the workload across two machine roles:
 
 This split keeps the UI responsive during inference (the coordinator isn't blocked by GPU compute) and lets workers focus VRAM entirely on model weights rather than browser sessions or API orchestration.
 
+### Single-Node Deployment (Experimental)
+
+cAIc can also run entirely on one machine with all services colocated — coordinator, llama-server, Qdrant, SearXNG, and RabbitMQ all on localhost. This is useful for testing, laptops, or WSL2 under Windows 11.
+
+To deploy single-node, override the remote service URLs:
+
+```bash
+export CAIC_QDRANT_URL=http://localhost:6333
+export CAIC_EMBED_URL=http://localhost:11434
+export LLAMA_SERVER_BASE=http://localhost:8081
+# AMQP URL is already configurable via CAIC_AMQP_URL
+```
+
+All services degrade gracefully if unreachable — RAG, search, cluster, and triage log warnings and continue. Only llama-server (inference) is strictly required.
+
+Untested: Windows 11 / WSL2 (Debian). The codebase is pure Python with no platform-specific dependencies beyond `rocm-smi` (AMD GPU stats, gracefully absent) and `system_profiler` (macOS, absent on Linux/WSL). llama.cpp builds and runs on WSL2 with NVIDIA GPU passthrough.
+
 Under the hood: FastAPI + SQLite + Jinja2 on Python 3.13. AMQP-mediated cluster coordination with an OpenAI-compatible inference endpoint.
 
 #### Query-routing vs. layer-splitting — why it matters
