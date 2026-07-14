@@ -93,7 +93,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .main::after { right:0; border-right:none; border-radius:4px 0 0 4px; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:8px 28px; border-bottom:1px solid var(--border); background:var(--bg-secondary); flex-shrink:0; gap:12px; }
 .topbar-left { display:flex; align-items:center; gap:10px; min-width:0; }
-.sys-stats { display:flex; align-items:center; gap:14px; padding:4px 28px; background:var(--bg-secondary); border-top:1px solid var(--border); font-size:11px; font-family:var(--font-mono); color:var(--text-muted); flex-shrink:0; overflow-x:auto; white-space:nowrap; }
+.sys-stats { display:flex; align-items:center; justify-content:center; gap:16px; padding:4px 28px; background:var(--bg-secondary); border-top:1px solid var(--border); font-size:11px; font-family:var(--font-mono); color:var(--text-muted); flex-shrink:0; overflow-x:auto; white-space:nowrap; }
 .sys-stats .ss-item { display:flex; align-items:center; gap:3px; }
 .sys-stats .ss-label { color:var(--text-muted); text-transform:uppercase; }
 .sys-stats .ss-val { transition:color 0.3s; }
@@ -342,7 +342,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
     .topbar { padding:8px 14px; gap:6px; }
     .chat-container { padding:12px 14px; }
     .input-area { padding:8px 14px; }
-    .sys-stats { padding:3px 14px; gap:10px; font-size:10px; }
+    .sys-stats { padding:3px 14px; gap:12px; font-size:10px; }
     .topbar-brand { font-size:14px; }
     .topbar-brand .version { font-size:11px; }
 }
