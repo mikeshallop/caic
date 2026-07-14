@@ -151,6 +151,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 .rag-toolbar-right { display:flex; gap:8px; align-items:center; flex-shrink:0; }
 .rag-search-input { flex:1; min-width:160px; background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-mono); font-size:12px; padding:8px 12px; border-radius:var(--radius); }
 .rag-search-input:focus { outline:none; border-color:var(--accent-dim); }
+.rag-search-hint { font-size:10px; color:var(--text-muted); margin:-6px 0 12px 0; font-family:var(--font-mono); line-height:1.4; }
 .rag-source-select { background:var(--bg-tertiary); border:1px solid var(--border); color:var(--text-primary); font-family:var(--font-mono); font-size:12px; padding:7px 10px; border-radius:var(--radius); cursor:pointer; }
 .rag-source-select:focus { outline:none; border-color:var(--accent-dim); }
 .rag-table-wrap { overflow-x:auto; margin-bottom:12px; }
@@ -387,9 +388,9 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
         </div>
         <div class="modal-body">
             <div class="rag-stats-bar" id="ragStatsBar">Loading stats...</div>
-            <div class="rag-toolbar">
+                <div class="rag-toolbar">
                 <div class="rag-toolbar-left">
-                    <input type="text" id="ragSearchInput" class="rag-search-input" placeholder="Semantic search..." onkeydown="if(event.key==='Enter')loadRagPoints()">
+                    <input type="text" id="ragSearchInput" class="rag-search-input" placeholder="Search RAG text (semantic vector search)..." onkeydown="if(event.key==='Enter')loadRagPoints()">
                     <select id="ragSourceFilter" class="rag-source-select" onchange="loadRagPoints()">
                         <option value="">All sources</option>
                     </select>
@@ -399,6 +400,7 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
                     <button class="btn-small btn-reset" onclick="flushRagCollection()" style="color:var(--danger);border-color:var(--danger);">Flush All</button>
                 </div>
             </div>
+            <div class="rag-search-hint">Leave search blank to browse all entries. Search uses vector similarity against uploaded/ingested document text.</div>
             <div class="rag-table-wrap">
                 <table class="rag-table" id="ragTable">
                     <thead>
