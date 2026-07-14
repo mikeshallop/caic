@@ -13,8 +13,6 @@ Scope: Active roadmap items and backlog.
 
 ## Backlog
 
-- B1 — Context loss in follow-up questions (investigation)
-- B2 — Bang-prefixed (`!`) search routing
 - B3 — Docker distribution (planning doc at `docker.md`, not yet implemented)
 - **B4 — RAG Corpus Management UI (deferred)** — browse, search, edit, delete individual RAG entries
 - HTTPS / reverse proxy (Caddy)

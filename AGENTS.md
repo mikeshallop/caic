@@ -149,6 +149,7 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - (none)
 
 ### Upcoming (backlog)
+- B3 — Docker distribution
 - B4 — RAG Corpus Management UI
 - Private Chat mode was implemented in B8 (v0.19.3). WireGuard in-transit encryption documented in wiki. At-rest encryption implemented in v0.20.0.
 
