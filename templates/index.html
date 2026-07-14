@@ -1624,6 +1624,10 @@ function toggleDirection() {
     localStorage.setItem('waterfallDirection', _waterfallDirection);
     const badge = document.getElementById('directionBadge');
     if (badge) badge.textContent = _waterfallDirection === 'newest' ? 'NEW' : 'OLD';
+    const container = document.getElementById('chatContainer');
+    const items = Array.from(container.children);
+    items.reverse().forEach(el => container.appendChild(el));
+    scrollToLatest();
 }
 let _userScrolledAway = false;
 document.getElementById('chatContainer')?.addEventListener('scroll', function() {
