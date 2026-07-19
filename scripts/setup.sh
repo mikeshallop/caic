@@ -56,12 +56,72 @@ else
 fi
 
 # ── models/ ─────────────────────────────────────────────────
+DEFAULT_MODEL_REPO="unsloth/Qwen2.5-7B-Instruct-GGUF"
+DEFAULT_MODEL_FILE="Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+DEFAULT_MODEL_SIZE_MB=4600  # approximate download size
+DEFAULT_MODEL_NAME="qwen2.5-7b-instruct"
+
 mkdir -p models
-if [ ! "$(ls -A models/*.gguf 2>/dev/null)" ]; then
-    warn "No .gguf models found in ./models/"
-    warn "  Place your model file(s) there before running docker compose up."
+
+# Set LLAMA_MODEL and CAIC_DEFAULT_MODEL in .env if not already set
+LLAMA_MODEL_LINE=$(grep '^LLAMA_MODEL=' .env || true)
+if [ -z "$LLAMA_MODEL_LINE" ] || [ "$LLAMA_MODEL_LINE" = "LLAMA_MODEL=" ]; then
+    sed -i "s/^LLAMA_MODEL=$/LLAMA_MODEL=$DEFAULT_MODEL_FILE/" .env
+    sed -i "s/^CAIC_DEFAULT_MODEL=.*/CAIC_DEFAULT_MODEL=$DEFAULT_MODEL_NAME/" .env
+    ok "Set LLAMA_MODEL=$DEFAULT_MODEL_FILE"
+    ok "Set CAIC_DEFAULT_MODEL=$DEFAULT_MODEL_NAME"
+fi
+
+if ls models/*.gguf 1>/dev/null 2>&1; then
+    ok "models/ has $(ls models/*.gguf | wc -l) model(s)"
 else
-    ok "models/ has $(ls models/*.gguf 2>/dev/null | wc -l) model(s)"
+    echo ""
+    echo "  No .gguf models found in ./models/"
+    echo ""
+
+    # Check disk space
+    AVAIL_KB=$(df -k models/ | tail -1 | awk '{print $4}')
+    AVAIL_MB=$((AVAIL_KB / 1024))
+    REQUIRED_MB=$((DEFAULT_MODEL_SIZE_MB + 500))  # 500MB safety margin
+
+    if [ "$AVAIL_MB" -lt "$REQUIRED_MB" ]; then
+        warn "Insufficient disk space: ${AVAIL_MB}MB available, ~${REQUIRED_MB}MB needed"
+        warn "Free space or change LLAMA_MODEL in .env to use a smaller model."
+        echo ""
+    else
+        echo "  Download default model (~${DEFAULT_MODEL_SIZE_MB}MB):"
+        echo "    ${DEFAULT_MODEL_REPO}/${DEFAULT_MODEL_FILE}"
+        echo ""
+        read -p "  Download now? [Y/n] " r
+        if [[ -z "$r" || "$r" =~ ^[Yy] ]]; then
+            echo ""
+            echo "  Downloading ${DEFAULT_MODEL_FILE}..."
+            if command -v hf &>/dev/null; then
+                # huggingface-cli (hf_transfer) if available
+                hf download "$DEFAULT_MODEL_REPO" "$DEFAULT_MODEL_FILE" \
+                    --local-dir models/ --local-dir-use-symlinks False
+            elif command -v wget &>/dev/null; then
+                wget -q --show-progress -O "models/$DEFAULT_MODEL_FILE" \
+                    "https://huggingface.co/${DEFAULT_MODEL_REPO}/resolve/main/${DEFAULT_MODEL_FILE}"
+            elif command -v curl &>/dev/null; then
+                curl -L --progress-bar -o "models/$DEFAULT_MODEL_FILE" \
+                    "https://huggingface.co/${DEFAULT_MODEL_REPO}/resolve/main/${DEFAULT_MODEL_FILE}"
+            else
+                warn "Neither wget nor curl found — cannot download."
+                warn "  Manual: wget -O models/$DEFAULT_MODEL_FILE \\"
+                warn "    https://huggingface.co/${DEFAULT_MODEL_REPO}/resolve/main/${DEFAULT_MODEL_FILE}"
+            fi
+
+            if [ -f "models/$DEFAULT_MODEL_FILE" ]; then
+                DOWNLOADED_MB=$(du -m "models/$DEFAULT_MODEL_FILE" | cut -f1)
+                ok "Downloaded ${DEFAULT_MODEL_FILE} (${DOWNLOADED_MB}MB)"
+            else
+                warn "Download failed — place model manually in ./models/"
+            fi
+        else
+            warn "Skipped. Place .gguf model(s) in ./models/ before docker compose up."
+        fi
+    fi
 fi
 
 # ── data/ ───────────────────────────────────────────────────
