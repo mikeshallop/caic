@@ -1,0 +1,116 @@
+# cAIc — Docker Compose stack
+# Coordinator: cAIc + SearXNG + Qdrant + RabbitMQ + llama-server + Ollama
+#
+# Usage:
+#   cp .env.example .env    # edit with your values
+#   mkdir -p models secrets searxng
+#   # place .gguf model in ./models/
+#   docker compose up -d
+
+services:
+  # ── cAIc (FastAPI) ──────────────────────────────────────
+  caic:
+    build: .
+    ports:
+      - "${CAIC_EXPOSE_PORT:-8080}:8080"
+    volumes:
+      - caic_data:/app/data
+    secrets:
+      - rabbitmq_password
+    environment:
+      - CAIC_AMQP_SECRET_PATH=/run/secrets/rabbitmq_password
+    env_file: .env
+    depends_on:
+      qdrant:        { condition: service_started }
+      rabbitmq:      { condition: service_healthy }
+      llama-server:  { condition: service_healthy }
+    restart: unless-stopped
+
+  # ── SearXNG (web search) ────────────────────────────────
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "${SEARXNG_EXPOSE_PORT:-8888}:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng_config:/etc/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888
+    restart: unless-stopped
+
+  # ── Qdrant (vector DB) ──────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_EXPOSE_PORT:-6333}:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  # ── RabbitMQ (AMQP broker) ──────────────────────────────
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "${RABBITMQ_EXPOSE_PORT:-5672}:5672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: caic
+      RABBITMQ_DEFAULT_PASS_FILE: /run/secrets/rabbitmq_password
+      RABBITMQ_DEFAULT_VHOST: /
+    secrets:
+      - rabbitmq_password
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ── llama-server (LLM inference) ────────────────────────
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    ports:
+      - "${LLAMA_EXPOSE_PORT:-8081}:8081"
+    volumes:
+      - ./models:/models:ro
+    command: >
+      --model /models/${LLAMA_MODEL:?Set LLAMA_MODEL in .env}
+      --host 0.0.0.0 --port 8081
+      --ctx-size ${LLAMA_CTX_SIZE:-4096}
+      --n-gpu-layers ${LLAMA_N_GPU_LAYERS:-0}
+      --embeddings
+      --logprobs
+      ${LLAMA_RPC_ENDPOINTS:+--rpc ${LLAMA_RPC_ENDPOINTS}}
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  # ── Ollama (embeddings) ─────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_EXPOSE_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  caic_data:
+  searxng_config:
+  qdrant_storage:
+  rabbitmq_data:
+  ollama_models:
+
+secrets:
+  rabbitmq_password:
+    file: ./secrets/rabbitmq_password.txt

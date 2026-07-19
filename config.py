@@ -6,6 +6,7 @@ import os
 import re
 import ipaddress
 import logging
+from pathlib import Path
 
 log = logging.getLogger("caic")
 
@@ -76,6 +77,7 @@ BODY_LIMIT_UPLOAD_BYTES = MAX_UPLOAD_BYTES
 
 # --- RAG eviction ---
 RAG_MAX_VECTORS = int(os.environ.get("CAIC_RAG_MAX_VECTORS", "50000"))
+HW_STATE_PATH = os.environ.get("CAIC_HW_STATE_PATH", str(Path(__file__).parent / "hardware_state.json"))
 RAG_EVICTION_HIGH_WATER = 0.80
 RAG_EVICTION_LOW_WATER = 0.20
 RAG_EVICTION_BATCH = 1000

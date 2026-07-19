@@ -1,0 +1,26 @@
+# SearXNG configuration — cAIc stack
+# Secret key is injected via environment variable.
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: en
+
+server:
+  secret_key: ${SEARXNG_SECRET_KEY}
+  limiter: false
+  image_proxy: false
+  method: GET
+  port: 8080
+  bind_address: "0.0.0.0"
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp

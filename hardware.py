@@ -12,11 +12,11 @@ from pathlib import Path
 import httpx
 import psutil
 
-from config import LLAMA_SERVER_BASE, SEARXNG_BASE, QDRANT_URL
+from config import LLAMA_SERVER_BASE, SEARXNG_BASE, QDRANT_URL, HW_STATE_PATH
 
 log = logging.getLogger("caic")
 
-HARDWARE_STATE_PATH = Path("hardware_state.json")
+HARDWARE_STATE_PATH = Path(HW_STATE_PATH)
 _TIMEOUT_EXPIRED = subprocess.TimeoutExpired
 
 
