@@ -47,9 +47,12 @@ log = logging.getLogger("caic")
 log.setLevel(logging.DEBUG)
 syslog_address = os.environ.get("CAIC_SYSLOG_ADDRESS", "/dev/log")
 if syslog_address:
-    syslog_handler = logging.handlers.SysLogHandler(address=syslog_address)
-    syslog_handler.setFormatter(logging.Formatter("caic[%(process)d]: %(levelname)s %(message)s"))
-    log.addHandler(syslog_handler)
+    try:
+        syslog_handler = logging.handlers.SysLogHandler(address=syslog_address)
+        syslog_handler.setFormatter(logging.Formatter("caic[%(process)d]: %(levelname)s %(message)s"))
+        log.addHandler(syslog_handler)
+    except Exception:
+        log.warning("syslog not available at %s -- skipping", syslog_address)
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))

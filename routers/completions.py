@@ -120,26 +120,28 @@ async def chat_completions(request: Request):
 
     # --- Persist conversation ---
     db = get_db()
-    now = datetime.now(timezone.utc).isoformat()
-    conv_id = str(uuid.uuid4())
-    title = f"[IDE] {user_message[:72]}{'...' if len(user_message) > 72 else ''}"
-    db.execute(
-        "INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (conv_id, encrypt_text(title), model, now, now),
-    )
-    for msg in messages:
-        role = msg.get("role")
-        content = msg.get("content", "")
-        if role in ("user", "assistant"):
-            db.execute(
-                "INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
-                (conv_id, role, encrypt_text(content), now, None),
-            )
-    db.commit()
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        conv_id = str(uuid.uuid4())
+        title = f"[IDE] {user_message[:72]}{'...' if len(user_message) > 72 else ''}"
+        db.execute(
+            "INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (conv_id, encrypt_text(title), model, now, now),
+        )
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content", "")
+            if role in ("user", "assistant"):
+                db.execute(
+                    "INSERT INTO messages (conversation_id, role, content, created_at, perplexity) VALUES (?, ?, ?, ?, ?)",
+                    (conv_id, role, encrypt_text(content), now, None),
+                )
+        db.commit()
 
-    # --- Build system prompt through full jC pipeline ---
-    system_prompt = await build_system_prompt(db, "", user_message)
-    db.close()
+        # --- Build system prompt through full jC pipeline ---
+        system_prompt = await build_system_prompt(db, "", user_message)
+    finally:
+        db.close()
 
     # Assemble messages for upstream: inject jC system prompt, preserve history
     upstream_messages = []

@@ -43,6 +43,8 @@ async def subscribe(exchange: str, routing_keys: list[str], handler) -> None:
     if ch is None:
         log.error("cannot subscribe — no AMQP channel")
         return
+    # Track subscription before attempting so reconnect catches it even if this try fails
+    _subscriptions.append((exchange, routing_keys, handler))
     try:
         queue = await ch.declare_queue("", exclusive=True)
         ex = await ch.get_exchange(exchange)
@@ -58,7 +60,6 @@ async def subscribe(exchange: str, routing_keys: list[str], handler) -> None:
                     log.exception("AMQP handler error for %s %s", exchange, msg.routing_key)
 
         await queue.consume(_dispatch)
-        _subscriptions.append((exchange, routing_keys, handler))
     except Exception:
         log.exception("AMQP subscribe failed for %s %s", exchange, routing_keys)
 
