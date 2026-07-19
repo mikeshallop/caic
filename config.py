@@ -14,7 +14,7 @@ VERSION = "v0.22.1"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://localhost:8081")
 SEARXNG_BASE = os.environ.get("CAIC_SEARXNG_BASE", "http://localhost:8888")
-DEFAULT_MODEL = "qwen2.5-7b-instruct"
+DEFAULT_MODEL = os.environ.get("CAIC_DEFAULT_MODEL", "qwen2.5-7b-instruct")
 COMPLETIONS_API_KEY = os.environ.get("CAIC_COMPLETIONS_API_KEY", "caic-sk-" + os.urandom(24).hex())
 MODEL_CONTEXT_LENGTH = 4096
 
