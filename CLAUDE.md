@@ -5,6 +5,10 @@ Detailed project context, work state, architecture, and configuration have moved
 ## Quick start
 
 ```bash
+# Docker (recommended)
+scripts/setup.sh          # first run: generates .env, secrets, pulls default model
+docker compose up -d
+
 # Development
 ./venv/bin/uvicorn app:app --host 0.0.0.0 --port 8080 --reload
 
@@ -17,7 +21,9 @@ sudo systemctl restart caic
 
 ## Dependencies
 
+Docker deployment: no manual pip install needed — the Dockerfile handles it.
+
 ```bash
 ./venv/bin/pip install -r requirements.txt
-# Also requires: psutil jinja2 python-multipart pypdf (not in requirements.txt)
+# Also requires: psutil jinja2 python-multipart pypdf
 ```

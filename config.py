@@ -10,7 +10,7 @@ from pathlib import Path
 
 log = logging.getLogger("caic")
 
-VERSION = "v0.22.1"
+VERSION = "v1.0.0"
 OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://localhost:11434")
 LLAMA_SERVER_BASE = os.environ.get("LLAMA_SERVER_BASE", "http://localhost:8081")
 SEARXNG_BASE = os.environ.get("CAIC_SEARXNG_BASE", "http://localhost:8888")

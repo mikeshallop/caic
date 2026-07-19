@@ -3,6 +3,10 @@
 ## Run
 
 ```bash
+# Docker (recommended)
+scripts/setup.sh && docker compose up -d
+
+# Bare-metal
 uvicorn app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
@@ -73,9 +77,9 @@ Refactored from single-file (`app.py`) into modules under project root:
 ### Entrypoint / API keys
 
 - `app.py` line 148: `uvicorn.run(app, ...)` when called directly
-- `config.py` line 14: `LLAMA_SERVER_BASE` defaults to `http://192.168.50.108:8081` — llama-server on coordinator, RPC-offloads GPU layers to worker :50052
-- `config.py` line 17: `COMPLETIONS_API_KEY` read from `CAIC_COMPLETIONS_API_KEY` env var or auto-generates
-- `config.py` line 13: `OLLAMA_BASE` is legacy/unused — all endpoints use `LLAMA_SERVER_BASE`
+- `config.py` line 14: `LLAMA_SERVER_BASE` defaults to `http://localhost:8081` — configurable via env var; Docker uses `http://llama-server:8081`
+- `config.py` line 17: `DEFAULT_MODEL` read from `CAIC_DEFAULT_MODEL` env var or defaults to `qwen2.5-7b-instruct`
+- `config.py` line 18: `COMPLETIONS_API_KEY` read from `CAIC_COMPLETIONS_API_KEY` env var or auto-generates
 
 ### Key flows
 
@@ -107,16 +111,18 @@ The upstream request includes `"logprobs": true`. `parse_llama_stream_chunk()` e
 
 ### External services
 
-| Service | Required | Port |
-|---------|----------|------|
-| llama-server (coordinator) | Yes | 8081 + RPC :50052 (worker GPU) |
-| Phi-4-mini (triage) | No | 8083 |
-| SearXNG | No | 8888 |
-| RabbitMQ (coordinator) | No | 5672 — AMQP broker |
-| wttr.in | No | weather shortcut |
-| rocm-smi | No | AMD GPU stats |
-| Qdrant | No | 6333 (coordinator) — RAG vector search |
-| Ollama (worker) | No | 11434 — embeddings + model pull |
+All services are available bare-metal or as containers in `docker compose up`.
+
+| Service | Required | Port | Docker service name |
+|---------|----------|------|---------------------|
+| llama-server (coordinator) | Yes | 8081 + RPC :50052 (worker GPU) | `llama-server` |
+| Phi-4-mini (triage) | No | 8083 | — |
+| SearXNG | No | 8888 | `searxng` |
+| RabbitMQ (coordinator) | No | 5672 — AMQP broker | `rabbitmq` |
+| wttr.in | No | weather shortcut | — |
+| rocm-smi | No | AMD GPU stats | — |
+| Qdrant | No | 6333 (coordinator) — RAG vector search | `qdrant` |
+| Ollama (worker) | No | 11434 — embeddings + model pull | `ollama` |
 
 ### Config quirks
 
@@ -143,6 +149,7 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - **Documentation**: Added inline comments and docstrings to all functions in `db.py`.
 - **Uninstall scripts**: Created and committed `scripts/uninstall.sh`, `teardown-docker.sh`, `nuclear-clean.sh`.
 - **README**: Added "Uninstalling cAIc" section.
+- **Docker containerization (B3)**: Created `Dockerfile`, `docker-compose.yml`, `.env.example`, `scripts/setup.sh`, `.dockerignore`, `searxng-settings.yml.dist`, `models/README.txt`. Fixed hardcoded defaults in `config.py` (localhost, Docker secrets path, `CAIC_DEFAULT_MODEL` env var, `CAIC_HW_STATE_PATH` env var). Added missing `psutil` + `jinja2` to `requirements.txt`. Fixed test discovery via `tests/conftest.py` sys.path insertion. 214 tests pass.
 
 ### Active
 - (none)
@@ -151,10 +158,10 @@ All streaming endpoints yield `data: {json}\n\n`. Key shapes:
 - (none)
 
 ### Upcoming (backlog)
-- B3 — Docker distribution
+- ~~B3 — Docker distribution~~ [DONE]
 
 ### Key config values (current)
-- **Current VERSION**: `v0.22.0` in `config.py`.
+- **Current VERSION**: `v1.0.0` in `config.py`.
 - `SESSION_TIMEOUT_SECONDS = 3600`
-- `DEFAULT_MODEL = "qwen2.5-7b-instruct"`
-- `LLAMA_SERVER_BASE = "http://192.168.50.108:8081"`
+- `DEFAULT_MODEL = "qwen2.5-7b-instruct"` (overridable via `CAIC_DEFAULT_MODEL`)
+- `LLAMA_SERVER_BASE = "http://localhost:8081"` (overridable via env var)

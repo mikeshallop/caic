@@ -933,7 +933,7 @@ Run full test suite. All 26+ existing tests must continue to pass.
 
 **Change:** Add a `force_search` flag when `user_message.startswith("!")`, strip the prefix from the message saved to DB, and route directly to the search+summarize path.
 
-### B3 — Docker distribution (v1.0 gate)
+### ~~B3 — Docker distribution (v1.0 gate) [DONE]~~
 
 **Goal:** Ship cAIc as a `docker compose` stack so a single command stands up everything.
 
