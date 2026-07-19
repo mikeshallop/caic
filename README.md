@@ -91,7 +91,7 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 - Only port 8080 exposed by default; all other services internal to compose network
 - Graceful degradation — SearXNG and Ollama are optional (not required for startup)
 
-### Bug Fixes & Hardening (v0.22.1)
+### Bug Fixes & Hardening
 - `config.py`: defaults changed from hardcoded LAN IPs to `localhost` for Docker compatibility
 - `config.py`: `AMQP_SECRET_PATH` defaults to `/run/secrets/caic_amqp_secret`
 - `config.py`: `DEFAULT_MODEL` now configurable via `CAIC_DEFAULT_MODEL` env var
@@ -103,6 +103,25 @@ Developer wiki: [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) — 
 - `amqp.py`: subscription append moved before try for reconnect safety
 - `requirements.txt`: added missing `psutil` and `jinja2`
 - `tests/conftest.py`: fixed test discovery (sys.path insertion)
+
+## What's New in v0.23.0
+
+### Topbar Redesign
+- Stats (CPU/RAM/GPU/VRAM) moved from topbar to bottom status bar
+- Toggles consolidated into hamburger menu
+- Palette icon moved next to version indicator
+- Mobile-responsive layout improvements
+- Query bar restored above chat area
+
+### Uninstall & Teardown Scripts
+- `scripts/uninstall.sh` — bare-metal/systemd removal
+- `scripts/teardown-docker.sh` — Docker stack teardown (interactive, `-y` for unattended)
+- `scripts/nuclear-clean.sh` — combined nuclear clean (bare-metal + Docker)
+- README "Uninstalling cAIc" section with all three scripts documented
+
+### Code Quality
+- Replaced deprecated `asyncio.ensure_future` with `asyncio.create_task` in `rag.py` and `routers/chat.py`
+- `AGENTS.md` renamed to `ai.md` for tool-agnostic project context
 
 ## What's New in v0.22.0
 
