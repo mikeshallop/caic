@@ -24,7 +24,7 @@ cAIc splits the workload across two machine roles:
 
 **Coordinator** (ultron — Ryzen 7 7840HS, no discrete GPU) runs the FastAPI app, RAG vector search (Qdrant), text embedding (Ollama on CPU), query triage (Phi-4-mini), web search (SearXNG), message broker (RabbitMQ), and all SQLite-backed services — memory, profiles, conversations, settings. Every CPU-bound task stays here.
 
-**Workers** (jarvis — RX 6600 XT 12 GB / corsair — RTX 5070 Ti 16 GB) run only llama-server for GPU inference. The coordinator never touches a model; workers never touch the database. Workers register via AMQP, receive ping/pong health checks, and accept model-swap commands when triage determines a different model is needed for the current query.
+**Workers** (jarvis — RX 6600 XT 8 GB / corsair — RTX 5070 Ti 16 GB) run only llama-server for GPU inference. The coordinator never touches a model; workers never touch the database. Workers register via AMQP, receive ping/pong health checks, and accept model-swap commands when triage determines a different model is needed for the current query.
 
 This split keeps the UI responsive during inference (the coordinator isn't blocked by GPU compute) and lets workers focus VRAM entirely on model weights rather than browser sessions or API orchestration.
 
@@ -525,6 +525,52 @@ Settings are stored in the `settings` table and include:
 - `memory_enabled` — Memory injection (true/false)
 - `skills_enabled` — Skills framework (true/false)
 - `default_model` — Default inference model
+
+## Uninstalling cAIc
+
+Three scripts are provided in `scripts/`. Each accepts `-y` for unattended execution.
+
+### Bare-metal / systemd removal
+
+Stop the service and remove `/opt/caic/`, the systemd unit, AMQP secret, and optionally the pip packages:
+
+```bash
+sudo ./scripts/uninstall.sh          # interactive
+sudo ./scripts/uninstall.sh -y       # unattended
+```
+
+Removes: systemd `caic` service, `/opt/caic/` + venv, `~/.caic_amqp_secret`, `/tmp/caic_uploads`, `hardware_state.json`. Preserves `caic.db` if it lives outside `/opt/caic/`.
+
+### Docker stack teardown
+
+Stop all containers, remove volumes/images, and delete generated files:
+
+```bash
+cd <docker-deploy-directory>
+../scripts/teardown-docker.sh          # interactive
+../scripts/teardown-docker.sh -y       # unattended
+```
+
+Removes: containers + volumes (`caic_data`, `caic_uploads`, `searxng_config`, `qdrant_storage`, `ollama_models`, `rabbitmq`), images (`caic`, `searxng`, `Qdrant`, `RabbitMQ`, `llama-server`, `Ollama`), `.env`, `secrets/`, `searxng/`, `setup.log`. Preserves `models/*.gguf` unless confirmed.
+
+### Nuclear clean (everything)
+
+Removes bare-metal install AND Docker stack AND config AND temp data. Double-confirmation required:
+
+```bash
+sudo ./scripts/nuclear-clean.sh     # double prompt, then unattended
+```
+
+Removes: everything from the two scripts above plus `/var/lib/caic/` and temp directories. Offers to delete the repository itself. Does NOT remove Docker Engine, pip packages, GPU drivers, or WireGuard config.
+
+### Partial / manual clean
+
+Files and components not tracked by the scripts:
+
+- `caic.db` (SQLite database at custom `CAIC_DB_PATH`)
+- Reverse proxy configs (Caddyfile, nginx)
+- WireGuard tunnel configurations
+- Docker Engine itself (`sudo apt remove docker containerd runc; sudo rm -rf /var/lib/docker`)
 
 ## Testing
 
