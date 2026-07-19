@@ -227,8 +227,8 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 
 .chat-container { flex:1; overflow-y:auto; padding:20px 30px; display:flex; flex-direction:column; gap:8px; background-image:radial-gradient(rgba(255,255,255,0.015) 1px, transparent 1px); background-size:24px 24px; margin-right:28px; }
 .msg-pair { display:flex; flex-direction:column; gap:8px; border-radius:var(--radius); padding:12px 12px 8px; border-left:3px solid transparent; }
-.msg-pair:nth-child(odd) { background:rgba(255,255,255,0.015); border-left-color:rgba(0,136,187,0.25); }
-.msg-pair:nth-child(even) { background:rgba(255,255,255,0.035); border-left-color:rgba(243,156,18,0.25); }
+.msg-pair:nth-child(odd) { background:rgba(255,255,255,0.015); border-left-color:rgba(0,136,187,0.30); }
+.msg-pair:nth-child(even) { background:rgba(255,255,255,0.025); border-left-color:rgba(0,136,187,0.12); }
 .welcome-screen { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); text-align:center; gap:12px; }
 .welcome-screen .logo { font-family:var(--font-mono); font-size:48px; color:var(--accent-dim); opacity:0.5; }
 .welcome-screen .welcome-logo { max-width:70%; height:auto; object-fit:contain; opacity:0.85; }
@@ -329,7 +329,10 @@ body { font-family: var(--font-body); background: var(--bg-primary); color: var(
 
 
 
+.message.assistant.search-result { }
 .message.assistant.search-result .content { background:rgba(243,156,18,0.08); border:1px solid rgba(243,156,18,0.2); border-radius:var(--radius); padding:12px; }
+.message.assistant.search-result .role-label { color:var(--warning) !important; }
+.message.assistant.search-result .content .text { color:var(--warning); }
 .raw-results { margin-top:12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; font-size:12px; }
 .raw-results summary { cursor:pointer; color:var(--accent); font-family:var(--font-mono); }
 .raw-results ul { margin:8px 0 0 0; padding-left:20px; list-style:none; }
@@ -1652,7 +1655,7 @@ async function sendSearch() {
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
                         if (roleLabel) {
-                            roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
+                            roleLabel.textContent = 'web search';
                             if (ttr > 0) {
                                 const ttrSec = ttr / 1000;
                                 roleLabel.innerHTML += `<span class="ttr-badge search">ttr: ${ttrSec.toFixed(1)}s</span>`;
@@ -1843,7 +1846,7 @@ async function sendMessage() {
                     if (data.token) { if (firstToken) { textEl.innerHTML = ''; firstToken = false; ttr = performance.now() - ttrStart; tokenCount = 0; } fullText += data.token; tokenCount++; textEl.innerHTML = renderMarkdown(fullText); scrollToLatest(); }
                     if (data.done) {
                         const roleLabel = assistantDiv.querySelector('.role-label');
-                        if (data.searched && roleLabel) roleLabel.innerHTML += '<span class="search-badge-inline">🔍 web</span>';
+                        if (data.searched && roleLabel) roleLabel.textContent = 'web search';
                         if (typeof data.perplexity === 'number' && roleLabel) { const ppl = data.perplexity; const conf = Math.round(Math.max(0, Math.min(100, (1 - (ppl - 1) / 10) * 100))); const cls = conf >= 80 ? 'high' : conf >= 15 ? 'medium' : 'low'; roleLabel.innerHTML += `<span class="conf-badge ${cls}">${conf}%</span>`; }
                         if (typeof data.tokens_per_sec === 'number' && data.tokens_per_sec > 0 && roleLabel) roleLabel.innerHTML += `<span class="tps-badge">${data.tokens_per_sec.toFixed(1)} t/s</span>`;
                         if (roleLabel && ttr > 0) {
