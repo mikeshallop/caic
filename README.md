@@ -19,27 +19,27 @@ You have more aggregate compute than any single consumer machine. The software j
 cAIc uses **query-routing** instead of layer-splitting. Each machine runs a complete model on its own GPU. When a query comes in, the coordinator classifies it and routes the *whole request* to the best-suited node — code questions to the coder model, general chat to the instruct model. No layer sharing, no straggler problem, no VRAM negotiation between mismatched GPUs.
 
 ```
-┌─────────────────────────────────────────────────┐
-│              docker compose stack                │
-│                                                  │
-│  ┌──────────┐  ┌────────┐  ┌──────────────────┐ │
-│  │ SearXNG  │  │ Qdrant │  │    RabbitMQ      │ │
-│  │  :8888   │  │ :6333  │  │  :5672/:15672    │ │
-│  └────┬─────┘  └───┬────┘  └────────┬─────────┘ │
-│       │            │                 │           │
-│       ▼            ▼                 ▼           │
-│  ┌──────────────────────────────────────────┐   │
-│  │           cAIc (FastAPI)                 │   │
-│  │           :8080 (HTTP)                   │   │
-│  └──────┬──────────────┬───────────────────┘   │
-│         │              │                        │
-│         ▼              ▼                        │
-│  ┌──────────────┐  ┌──────────────┐             │
-│  │ llama-server │  │   Ollama     │             │
-│  │    :8081     │  │   :11434     │             │
-│  │  (GPU/RPC)   │  │ (embeddings) │             │
-│  └──────────────┘  └──────────────┘             │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│               docker compose stack                   │
+│                                                      │
+│  ┌──────────┐  ┌────────┐  ┌────────────────────┐   │
+│  │ SearXNG  │  │ Qdrant │  │     RabbitMQ       │   │
+│  │  :8888   │  │ :6333  │  │   :5672 / :15672   │   │
+│  └────┬─────┘  └───┬────┘  └─────────┬──────────┘   │
+│       │            │                  │              │
+│       ▼            ▼                  ▼              │
+│  ┌───────────────────────────────────────────────┐   │
+│  │             cAIc (FastAPI)                    │   │
+│  │             :8080 (HTTP)                      │   │
+│  └───────┬──────────────────┬────────────────────┘   │
+│          │                  │                        │
+│          ▼                  ▼                        │
+│  ┌────────────────┐  ┌────────────────┐              │
+│  │  llama-server  │  │     Ollama     │              │
+│  │     :8081      │  │     :11434     │              │
+│  │   (GPU/RPC)    │  │  (embeddings)  │              │
+│  └────────────────┘  └────────────────┘              │
+└──────────────────────────────────────────────────────┘
 ```
 
 **Coordinator** (CPU-only, no GPU) handles the web UI, RAG embedding, query triage, web search, memory, conversation storage, and the message broker. Every CPU-bound task stays here so it never competes with inference for GPU resources.
