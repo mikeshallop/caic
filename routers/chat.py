@@ -229,7 +229,8 @@ async def chat(request: Request):
                                 if conflicts:
                                     rag_update = {"conflicts": conflicts}
                                 else:
-                                    asyncio.ensure_future(ingest_auto_fact(facts, user_message, cleaned_response))
+                                    # Fire-and-forget: persist facts silently, don't block the response
+                                    asyncio.create_task(ingest_auto_fact(facts, user_message, cleaned_response))
 
                         yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'searched': True, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'prompt_tokens': prompt_tokens, 'completion_tokens': completion_tokens, 'context_length': MODEL_CONTEXT_LENGTH, **(rag_update and {'rag_update_suggestion': rag_update} or {})})}\n\n"
                         return
@@ -251,7 +252,8 @@ async def chat(request: Request):
                         if conflicts:
                             rag_update = {"conflicts": conflicts}
                         else:
-                            asyncio.ensure_future(ingest_auto_fact(facts, user_message, assistant_msg))
+                            # Fire-and-forget: persist facts silently, don't block the response
+                            asyncio.create_task(ingest_auto_fact(facts, user_message, assistant_msg))
 
                 yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id, 'perplexity': round(perplexity, 2), 'tokens_per_sec': round(tokens_per_sec, 1), 'prompt_tokens': prompt_tokens, 'completion_tokens': completion_tokens, 'context_length': MODEL_CONTEXT_LENGTH, **(rag_update and {'rag_update_suggestion': rag_update} or {})})}\n\n"
 

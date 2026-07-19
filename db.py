@@ -24,6 +24,8 @@ DB_PATH = Path(os.environ.get("CAIC_DB_PATH", str(BASE_DIR / "caic.db")))
 
 
 def get_db():
+    """Return a new SQLite connection. Each call creates a fresh connection
+    (not pooled) so callers must close() when done."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -31,11 +33,13 @@ def get_db():
 
 
 def get_setting(db, key: str, default: str = "") -> str:
+    """Read a single settings row, returning *default* if the key is missing."""
     row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else default
 
 
 def list_skills_with_state(db) -> list:
+    """Merge built-in skill definitions with per-skill enabled/disabled state from the DB."""
     rows = db.execute("SELECT skill_key, enabled, updated_at FROM skills").fetchall()
     state_by_key = {
         row["skill_key"]: {"enabled": bool(row["enabled"]), "updated_at": row["updated_at"]}
@@ -49,6 +53,7 @@ def list_skills_with_state(db) -> list:
 
 
 def set_skill_enabled(db, skill_key: str, enabled: bool) -> None:
+    """Insert or replace a skill's enabled state (UPSERT)."""
     now = datetime.now(timezone.utc).isoformat()
     db.execute(
         "INSERT OR REPLACE INTO skills (skill_key, enabled, updated_at) VALUES (?, ?, ?)",
@@ -57,6 +62,7 @@ def set_skill_enabled(db, skill_key: str, enabled: bool) -> None:
 
 
 def format_active_skills_prompt(skills: list) -> str:
+    """Build the 'Active Skills' section of the system prompt from the provided skill list."""
     lines = [
         "## Active Skills",
         "Use these skills only when needed. Prefer concise answers over unnecessary tool usage.",
@@ -70,6 +76,7 @@ def format_active_skills_prompt(skills: list) -> str:
 
 
 def insert_upload_context(db, conversation_id: str, filename: str, content: str, expires_at: str, content_type: str = "text/plain") -> int:
+    """Persist an upload context entry (encrypted content) tied to a conversation."""
     now = datetime.now(timezone.utc).isoformat()
     cur = db.execute(
         "INSERT INTO upload_context (conversation_id, filename, content, content_type, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -79,6 +86,7 @@ def insert_upload_context(db, conversation_id: str, filename: str, content: str,
 
 
 def list_upload_context_by_conversation(db, conversation_id: str):
+    """Return all upload contexts for a given conversation (content excluded for brevity)."""
     rows = db.execute(
         "SELECT id, conversation_id, filename, content_type, created_at, expires_at FROM upload_context WHERE conversation_id = ? ORDER BY id ASC",
         (conversation_id,),
@@ -87,11 +95,16 @@ def list_upload_context_by_conversation(db, conversation_id: str):
 
 
 def delete_upload_context_by_id(db, context_id: int) -> bool:
+    """Delete an upload context entry, returning True if a row was actually removed."""
     cur = db.execute("DELETE FROM upload_context WHERE id = ?", (context_id,))
     return cur.rowcount > 0
 
 
 def get_upload_context(db, context_id: int):
+    """Fetch a single upload context, returning its decrypted content.
+
+    If the context has expired (past expires_at), it is deleted and None returned.
+    """
     row = db.execute(
         "SELECT id, conversation_id, filename, content, content_type, expires_at FROM upload_context WHERE id = ?",
         (context_id,),
@@ -109,10 +122,17 @@ def get_upload_context(db, context_id: int):
 
 
 def init_db():
+    """Run initial schema creation and seed default data.
+
+    Idempotent — safe to call on every startup. Creates tables if missing,
+    runs ALTER TABLE to add columns that may not exist on legacy databases,
+    and inserts defaults for profile, presets, settings, skills, and admin PIN.
+    """
     from security import hash_pin
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
+    # --- Core tables ---
     conn.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT 'New Chat',
@@ -144,6 +164,7 @@ def init_db():
             skill_key TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL
         )
     """)
+    # FTS5 virtual table for full-text memory search
     conn.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS memories USING fts5(
             fact, topic, source, created_at UNINDEXED
@@ -160,16 +181,18 @@ def init_db():
             expires_at TEXT NOT NULL
         )
     """)
+
+    # --- Backfill columns for legacy databases (safe to run every time) ---
     try:
         conn.execute("ALTER TABLE upload_context ADD COLUMN content_type TEXT DEFAULT 'text/plain'")
     except Exception:
-        pass
-
+        pass  # column already exists
     try:
         conn.execute("ALTER TABLE messages ADD COLUMN perplexity REAL")
     except Exception:
         pass
 
+    # --- Seed default data (only if tables are empty) ---
     if not conn.execute("SELECT id FROM profile WHERE id = 1").fetchone():
         now = datetime.now(timezone.utc).isoformat()
         conn.execute("INSERT INTO profile (id, content, updated_at) VALUES (1, ?, ?)", (DEFAULT_PROFILE, now))
@@ -195,6 +218,9 @@ def init_db():
         if not conn.execute("SELECT skill_key FROM skills WHERE skill_key = ?", (skill["key"],)).fetchone():
             conn.execute("INSERT INTO skills (skill_key, enabled, updated_at) VALUES (?, 1, ?)", (skill["key"], now))
 
+    # --- Admin PIN bootstrap ---
+    # If no PIN hash exists on disk, seed one from env var CAIC_ADMIN_PIN
+    # or, if CAIC_ALLOW_DEFAULT_PIN=true, from the hardcoded default "1234".
     existing_pin_hash = conn.execute("SELECT value FROM settings WHERE key = 'admin_pin_hash'").fetchone()
     existing_pin_salt = conn.execute("SELECT value FROM settings WHERE key = 'admin_pin_salt'").fetchone()
     if not existing_pin_hash or not existing_pin_salt:

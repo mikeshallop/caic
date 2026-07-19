@@ -164,7 +164,8 @@ async def query_rag(query: str, limit: int = 3) -> list:
                 pid = r.get("id")
                 if pid:
                     current = r.get("payload", {}).get("retrieval_count", 0) or 0
-                    asyncio.ensure_future(_update_retrieval_count(pid, current))
+                    # Fire-and-forget: update retrieval count without blocking the response
+                    asyncio.create_task(_update_retrieval_count(pid, current))
             return results
     except Exception as e:
         log.warning(f"RAG query error: {e}")
