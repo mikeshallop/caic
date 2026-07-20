@@ -72,7 +72,7 @@ cAIc went from initial commit to v1.0.0 in four and a half months. Every line of
 ## Quick Start (Docker)
 
 ```bash
-git clone ssh://gitea@llgit.llamachile.tube:1319/gramps/caic.git && cd caic
+git clone https://github.com/mikeshallop/caic.git && cd caic
 scripts/setup.sh           # generates .env, secrets, pulls default model (~4.6GB)
 docker compose up -d       # boots cAIc + Qdrant + RabbitMQ + SearXNG + llama-server + Ollama
 ```
@@ -81,7 +81,20 @@ The setup wizard auto-generates secrets, detects disk space, downloads a default
 
 Requires: Docker Engine + Compose plugin. Place your own `.gguf` models in `./models/` for different sizes/vendors.
 
-→ [Installation Guide](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation) | [Configuration](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) | [Bare-Metal Install](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation)
+### Default Model
+
+The setup wizard downloads **Qwen2.5-7B-Instruct** (Q4_K_M quantization, ~4.6 GB) as the default inference model.
+
+Why this model:
+
+- **Fits in 6 GB VRAM** — runs on mid-range GPUs (RX 6600 XT, RTX 3060, etc.) without offloading
+- **Instruction-tuned** — handles chat, code, and reasoning without fine-tuning
+- **Q4_K_M quantization** — best balance of quality and speed for consumer hardware; loses less than 1% accuracy vs. FP16 while fitting in half the VRAM
+- **GGUF format** — runs natively in llama.cpp (the worker backend) with no conversion step
+
+Swap it for any `.gguf` model you prefer. cAIc's query-routing works with whatever you put in `./models/` — the coordinator doesn't care which model runs where, as long as the workers can serve it.
+
+→ [Installation Guide](https://github.com/mikeshallop/caic/wiki/Installation) | [Configuration](https://github.com/mikeshallop/caic/wiki/Home) | [Bare-Metal Install](https://github.com/mikeshallop/caic/wiki/Installation)
 
 ## Single-Node Mode
 
@@ -121,14 +134,14 @@ FastAPI + SQLite + Jinja2 on Python 3.13. AMQP-mediated cluster coordination via
 
 | Page | What's there |
 |------|-------------|
-| [Home](https://llgit.llamachile.tube/gramps/cAIc/wiki/Home) | Overview, FAQ, links |
-| [Installation](https://llgit.llamachile.tube/gramps/cAIc/wiki/Installation) | Docker + bare-metal walkthrough, config reference |
-| [Architecture](https://llgit.llamachile.tube/gramps/cAIc/wiki/Developer-Architecture) | Coordinator/worker design, AMQP protocol, module map |
-| [Screenshots](https://llgit.llamachile.tube/gramps/cAIc/wiki/Screenshots) | UI gallery |
+| [Home](https://github.com/mikeshallop/caic/wiki) | Overview, FAQ, links |
+| [Installation](https://github.com/mikeshallop/caic/wiki/Installation) | Docker + bare-metal walkthrough, config reference |
+| [Architecture](https://github.com/mikeshallop/caic/wiki/Developer-Architecture) | Coordinator/worker design, AMQP protocol, module map |
+| [Screenshots](https://github.com/mikeshallop/caic/wiki/Screenshots) | UI gallery |
 
 ## Changelog
 
-See [What's New](#whats-new-in-v100) below, or browse the [commit history](https://llgit.llamachile.tube/gramps/cAIc/commits/main).
+See [What's New](#whats-new-in-v100) below, or browse the [commit history](https://github.com/mikeshallop/caic/commits/main).
 
 ## License
 
@@ -136,7 +149,9 @@ MIT
 
 ## Repository
 
-Gitea: `ssh://gitea@llgit.llamachile.tube:1319/gramps/caic.git`
+GitHub: https://github.com/mikeshallop/caic
+
+Gitea (primary): `ssh://gitea@llgit.llamachile.tube:1319/gramps/caic.git`
 
 ---
 
